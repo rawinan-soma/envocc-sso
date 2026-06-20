@@ -15,6 +15,15 @@ on:
   pull_request:
     branches: ["main", "develop"]
 
+# Single source of truth for the gitleaks version used by all jobs.
+# Bump here to upgrade both the secret-scan gate and the realm-export check.
+# Also update GITLEAKS_SHA256 to match the new linux_x64 release tarball.
+env:
+  GITLEAKS_VERSION: "8.24.0"
+  # SHA-256 of gitleaks_8.24.0_linux_x64.tar.gz (from official checksums.txt).
+  # Update this when bumping GITLEAKS_VERSION to prevent supply-chain tampering.
+  GITLEAKS_SHA256: "cb49b7de5ee986510fe8666ca0273a6cc15eb82571f2f14832c9e8920751f3a4"
+
 jobs:
 
   # ─── Secret Scanning Gate ──────────────────────────────────────────────────
@@ -28,8 +37,6 @@ jobs:
   gitleaks:
     name: Secret Scan (gitleaks)
     runs-on: ubuntu-latest
-    env:
-      GITLEAKS_VERSION: "8.24.0"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,6 +52,8 @@ jobs:
           curl -sSfL \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             -o "$tmp/gitleaks.tar.gz"
+          # Verify checksum before installing — guards against MITM / CDN compromise.
+          echo "${GITLEAKS_SHA256}  $tmp/gitleaks.tar.gz" | sha256sum --check --status
           tar -xzf "$tmp/gitleaks.tar.gz" -C "$tmp" gitleaks
           sudo install -m 0755 "$tmp/gitleaks" /usr/local/bin/gitleaks
           gitleaks version
@@ -61,8 +70,6 @@ jobs:
   realm-export-check:
     name: Realm Export Clean
     runs-on: ubuntu-latest
-    env:
-      GITLEAKS_VERSION: "8.24.0"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,16 +81,14 @@ jobs:
           curl -sSfL \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             -o "$tmp/gitleaks.tar.gz"
+          # Verify checksum before installing — guards against MITM / CDN compromise.
+          echo "${GITLEAKS_SHA256}  $tmp/gitleaks.tar.gz" | sha256sum --check --status
           tar -xzf "$tmp/gitleaks.tar.gz" -C "$tmp" gitleaks
           sudo install -m 0755 "$tmp/gitleaks" /usr/local/bin/gitleaks
           gitleaks version
 
       - name: Verify realm-export.json has no secrets
         run: |
-          if [ ! -f keycloak/realm-export.json ]; then
-            echo "ERROR: keycloak/realm-export.json not found — this file is required." >&2
-            exit 1
-          fi
           gitleaks detect \
             --source keycloak/realm-export.json \
             --no-git \

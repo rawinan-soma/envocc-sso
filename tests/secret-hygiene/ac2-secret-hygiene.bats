@@ -214,21 +214,28 @@ print('OK')
 
   git rev-parse --git-dir > /dev/null 2>&1 || skip "Not in a git repository context"
 
+  # Resolve the repo root so this test is CWD-independent.
+  # Staging at <root>/test-fake-secret-staged.txt guarantees the file is NOT
+  # under the .gitleaks.toml path allowlist (^tests/) regardless of where BATS
+  # was invoked from (repo root, tests/, tests/secret-hygiene/, CI, IDE, etc.).
+  local repo_root
+  repo_root="$(git rev-parse --show-toplevel)"
+
   # Stage at the repo ROOT with a filename NOT matched by .gitignore (the
   # *.env / .env.* rules block staging) and NOT under the allowlisted tests/
   # dir, so we genuinely exercise gitleaks on staged content.
-  local staged="test-fake-secret-staged.txt"
+  local staged="${repo_root}/test-fake-secret-staged.txt"
   # A non-placeholder Keycloak admin password — caught by our custom rule.
   # (Avoid the canonical AWS "EXAMPLE" key: the default ruleset allowlists it.)
   echo 'KEYCLOAK_ADMIN_PASSWORD=Xy9Zq2Lm8Bv4Nc7Rt1Wp' > "$staged"
-  git add -f "$staged"
+  git -C "$repo_root" add -f "test-fake-secret-staged.txt"
 
   # gitleaks protect --staged must exit non-zero (finds the secret)
-  run gitleaks protect --staged --config .gitleaks.toml
+  run gitleaks protect --staged --config "${repo_root}/.gitleaks.toml"
   local gitleaks_exit="$status"
 
   # Clean up: unstage and remove the temp file no matter what.
-  git reset -q HEAD "$staged" 2>/dev/null || true
+  git -C "$repo_root" reset -q HEAD "test-fake-secret-staged.txt" 2>/dev/null || true
   rm -f "$staged"
 
   # Must have found a secret (non-zero exit)

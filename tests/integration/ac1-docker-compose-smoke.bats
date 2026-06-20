@@ -15,7 +15,9 @@ KC_PORT="${KC_PORT:-8080}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 REALM="envocc"
 DISCOVERY_URL="http://localhost:${KC_PORT}/realms/${REALM}/.well-known/openid-configuration"
-HEALTH_URL="http://localhost:${KC_PORT}/health/ready"
+# NOTE: In Keycloak 26 /health/ready is served on the management port (9000),
+# which is NOT published to the host. Do not probe /health/ready on KC_PORT.
+# The readiness signal available on the host is the realm endpoint (DISCOVERY_URL).
 
 # Helper: skip if the Keycloak stack isn't up.
 # Probe the realm DISCOVERY endpoint (always on the main HTTP port) rather than

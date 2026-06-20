@@ -50,9 +50,12 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      # Database (Quarkus JDBC format)
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      # Database (Quarkus JDBC format).
+      # Both values are sourced from .env so they can be overridden (e.g. to
+      # point at an external Postgres for staging). The defaults below match
+      # the internal postgres service defined in this file.
+      KC_DB: ${KC_DB:-postgres}
+      KC_DB_URL: ${KC_DB_URL:-jdbc:postgresql://postgres:5432/keycloak_db}
       KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
       KC_DB_PASSWORD: ${KC_DB_PASSWORD}
       # Initial admin bootstrap (only effective on first boot). Keycloak 26
@@ -75,8 +78,14 @@ services:
     healthcheck:
       # The Keycloak image ships no curl/wget, so probe with bash /dev/tcp.
       # Health is served on the management port 9000 (not 8080) in KC 26.
+      # We invoke bash explicitly (not sh) because /dev/tcp is a bash built-in
+      # and is not available in dash/sh.  Keycloak 26 on UBI9-minimal ships
+      # bash at /bin/bash; CMD-SHELL would invoke /bin/sh which may differ
+      # on future base images.  Using CMD form with bash is more explicit.
       test:
-        - "CMD-SHELL"
+        - "CMD"
+        - "bash"
+        - "-c"
         - >-
           exec 3<>/dev/tcp/localhost/9000 &&
           printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&

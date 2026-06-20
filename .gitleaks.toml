@@ -35,8 +35,11 @@ description = "Keycloak admin password with a real value"
 regex       = '''(?i)(KEYCLOAK_ADMIN_PASSWORD|KC_BOOTSTRAP_ADMIN_PASSWORD)\s*[:=]\s*["']?[^\s"'$]{8,}'''
 tags        = ["keycloak", "password"]
 [rules.allowlist]
+# regexTarget = "match" tests the regex against the full matched string
+# (e.g. "KEYCLOAK_ADMIN_PASSWORD=change-me"), so we anchor each pattern with
+# word-boundary equivalents to avoid "change-meNow" or "change-me123" matching.
 regexTarget = "match"
-regexes     = ['''(?i)(change[-_]me|changeit|placeholder|test-only|your[-_.]password)''']
+regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only|your[-_.]password)($|[-_=:"'\s])''']
 
 [[rules]]
 id          = "keycloak-db-password"
@@ -45,7 +48,7 @@ regex       = '''(?i)(KEYCLOAK_DB_PASSWORD|KC_DB_PASSWORD)\s*[:=]\s*["']?[^\s"'$
 tags        = ["keycloak", "database", "password"]
 [rules.allowlist]
 regexTarget = "match"
-regexes     = ['''(?i)(change[-_]me|changeit|placeholder|test-only|your[-_.]password)''']
+regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only|your[-_.]password)($|[-_=:"'\s])''']
 
 [[rules]]
 id          = "rails-db-password"
@@ -54,7 +57,7 @@ regex       = '''(?i)RAILS_DB_PASSWORD\s*[:=]\s*["']?[^\s"'$]{8,}'''
 tags        = ["rails", "database", "password"]
 [rules.allowlist]
 regexTarget = "match"
-regexes     = ['''(?i)(change[-_]me|changeit|placeholder|test-only|your[-_.]password)''']
+regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only|your[-_.]password)($|[-_=:"'\s])''']
 
 [[rules]]
 id          = "postgres-password"
@@ -63,13 +66,15 @@ regex       = '''(?i)POSTGRES_PASSWORD\s*[:=]\s*["']?[^\s"'$]{8,}'''
 tags        = ["postgres", "password"]
 [rules.allowlist]
 regexTarget = "match"
-regexes     = ['''(?i)(change[-_]me|changeit|placeholder|test-only|your[-_.]password)''']
+regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only|your[-_.]password)($|[-_=:"'\s])''']
 
 [[rules]]
 id          = "keycloak-client-secret"
 description = "Keycloak client secret with a real value (non-empty)"
 # Matches the realm-export "secret":"<value>" and "clientSecret":"<value>" forms.
-regex       = '''"(clientSecret|secret)"\s*:\s*"[^"]{16,}"'''
+# Floor is 8 chars (not 16) to catch short manually-set secrets; Keycloak's
+# auto-generated secrets are 32+ chars but operators can set shorter values.
+regex       = '''"(clientSecret|secret)"\s*:\s*"[^"]{8,}"'''
 tags        = ["keycloak", "client-secret"]
 [rules.allowlist]
 regexTarget = "match"
@@ -111,7 +116,14 @@ regexTarget = "match"
 
 # Global value allowlist — kept deliberately NARROW and ANCHORED so a real
 # weak secret (e.g. "change-meNOW123") is NOT masked. Only exact placeholder
-# tokens and the blanked realm-export fields are allowed.
+# tokens are allowed here.
+#
+# NOTE: Empty-field safety for realm exports (empty "secret"/"privateKey" etc.)
+# comes from the per-rule minimum-length anchors ({8,}, {16,}, {64,}) which
+# exclude empty strings by design — NOT from global allowlist patterns.
+# JSON structural patterns like '"secret":\[""\]' were removed because they
+# cannot match under regexTarget = "match" (which tests only the bare captured
+# value, not the surrounding JSON context).
 regexes = [
   # Explicit placeholders (anchored to the whole matched value)
   '''^change[-_]me$''',
@@ -119,12 +131,6 @@ regexes = [
   '''^placeholder[-_]?replaced[-_]?by[-_]?env$''',
   '''^placeholder$''',
   '''^test-only-not-real$''',
-  # Empty secrets in realm export (blanked before commit)
-  '''"secret"\s*:\s*\[""\]''',
-  '''"privateKey"\s*:\s*\[""\]''',
-  '''"certificate"\s*:\s*\[""\]''',
-  '''"clientSecret"\s*:\s*""''',
-  '''"secret"\s*:\s*""''',
 ]
 
 # Files/dirs that are explicitly safe. NOTE: .env.example is deliberately NOT
