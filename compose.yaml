@@ -21,11 +21,19 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # Let init.sql handle database + role creation
       POSTGRES_DB: postgres
+      # init.sh creates the keycloak_db/rails_db databases and their owner roles.
+      # It reads these to set each role's password at first-boot (TCP auth needs
+      # a stored password). Sourced from .env — never hardcoded here.
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      RAILS_DB_USERNAME: ${RAILS_DB_USERNAME:-rails}
+      RAILS_DB_PASSWORD: ${RAILS_DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # NOTE: init scripts run ONCE on an empty data dir. After editing init.sh
+      # you must `docker compose down -v` to wipe the volume and re-run it.
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     ports:
       - "5432:5432"
     healthcheck:
@@ -47,13 +55,16 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
       KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
       KC_DB_PASSWORD: ${KC_DB_PASSWORD}
-      # Initial admin credentials (only effective on first boot)
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Initial admin bootstrap (only effective on first boot). Keycloak 26
+      # renamed KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD to KC_BOOTSTRAP_ADMIN_*.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       # Dev: HTTP only, no reverse proxy needed
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
-      KC_HOSTNAME_STRICT_HTTPS: "false"
+      # Expose /health/* and /metrics on the management port (9000).
+      # Required for the healthcheck below — disabled by default in KC 26.
+      KC_HEALTH_ENABLED: "true"
       # Mailpit SMTP for email flows (used from Story 1.6+)
       KC_SPI_TRUSTSTORE_FILE_HOSTNAME_VERIFICATION_POLICY: ANY
     ports:
@@ -62,7 +73,14 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8080/health/ready || exit 1"]
+      # The Keycloak image ships no curl/wget, so probe with bash /dev/tcp.
+      # Health is served on the management port 9000 (not 8080) in KC 26.
+      test:
+        - "CMD-SHELL"
+        - >-
+          exec 3<>/dev/tcp/localhost/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          cat <&3 | grep -q '"status": "UP"'
       interval: 15s
       timeout: 10s
       retries: 10

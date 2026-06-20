@@ -38,6 +38,16 @@ docker compose logs -f keycloak
 curl http://localhost:8080/realms/envocc/.well-known/openid-configuration
 ```
 
+> **Heads up — Postgres init runs only once.** `postgres/init.sh` (which creates
+> `keycloak_db`/`rails_db` and their owner roles) runs only on an *empty* data
+> volume. If you change `init.sh` or a DB password in `.env` after the first
+> `docker compose up`, you must reset the volume for it to take effect:
+>
+> ```bash
+> docker compose down -v   # wipes postgres_data — destroys local data
+> docker compose up -d
+> ```
+
 ## Services & Ports
 
 | Service | Port | URL |

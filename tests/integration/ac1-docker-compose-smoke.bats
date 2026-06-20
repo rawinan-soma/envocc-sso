@@ -17,9 +17,12 @@ REALM="envocc"
 DISCOVERY_URL="http://localhost:${KC_PORT}/realms/${REALM}/.well-known/openid-configuration"
 HEALTH_URL="http://localhost:${KC_PORT}/health/ready"
 
-# Helper: skip if docker compose stack isn't up
+# Helper: skip if the Keycloak stack isn't up.
+# Probe the realm DISCOVERY endpoint (always on the main HTTP port) rather than
+# /health/ready — in Keycloak 26 health is served on the management port 9000,
+# which is not published to the host, so it is not reachable here.
 kc_running() {
-  curl -sf -o /dev/null -w "%{http_code}" "${HEALTH_URL}" 2>/dev/null | grep -q "200"
+  curl -sf -o /dev/null -w "%{http_code}" "${DISCOVERY_URL}" 2>/dev/null | grep -q "200"
 }
 
 # ---------------------------------------------------------------------------
@@ -33,12 +36,16 @@ kc_running() {
 }
 
 # ---------------------------------------------------------------------------
-# [P0] AC1-02 — Keycloak health endpoint responds 200 (requires running stack)
+# [P0] AC1-02 — Keycloak is up and serving on the main HTTP port (requires stack)
 # ---------------------------------------------------------------------------
-@test "[P0][AC1-02] Keycloak /health/ready returns HTTP 200" {
+# Keycloak 26 serves /health/ready on the management port (9000), which is NOT
+# published to the host. The readiness signal reachable on the main HTTP port is
+# the realm itself, so we assert the realm endpoint returns 200. (The container's
+# OWN healthcheck does probe :9000/health/ready via bash /dev/tcp — see compose.)
+@test "[P0][AC1-02] Keycloak responds on the main HTTP port (realm reachable)" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
-  run curl -sf -o /dev/null -w "%{http_code}" "${HEALTH_URL}"
+  run curl -sf -o /dev/null -w "%{http_code}" "http://localhost:${KC_PORT}/realms/${REALM}"
   [ "$status" -eq 0 ]
   [ "$output" = "200" ]
 }
@@ -77,7 +84,12 @@ kc_running() {
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-05] PostgreSQL has keycloak_db and rails_db databases" {
   command -v docker >/dev/null 2>&1 || skip "docker not installed"
-  docker compose ps --services 2>/dev/null | grep -q "postgres" || skip "postgres service not running"
+  # Guard on the container actually RUNNING, not merely being defined in compose.
+  # `ps --services` lists configured services regardless of state, which would let
+  # this test proceed (and then fail) when the stack is down. `--status running`
+  # only lists services that are up.
+  docker compose ps --services --status running 2>/dev/null | grep -q "^postgres$" \
+    || skip "postgres service not running — start with: docker compose up -d"
 
   # Use docker exec to query the postgres service
   run docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -l -t
@@ -211,8 +223,12 @@ kc_running() {
     if echo "_${varname}=" | grep -qE '_(PASSWORD|SECRET|KEY|TOKEN|MASTER)(_|=)'; then
       local val
       val="${line#*=}"
-      # Value must be a known placeholder (case-insensitive) or empty
-      if ! echo "$val" | grep -qiE '^(change-me|change_me|placeholder|test-only|changeit|your[-_]password|)$'; then
+      # Value must be empty OR a known placeholder (case-insensitive).
+      # NOTE: keep the empty-value check SEPARATE — a trailing empty alternative
+      # in the alternation (e.g. '...|)$') is an "empty (sub)expression" error
+      # in BSD/macOS grep and would crash the test.
+      [ -z "$val" ] && continue
+      if ! echo "$val" | grep -qiE '^(change-me|change_me|placeholder|test-only|changeit|your[-_]password)$'; then
         echo "Non-placeholder secret value detected in .env.example: $line"
         return 1
       fi

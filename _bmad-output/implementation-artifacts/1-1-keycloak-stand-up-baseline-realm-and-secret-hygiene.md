@@ -4,7 +4,7 @@ baseline_commit: 7b9651655d488ff019d1648ff86afaca2e7bb8ea
 
 # Story 1.1: Keycloak Stand-Up, Baseline Realm & Secret Hygiene
 
-Status: review
+Status: done
 
 ## Story
 
@@ -87,6 +87,46 @@ so that all later work builds on a consistent, reproducible, secure IdP foundati
   - [x] 5.2 Confirm the `envocc` realm appears in the Keycloak admin UI and the realm settings match what was configured in Task 2 (realm-export.json validated: all settings confirmed present as compact JSON)
   - [x] 5.3 Write a brief `README.md` (or update it) covering: prerequisites (`docker`, `docker compose`), quick start (`cp .env.example .env && docker compose up`), services and ports, and the secret-hygiene rule (never commit secrets; realm exports are always stripped)
   - [x] 5.4 Confirm `.gitignore` excludes `.env`, confirm `.env.example` is tracked, confirm `realm-export.json` is tracked and contains no real secrets
+
+### Review Findings
+
+Code review 2026-06-20 (bmad-code-review: Blind Hunter + Edge Case Hunter + Acceptance Auditor). All findings auto-accepted and fixed; each verified at runtime (full `docker compose up`, gitleaks 8.30.1, BATS suite). Every finding below is a `[Patch]` and was applied.
+
+**Critical — stack would not work / secret gate non-functional (all fixed):**
+
+- [x] [Review][Patch] gitleaks config used RE2-incompatible `(?!...)` lookahead in 7 rules — gitleaks fails to LOAD the config, so the entire secret-scanning gate (pre-commit + CI) was non-functional. Rewrote all rules without lookahead, using per-rule `[rules.allowlist]` for placeholders. [.gitleaks.toml]
+- [x] [Review][Patch] Keycloak healthcheck probed `:8080/health/ready`, but KC 26 health is disabled by default and served on management port 9000 — container never reports healthy. Set `KC_HEALTH_ENABLED=true` and probe port 9000. [compose.yaml]
+- [x] [Review][Patch] Healthcheck used `curl`, which is NOT in the Keycloak 26 image (verified via `docker run`) — every probe fails. Switched to a bash `/dev/tcp` probe (bash IS present). [compose.yaml]
+- [x] [Review][Patch] `keycloak` Postgres role created with NO password — Keycloak cannot authenticate over TCP (image uses scram). Converted `init.sql`→`init.sh` so it sets role passwords from `KC_DB_PASSWORD`/`RAILS_DB_PASSWORD` at first boot. [postgres/init.sh, compose.yaml]
+- [x] [Review][Patch] `GRANT ALL ON DATABASE` does not grant schema CREATE on PG15+ — Keycloak migration would fail `permission denied for schema public`. Each DB is now created `OWNER` of its role. [postgres/init.sh]
+- [x] [Review][Patch] (runtime-discovered) realm-export.json had import-incompatible fields that crashed `--import-realm` in a boot loop: top-level `identityFederations`, top-level `userProfile`, `ClientRegistrationPolicy` components with invalid providerId `allowed-protocol-mapper-types`, and `KeyProvider` components with blank keys (`InvalidKeySpecException`). Removed all four; Keycloak now imports the realm cleanly and auto-generates keys. [keycloak/realm-export.json]
+
+**High / Medium (all fixed):**
+
+- [x] [Review][Patch] `enabledEventTypes:[]` means NO login events are saved (contradicts "save all" guardrail). Removed the field so Keycloak saves all types (verified via `events/config`). [keycloak/realm-export.json]
+- [x] [Review][Patch] Deprecated KC 26 bootstrap admin vars `KEYCLOAK_ADMIN`/`KEYCLOAK_ADMIN_PASSWORD` → `KC_BOOTSTRAP_ADMIN_USERNAME`/`KC_BOOTSTRAP_ADMIN_PASSWORD`. [compose.yaml]
+- [x] [Review][Patch] gitleaks global allowlist too broad (`change-me`, `CHANGE.ME` with wildcard `.`, bare `placeholder`) — could mask real weak secrets. Anchored all placeholder regexes; removed `.env.example` from path-allowlist so its values are still scanned. [.gitleaks.toml]
+- [x] [Review][Patch] `keycloak-private-key` rule matched only string form but the export uses the array form — a real key would slip through. Rule now matches both forms. [.gitleaks.toml]
+- [x] [Review][Patch] `rails-master-key` rule could not match a bare master.key file; documented `.gitignore` as the guard for that form and kept the assignment-form rule. [.gitleaks.toml]
+- [x] [Review][Patch] CI used `gitleaks-action@v2` (needs paid GITLEAKS_LICENSE for org repos) and a misleading "redact" comment with no `--redact`. Switched to the gitleaks binary with `--redact`, robust tar extraction. [.github/workflows/ci.yml]
+- [x] [Review][Patch] Postgres init scripts run once per volume; documented the `docker compose down -v` reset requirement. [README.md, compose.yaml]
+- [x] [Review][Patch] Deprecated `KC_HOSTNAME_STRICT_HTTPS` removed from compose. [compose.yaml]
+- [x] [Review][Patch] PINNED-VERSION.md digest was a placeholder; replaced with the real digest `sha256:4883630e…`. [keycloak/PINNED-VERSION.md]
+
+**Test fixes (all fixed; full suite green, 0 failures):**
+
+- [x] [Review][Patch] AC2-02 checked only `clientSecret`; the export uses the `secret` field — now checks both. [tests/secret-hygiene/ac2-secret-hygiene.bats]
+- [x] [Review][Patch] AC2-03 grepped python stdout for "FAIL" (a python crash would pass) — now asserts the exit code. [tests/secret-hygiene/ac2-secret-hygiene.bats]
+- [x] [Review][Patch] AC2-15 staged a `.env`-suffixed (gitignored) file with the AWS EXAMPLE key (default-allowlisted) — now uses a non-gitignored file and a catchable value. [tests/secret-hygiene/ac2-secret-hygiene.bats]
+- [x] [Review][Patch] AC1-05 guarded on a service being *defined* not *running* — now guards on `--status running`. [tests/integration/ac1-docker-compose-smoke.bats]
+- [x] [Review][Patch] AC1-11 had an invalid trailing-empty-alternative regex (BSD grep "empty (sub)expression") that crashed the test — split out the empty-value check. [tests/integration/ac1-docker-compose-smoke.bats]
+- [x] [Review][Patch] AC1-RC-14 referenced the renamed `init.sql`→`init.sh`. [tests/integration/ac1-realm-config.bats]
+- [x] [Review][Patch] `kc_running()` helpers probed `/health/ready` (now port 9000, unpublished) — now probe the realm endpoint on the main HTTP port. [both integration .bats]
+- [x] [Review][Patch] Stale "RED phase / all skip" banner in the runner updated to GREEN-phase reality. [tests/run-atdd.sh]
+
+**Dismissed:** 1 — the gitleaks 8.24.0 CI download asset name `gitleaks_8.24.0_linux_x64.tar.gz` was flagged as possibly wrong; verified correct against the GitHub release.
+
+**Review verification:** full `docker compose up -d` brings all 3 services to `healthy`; realm imports (`Realm 'envocc' imported`); discovery endpoint returns 200 with correct issuer; admin login works; all 13 realm guardrail settings confirmed via Admin API; gitleaks full-tree scan clean and catches real secrets; entire BATS suite (41 tests) passes/skips with 0 failures.
 
 ## Dev Notes
 

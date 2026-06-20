@@ -4,26 +4,35 @@
 
 `realm-export.json` is the **secrets-stripped** baseline realm configuration for the `envocc` Keycloak realm. It is committed to version control and imported automatically on `docker compose up`.
 
-## Fields Stripped Before Commit
+## Secrets & Key Material — Stripped / Omitted Before Commit
 
-The following fields have been **blanked (set to `""`)** or are emitted empty. Keycloak re-generates them on first import — they are never stored in VCS.
+No private keys, certificates, or signing secrets are committed. Two approaches are used:
 
 | Field | Location in JSON | Action |
 |-------|------------------|--------|
-| `privateKey` | `components["org.keycloak.keys.KeyProvider"][*].config.privateKey` | Set to `[""]` |
-| `certificate` | Same location | Set to `[""]` |
-| `secret` | Key provider `hmac-generated` and `aes-generated` configs | Set to `[""]` |
-| `clientSecret` | Any `clients[*].secret` | Set to `""` |
+| `org.keycloak.keys.KeyProvider` | `components` | **Component group OMITTED entirely.** Keycloak auto-generates fresh `rsa-generated`, `rsa-enc-generated`, `hmac-generated`, and `aes-generated` keys on first import. (Committing the providers with blanked `privateKey:[""]` made `--import-realm` fail with `InvalidKeySpecException: Unable to decode the private key` — Keycloak tries to *decode* the empty key. Omitting the group is the correct pattern.) |
+| `clientSecret` / `secret` | `clients[*].secret` | Set to `""` on every built-in client. Keycloak regenerates them. |
 | `secretData` | User credential representations | Not present (no users exported) |
 | `credentialData` | User credential representations | Not present (no users exported) |
 
+### Import-incompatibility fields removed
+
+The following were removed because Keycloak 26.2.5's `--import-realm` rejects them (the import is strict about `RealmRepresentation`):
+
+| Field | Why removed |
+|-------|-------------|
+| `identityFederations` | Not a valid `RealmRepresentation` field (the correct field is `identityProviders`, present and empty). |
+| `userProfile` (top-level) | Not importable as a top-level key in KC 26. The default declarative user profile is already exactly the minimal set we want (`username`, `email`, `firstName`, `lastName`); `attributes.userProfileEnabled=true` keeps it on. No PDPA-sensitive fields are added. |
+| `enabledEventTypes: []` | An empty array means "save NO event types". Removing the field makes Keycloak save **all** event types (the day-one capture requirement). Verified via `GET /admin/realms/envocc/events/config` — all types (`LOGIN`, `LOGIN_ERROR`, ...) are enabled. |
+| `ClientRegistrationPolicy` components | Used the invalid provider id `allowed-protocol-mapper-types` (correct id: `allowed-protocol-mappers`), causing `No such provider`. These are default policies Keycloak recreates automatically. |
+
 ## How Secrets Are Re-Injected at Runtime
 
-1. **Realm signing/encryption keys** (`rsa-generated`, `hmac-generated`, `aes-generated`): Keycloak **auto-generates** new keys on first import. The blank values in the export trigger this auto-generation.
+1. **Realm signing/encryption keys**: Keycloak **auto-generates** new keys on first import because the `KeyProvider` components are omitted from the export.
 
 2. **Client secrets** (e.g., `account` client): Built-in clients have blank secrets in the export; Keycloak regenerates them. For the Rails OIDC client (added in Story 3.1), the secret will be injected via environment variable using Keycloak's Admin REST API at container startup.
 
-3. **Admin password**: Set via `KEYCLOAK_ADMIN_PASSWORD` environment variable (from `.env`, never committed).
+3. **Admin password**: Set via `KC_BOOTSTRAP_ADMIN_PASSWORD` (mapped from `KEYCLOAK_ADMIN_PASSWORD` in `.env`, never committed) — Keycloak 26 renamed `KEYCLOAK_ADMIN_PASSWORD` to `KC_BOOTSTRAP_ADMIN_PASSWORD`.
 
 ## Updating the Realm Export
 

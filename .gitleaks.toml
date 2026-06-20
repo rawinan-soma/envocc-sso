@@ -8,6 +8,10 @@
 #   gitleaks detect --source . --redact           # scan working tree (CI)
 #   gitleaks protect --staged --redact            # scan staged files (pre-commit)
 #   gitleaks detect --source keycloak/realm-export.json --verbose  # spot-check
+#
+# IMPORTANT: gitleaks compiles regexes with Go's RE2 engine, which does NOT
+# support lookaround (?!...) / (?=...). Placeholder values are therefore
+# excluded via per-rule [rules.allowlist] regexes, never via negative lookahead.
 
 title = "envocc-sso gitleaks config"
 
@@ -17,86 +21,122 @@ title = "envocc-sso gitleaks config"
 useDefault = true
 
 # ─── Custom rules ─────────────────────────────────────────────────────────────
+# Each rule matches the assignment of an 8+ char value to a known secret var,
+# then excludes the project's placeholder tokens via a per-rule allowlist.
+
+# Shared placeholder/reference exclusions for the env-var password rules.
+# - placeholder tokens (change-me, etc.) are dev defaults, not secrets
+# - ${VAR} / $VAR are compose interpolation references, not literal secrets
+# - "realpass" is the documented example value in the AC1-RC-13 test fixture
 
 [[rules]]
 id          = "keycloak-admin-password"
 description = "Keycloak admin password with a real value"
-regex       = '''(?i)KEYCLOAK_ADMIN_PASSWORD\s*=\s*(?!change-me|CHANGE.ME|placeholder|test-only|changeit|your.password)[^\s"']{8,}'''
+regex       = '''(?i)(KEYCLOAK_ADMIN_PASSWORD|KC_BOOTSTRAP_ADMIN_PASSWORD)\s*[:=]\s*["']?[^\s"'$]{8,}'''
 tags        = ["keycloak", "password"]
-severity    = "critical"
+[rules.allowlist]
+regexTarget = "match"
+regexes     = ['''(?i)(change[-_]me|changeit|placeholder|test-only|your[-_.]password)''']
 
 [[rules]]
 id          = "keycloak-db-password"
 description = "Keycloak DB password with a real value"
-regex       = '''(?i)(KEYCLOAK_DB_PASSWORD|KC_DB_PASSWORD)\s*=\s*(?!change-me|CHANGE.ME|placeholder|test-only|changeit|your.password)[^\s"']{8,}'''
+regex       = '''(?i)(KEYCLOAK_DB_PASSWORD|KC_DB_PASSWORD)\s*[:=]\s*["']?[^\s"'$]{8,}'''
 tags        = ["keycloak", "database", "password"]
-severity    = "critical"
+[rules.allowlist]
+regexTarget = "match"
+regexes     = ['''(?i)(change[-_]me|changeit|placeholder|test-only|your[-_.]password)''']
 
 [[rules]]
 id          = "rails-db-password"
 description = "Rails database password with a real value"
-regex       = '''(?i)RAILS_DB_PASSWORD\s*=\s*(?!change-me|CHANGE.ME|placeholder|test-only|changeit|your.password)[^\s"']{8,}'''
+regex       = '''(?i)RAILS_DB_PASSWORD\s*[:=]\s*["']?[^\s"'$]{8,}'''
 tags        = ["rails", "database", "password"]
-severity    = "critical"
+[rules.allowlist]
+regexTarget = "match"
+regexes     = ['''(?i)(change[-_]me|changeit|placeholder|test-only|your[-_.]password)''']
 
 [[rules]]
 id          = "postgres-password"
 description = "PostgreSQL password with a real value"
-regex       = '''(?i)POSTGRES_PASSWORD\s*=\s*(?!change-me|CHANGE.ME|placeholder|test-only|changeit|your.password)[^\s"']{8,}'''
+regex       = '''(?i)POSTGRES_PASSWORD\s*[:=]\s*["']?[^\s"'$]{8,}'''
 tags        = ["postgres", "password"]
-severity    = "critical"
+[rules.allowlist]
+regexTarget = "match"
+regexes     = ['''(?i)(change[-_]me|changeit|placeholder|test-only|your[-_.]password)''']
 
 [[rules]]
 id          = "keycloak-client-secret"
 description = "Keycloak client secret with a real value (non-empty)"
-regex       = '''"clientSecret"\s*:\s*"(?!"|change-me|placeholder|test-only)[^"]{16,}"'''
+# Matches the realm-export "secret":"<value>" and "clientSecret":"<value>" forms.
+regex       = '''"(clientSecret|secret)"\s*:\s*"[^"]{16,}"'''
 tags        = ["keycloak", "client-secret"]
-severity    = "critical"
+[rules.allowlist]
+regexTarget = "match"
+regexes     = ['''(?i)(change[-_]me|placeholder|test-only)''']
 
 [[rules]]
 id          = "keycloak-private-key"
 description = "Keycloak RSA private key embedded in realm export or config"
-regex       = '''"privateKey"\s*:\s*"(?!"|\s*)[^"]{64,}"'''
+# Catches BOTH the string form "privateKey":"<64+>" AND the realm-export array
+# form "privateKey":["<64+>"] that Keycloak actually emits for KeyProvider config.
+regex       = '''"(privateKey|certificate)"\s*:\s*\[?\s*"[^"]{64,}"'''
 tags        = ["keycloak", "private-key"]
-severity    = "critical"
 
 [[rules]]
 id          = "keycloak-hmac-secret"
-description = "Keycloak HMAC secret in key provider config (non-empty)"
-regex       = '''"secret"\s*:\s*\[\s*"(?!"|\s*)[^"]{16,}"\s*\]'''
+description = "Keycloak HMAC/AES secret in key provider config (non-empty)"
+# Array form: "secret":["<16+ chars>"]
+regex       = '''"secret"\s*:\s*\[\s*"[^"]{16,}"\s*\]'''
 tags        = ["keycloak", "hmac-secret"]
-severity    = "high"
 
 [[rules]]
 id          = "rails-master-key"
-description = "Rails credentials master key"
-regex       = '''(?i)(master\.key|RAILS_MASTER_KEY)\s*[:=]\s*[0-9a-f]{32,}'''
+description = "Rails credentials master key (assigned form)"
+# Matches the prefixed/assigned form (master.key=<hex> / RAILS_MASTER_KEY=<hex>).
+# A *bare* 32-hex config/master.key file is guarded by .gitignore (a bare-hex
+# regex here would false-positive on git SHAs, realm IDs, etc.) — defence in
+# depth: .gitignore blocks the file, this rule blocks the env-var/assignment form.
+regex       = '''(?i)(master\.key|RAILS_MASTER_KEY)\s*[:=]\s*["']?[0-9a-f]{32}'''
 tags        = ["rails", "master-key"]
-severity    = "critical"
 
 # ─── Allowlist ────────────────────────────────────────────────────────────────
 [allowlist]
 description = "Known-safe patterns: placeholders, examples, test fixtures"
 
-# Allow placeholder values used in .env.example and documentation
+# Global value allowlist — kept deliberately NARROW and ANCHORED so a real
+# weak secret (e.g. "change-meNOW123") is NOT masked. Only exact placeholder
+# tokens and the blanked realm-export fields are allowed.
 regexes = [
-  # Explicit placeholders
-  '''change-me''',
-  '''CHANGE.ME''',
-  '''placeholder[-_]?replaced[-_]?by[-_]?env''',
-  '''placeholder''',
-  '''test-only-not-real''',
+  # Explicit placeholders (anchored to the whole matched value)
+  '''^change[-_]me$''',
+  '''^CHANGE[-_]ME$''',
+  '''^placeholder[-_]?replaced[-_]?by[-_]?env$''',
+  '''^placeholder$''',
+  '''^test-only-not-real$''',
   # Empty secrets in realm export (blanked before commit)
   '''"secret"\s*:\s*\[""\]''',
   '''"privateKey"\s*:\s*\[""\]''',
   '''"certificate"\s*:\s*\[""\]''',
   '''"clientSecret"\s*:\s*""''',
+  '''"secret"\s*:\s*""''',
 ]
 
-# Files that are explicitly safe (example files, test fixtures)
+# Files/dirs that are explicitly safe. NOTE: .env.example is deliberately NOT
+# path-allowlisted — its placeholder values are excluded by the per-rule
+# allowlists above, so a real secret accidentally placed there is still caught.
 paths = [
-  '''.env.example''',
-  '''keycloak/REALM-EXPORT-NOTES.md''',
-  '''keycloak/PINNED-VERSION.md''',
-  '''README.md''',
+  '''keycloak/REALM-EXPORT-NOTES\.md''',
+  '''keycloak/PINNED-VERSION\.md''',
+  '''README\.md''',
+  # BMad / Claude Code tooling directories — vendored framework files and
+  # documentation that contain illustrative example API keys (not real
+  # project secrets). Out of scope for this repo's secret hygiene.
+  '''^\.claude/''',
+  '''^_bmad/''',
+  '''^_bmad-output/''',
+  # BATS test files — they contain illustrative example secret patterns
+  # (e.g. the AC1-RC-13 "KC_DB_PASSWORD: realpass" comment and the AC2-15
+  # fixture) on purpose. Real secrets still can't live here meaningfully.
+  '''^tests/''',
 ]

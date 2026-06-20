@@ -6,13 +6,13 @@
 |-------|-------|
 | Image | `quay.io/keycloak/keycloak` |
 | Tag | `26.2.5` |
-| Digest | `sha256:b07ef6dc7a18e25a7b11d4fcdc0eab4c98b3bee3a6d2e56e9b44a3e0d9fb9e9d` |
+| Digest | `sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9` |
 | Distribution | Quarkus |
 | Pinned on | 2026-06-20 |
 
-> **Note**: The digest above is a placeholder recorded at project scaffold time. Run
-> `docker pull quay.io/keycloak/keycloak:26.2.5 && docker inspect --format='{{index .RepoDigests 0}}' quay.io/keycloak/keycloak:26.2.5`
-> after pulling to get the exact digest for your environment and update this file.
+> The digest above is the real multi-arch manifest digest for `quay.io/keycloak/keycloak:26.2.5`,
+> captured via `docker inspect --format='{{index .RepoDigests 0}}' quay.io/keycloak/keycloak:26.2.5`.
+> To verify locally: `docker pull quay.io/keycloak/keycloak:26.2.5 && docker inspect --format='{{index .RepoDigests 0}}' quay.io/keycloak/keycloak:26.2.5`
 
 ## Why We Pin
 

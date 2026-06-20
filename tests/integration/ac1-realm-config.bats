@@ -28,10 +28,11 @@ _admin_token() {
     | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4
 }
 
-# Helper: skip if Keycloak isn't running
-# Explicitly check for HTTP 200 (consistent with ac1-docker-compose-smoke.bats)
+# Helper: skip if Keycloak isn't running.
+# Probe the realm endpoint on the main HTTP port — in Keycloak 26 /health/ready
+# is on the management port 9000, which is not published to the host.
 kc_running() {
-  curl -sf -o /dev/null -w "%{http_code}" "http://localhost:${KC_PORT}/health/ready" 2>/dev/null | grep -q "200"
+  curl -sf -o /dev/null -w "%{http_code}" "http://localhost:${KC_PORT}/realms/${REALM}" 2>/dev/null | grep -q "200"
 }
 
 # ---------------------------------------------------------------------------
@@ -230,11 +231,13 @@ kc_running() {
 # ---------------------------------------------------------------------------
 # [P1] AC1-RC-14 — postgres/init.sql exists and creates both databases
 # ---------------------------------------------------------------------------
-@test "[P1][AC1-RC-14] postgres/init.sql creates keycloak_db and rails_db" {
-  [ -f "postgres/init.sql" ]
-  grep -qi "CREATE DATABASE" postgres/init.sql
-  grep -qi "keycloak_db" postgres/init.sql
-  grep -qi "rails_db" postgres/init.sql
+@test "[P1][AC1-RC-14] postgres init script creates keycloak_db and rails_db" {
+  # init.sh (shell) is used instead of init.sql so it can read the DB password
+  # env vars and set role passwords / database ownership at first boot.
+  [ -f "postgres/init.sh" ]
+  grep -qi "CREATE DATABASE" postgres/init.sh
+  grep -qi "keycloak_db" postgres/init.sh
+  grep -qi "rails_db" postgres/init.sh
 }
 
 # ---------------------------------------------------------------------------

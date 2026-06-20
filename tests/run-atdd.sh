@@ -3,7 +3,7 @@
 # ATDD Test Runner — Story 1.1: Keycloak Stand-Up & Secret Hygiene
 #
 # Usage:
-#   ./tests/run-atdd.sh               # run all tests (all will skip in RED phase)
+#   ./tests/run-atdd.sh               # run all tests
 #   ./tests/run-atdd.sh secrets       # run only AC2 secret-hygiene tests
 #   ./tests/run-atdd.sh integration   # run only AC1 Docker/realm tests
 #
@@ -11,7 +11,9 @@
 #   brew install bats-core gitleaks lefthook
 #   docker + docker compose
 #
-# TDD Phase: RED — all tests skip until implementation is complete.
+# TDD Phase: GREEN — static tests run always; runtime tests (those needing a
+# running stack) self-skip when Keycloak/Postgres are not up. Start the stack
+# first (`docker compose up -d`) to exercise the runtime tests too.
 # =============================================================================
 
 set -euo pipefail
@@ -43,7 +45,8 @@ case "$FILTER" in
   all|*)
     echo "Running all Story 1.1 ATDD acceptance tests..."
     echo "=========================================="
-    echo "NOTE: All tests should SKIP in RED phase."
+    echo "NOTE: runtime tests self-skip if the stack is not running."
+    echo "      Run 'docker compose up -d' first to exercise them."
     echo "=========================================="
     bats tests/secret-hygiene/ac2-secret-hygiene.bats
     bats tests/integration/ac1-docker-compose-smoke.bats

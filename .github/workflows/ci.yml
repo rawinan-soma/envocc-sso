@@ -20,9 +20,16 @@ jobs:
   # ─── Secret Scanning Gate ──────────────────────────────────────────────────
   # Blocks the build if any secret pattern is detected in the source tree.
   # This is a hard gate — a match means the PR/push cannot merge.
+  #
+  # We invoke the gitleaks BINARY directly rather than gitleaks/gitleaks-action@v2:
+  # the v2 action requires a paid GITLEAKS_LICENSE for organization-owned repos
+  # (it exits non-zero without one), which would make the gate fail for the wrong
+  # reason. The binary needs no license and lets us pass --redact explicitly.
   gitleaks:
     name: Secret Scan (gitleaks)
     runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.24.0"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,30 +37,42 @@ jobs:
           # Fetch full history so gitleaks can scan all commits
           fetch-depth: 0
 
-      - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Use our custom config (includes Keycloak-specific rules + allowlist)
-          GITLEAKS_CONFIG: .gitleaks.toml
-          # Redact actual secret values from logs
-          GITLEAKS_ENABLE_COMMENTS: "true"
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -o "$tmp/gitleaks.tar.gz"
+          tar -xzf "$tmp/gitleaks.tar.gz" -C "$tmp" gitleaks
+          sudo install -m 0755 "$tmp/gitleaks" /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Run gitleaks (full working tree)
+        run: |
+          # --redact keeps any matched secret value out of the CI logs.
+          gitleaks detect --source . --no-git --config .gitleaks.toml --redact --verbose
 
   # ─── Realm Export Secret Check ─────────────────────────────────────────────
   # Extra targeted check: confirm the committed realm export contains no secrets.
   realm-export-check:
     name: Realm Export Clean
     runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.24.0"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install gitleaks
         run: |
-          GITLEAKS_VERSION="8.24.0"
+          set -euo pipefail
+          tmp="$(mktemp -d)"
           curl -sSfL \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz -C /usr/local/bin gitleaks
+            -o "$tmp/gitleaks.tar.gz"
+          tar -xzf "$tmp/gitleaks.tar.gz" -C "$tmp" gitleaks
+          sudo install -m 0755 "$tmp/gitleaks" /usr/local/bin/gitleaks
           gitleaks version
 
       - name: Verify realm-export.json has no secrets
@@ -61,6 +80,7 @@ jobs:
           if [ -f keycloak/realm-export.json ]; then
             gitleaks detect \
               --source keycloak/realm-export.json \
+              --no-git \
               --config .gitleaks.toml \
               --redact \
               --verbose

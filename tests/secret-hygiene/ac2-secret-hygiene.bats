@@ -29,12 +29,20 @@
 # ---------------------------------------------------------------------------
 # [P0] AC2-02 — realm-export.json does NOT contain real clientSecret values
 # ---------------------------------------------------------------------------
-@test "[P0][AC2-02] realm-export.json has no real clientSecret values (must be empty string or absent)" {
+@test "[P0][AC2-02] realm-export.json has no real client secret values (must be empty string or absent)" {
   [ -f "keycloak/realm-export.json" ]
 
-  # clientSecret must be absent or set to empty string ""
+  # Keycloak stores confidential-client secrets in the "secret" field of each
+  # client (the realm JSON has no "clientSecret" key), so check BOTH spellings.
+  # Each must be absent or set to the empty string "".
   if grep -o '"clientSecret":"[^"]*"' keycloak/realm-export.json | grep -v '"clientSecret":""'; then
     echo "FAIL: realm-export.json contains non-empty clientSecret values"
+    return 1
+  fi
+  # "secret":"..." on a client must be empty. (Key-provider HMAC/AES secrets use
+  # the array form "secret":["..."] and are covered by gitleaks AC2-01/AC2-05.)
+  if grep -o '"secret":"[^"]*"' keycloak/realm-export.json | grep -v '"secret":""'; then
+    echo "FAIL: realm-export.json contains non-empty client secret values"
     return 1
   fi
 }
@@ -45,8 +53,10 @@
 @test "[P0][AC2-03] realm-export.json has no real privateKey values" {
   [ -f "keycloak/realm-export.json" ]
 
-  # privateKey must be absent, empty string, or empty array element
-  if python3 -c "
+  # privateKey must be absent, empty string, or empty array element.
+  # Assert on the python EXIT CODE (run/status), not on grepping its stdout —
+  # grepping for "FAIL" would let a python crash (traceback != "FAIL") pass.
+  run python3 -c "
 import json, sys
 with open('keycloak/realm-export.json') as f:
     data = json.load(f)
@@ -69,10 +79,9 @@ def scan(obj):
             scan(item)
 scan(data)
 print('OK')
-" 2>&1 | grep -q "FAIL"; then
-    echo "FAIL: realm-export.json contains non-empty privateKey values"
-    return 1
-  fi
+"
+  # status 0 = no non-empty privateKey found AND python ran cleanly.
+  [ "$status" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -203,30 +212,25 @@ print('OK')
   command -v gitleaks >/dev/null 2>&1 || skip "gitleaks not installed"
   command -v lefthook >/dev/null 2>&1 || skip "lefthook not installed"
 
-  # Create a temp file with an obvious fake secret pattern, stage it
-  local tmpfile
-  tmpfile=$(mktemp /tmp/test-secret-XXXX.env)
-  echo 'AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' > "$tmpfile"
-  cp "$tmpfile" /tmp/test-secret-staged.env
+  git rev-parse --git-dir > /dev/null 2>&1 || skip "Not in a git repository context"
 
-  # Stage the file in the repo (if in git repo context)
-  if git rev-parse --git-dir > /dev/null 2>&1; then
-    cp /tmp/test-secret-staged.env test-secret-staged.env
-    git add test-secret-staged.env
+  # Stage at the repo ROOT with a filename NOT matched by .gitignore (the
+  # *.env / .env.* rules block staging) and NOT under the allowlisted tests/
+  # dir, so we genuinely exercise gitleaks on staged content.
+  local staged="test-fake-secret-staged.txt"
+  # A non-placeholder Keycloak admin password — caught by our custom rule.
+  # (Avoid the canonical AWS "EXAMPLE" key: the default ruleset allowlists it.)
+  echo 'KEYCLOAK_ADMIN_PASSWORD=Xy9Zq2Lm8Bv4Nc7Rt1Wp' > "$staged"
+  git add -f "$staged"
 
-    # gitleaks protect --staged must exit non-zero (finds the secret)
-    run gitleaks protect --staged --config .gitleaks.toml 2>&1
-    local gitleaks_exit="$status"
+  # gitleaks protect --staged must exit non-zero (finds the secret)
+  run gitleaks protect --staged --config .gitleaks.toml
+  local gitleaks_exit="$status"
 
-    # Clean up
-    git rm -f test-secret-staged.env 2>/dev/null || rm -f test-secret-staged.env
-    git reset HEAD test-secret-staged.env 2>/dev/null || true
+  # Clean up: unstage and remove the temp file no matter what.
+  git reset -q HEAD "$staged" 2>/dev/null || true
+  rm -f "$staged"
 
-    # Must have found a secret (non-zero exit)
-    [ "$gitleaks_exit" -ne 0 ]
-  else
-    skip "Not in a git repository context — skipping staged file test"
-  fi
-
-  rm -f "$tmpfile" /tmp/test-secret-staged.env
+  # Must have found a secret (non-zero exit)
+  [ "$gitleaks_exit" -ne 0 ]
 }
