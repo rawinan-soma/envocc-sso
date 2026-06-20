@@ -1,0 +1,100 @@
+# generated: 2026-06-20
+# last_updated: 2026-06-20
+# project: envocc-sso
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-06-20
+last_updated: 2026-06-20
+project: envocc-sso
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # ── Epic 1: Keycloak IdP Foundation & SSO Core ──────────────────────────────
+  epic-1: backlog
+  1-1-keycloak-stand-up-baseline-realm-and-secret-hygiene: backlog
+  1-2-realm-oidc-client-configuration-auth-code-and-pkce-only: backlog
+  1-3-realm-keys-and-token-issuance: backlog
+  1-4-sessions-brute-force-password-policy-and-enumeration-resistance: backlog
+  1-5-canonical-identity-model-and-work-email-claim: backlog
+  1-6-sign-in-and-verification-code-totp-flow: backlog
+  1-7-reference-client-proving-end-to-end-sso: backlog
+  1-8-keycloak-event-capture-enabled: backlog
+  epic-1-retrospective: optional
+
+  # ── Epic 2: Ministry Bronze Theme, Staff Experience & Recovery ───────────────
+  epic-2: backlog
+  2-1-ministry-bronze-keycloak-theme: backlog
+  2-2-bilingual-localization-en-and-th: backlog
+  2-3-first-login-activation-set-password-and-enroll-mfa: backlog
+  2-4-self-service-password-reset: backlog
+  2-5-email-action-token-hygiene-and-pending-account-expiry: backlog
+  epic-2-retrospective: optional
+
+  # ── Epic 3: Rails HR Admin Console (Employee Lifecycle) ─────────────────────
+  epic-3: backlog
+  3-1-rails-app-keycloak-oidc-login-role-gate-and-admin-api-adapter: backlog
+  3-2-create-and-search-users: backlog
+  3-3-enable-disable-with-immediate-revocation: backlog
+  3-4-hardened-admin-password-and-mfa-reset: backlog
+  3-5-csv-bulk-import: backlog
+  3-6-profile-edit-with-controlled-email-key-change: backlog
+  epic-3-retrospective: optional
+
+  # ── Epic 4: Rails System Admin Console & App Onboarding ─────────────────────
+  epic-4: backlog
+  4-1-system-section-step-up-re-auth-and-csrf: backlog
+  4-2-register-and-manage-oidc-clients: backlog
+  4-3-admin-user-and-realm-role-management-separation-of-duties: backlog
+  epic-4-retrospective: optional
+
+  # ── Epic 5: Audit, Compliance & Oversight ───────────────────────────────────
+  epic-5: backlog
+  5-1-complete-audit-event-capture: backlog
+  5-2-off-host-worm-shipping-and-integrity: backlog
+  5-3-audit-console-view-and-export-rails: backlog
+  5-4-retention-and-second-person-oversight: backlog
+  5-5-pdpa-compliance-artifacts: backlog
+  epic-5-retrospective: optional
+
+  # ── Epic 6: Integration Enablement & Production Hardening ───────────────────
+  epic-6: backlog
+  6-1-oidc-integration-guide: backlog
+  6-2-polished-reference-client: backlog
+  6-3-nginx-edge-and-abuse-protection: backlog
+  6-4-kamal-deploy-and-managed-keycloak-postgres-and-tested-backups: backlog
+  6-5-ci-security-gates-and-monitoring: backlog
+  6-6-pre-pilot-assurance: backlog
+  epic-6-retrospective: optional

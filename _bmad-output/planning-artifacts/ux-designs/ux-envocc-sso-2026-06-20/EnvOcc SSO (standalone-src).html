@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#1B3354">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#1B3354"/>
+    <rect x="470" y="250" width="260" height="260" rx="36" fill="#1B3354" stroke="#A9711B" stroke-width="10"/>
+    <text x="600" y="445" font-family="Georgia, 'Noto Serif', serif" font-size="180" font-weight="700" fill="#FFFFFF" text-anchor="middle">E</text>
+    <text x="600" y="610" font-family="Georgia, 'Noto Serif', serif" font-size="64" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="-1">EnvOcc</text>
+    <text x="600" y="660" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#A9B6CA" text-anchor="middle" letter-spacing="6">SINGLE SIGN-ON</text>
+  </svg>
+</template>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:#EEEAE2}
+  input,button,textarea{font-family:inherit}
+  ::placeholder{color:#9A9384}
+  @keyframes envSpin{to{transform:rotate(360deg)}}
+  
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#cfc7b8;border-radius:6px}
+</style>
+</helmet>
+
+<div style="min-height:100vh;font-family:'Noto Sans',system-ui,sans-serif;color:#1E2A3D;-webkit-font-smoothing:antialiased">
+
+  <!-- ============ STAFF AUTH SURFACES ============ -->
+  <sc-if value="{{ isAuth }}" hint-placeholder-val="{{ true }}">
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;background:radial-gradient(circle at 50% 0%, #F4F1EA 0%, #EEEAE2 60%)">
+
+      <!-- shared lockup -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <div style="width:40px;height:40px;border-radius:8px;background:#1B3354;border:1.5px solid #A9711B;display:flex;align-items:center;justify-content:center;font-family:'Noto Serif',serif;font-weight:700;font-size:20px;color:#fff">E</div>
+        <div>
+          <div style="font-family:'Noto Serif',serif;font-weight:700;font-size:18px;line-height:1.1;letter-spacing:-0.01em;color:#1B3354">EnvOcc</div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.13em;text-transform:uppercase;color:#6A6356;margin-top:2px">Occupational &amp; Environmental Diseases</div>
+        </div>
+      </div>
+
+      <div style="width:100%;max-width:420px;background:#F7F5F1;border:1px solid #DED7CB;border-top:3px solid #1B3354;border-radius:12px;box-shadow:0 1px 2px rgba(15,39,66,.06),0 10px 30px rgba(15,39,66,.06);padding:28px">
+
+        <!-- ---- Sign in ---- -->
+        <sc-if value="{{ isSignin }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:26px;line-height:1.2;letter-spacing:-0.01em;margin:0 0 6px">Sign in</h1>
+            <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 20px">Use your EnvOcc work email and password to continue.</p>
+
+            <sc-if value="{{ signinError }}" hint-placeholder-val="">
+              <div role="alert" style="display:flex;gap:10px;background:#FBEAE6;border:1px solid #AD2B1E;border-radius:8px;padding:11px 13px;margin-bottom:16px;color:#7E2018;font-size:13px;line-height:1.5">
+                <span style="font-weight:700">!</span><span>{{ signinError }}</span>
+              </div>
+            </sc-if>
+
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Work email</label>
+            <input value="{{ email }}" onInput="{{ onEmail }}" type="email" autocomplete="username" placeholder="name@envocc.go.th" style="width:100%;padding:11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px;color:#1E2A3D;margin-bottom:14px" style-focus="{{ inputFocus }}" />
+
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+              <label style="font-size:13px;font-weight:600">Password</label>
+              <a onClick="{{ goForgot }}" style="font-size:13px;color:#7A4F0E;text-decoration:underline;cursor:pointer">Forgot password?</a>
+            </div>
+            <div style="position:relative;margin-bottom:20px">
+              <input value="{{ password }}" onInput="{{ onPassword }}" type="{{ pwType }}" autocomplete="current-password" placeholder="Enter your password" style="width:100%;padding:11px 44px 11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px;color:#1E2A3D" style-focus="{{ inputFocus }}" />
+              <button onClick="{{ toggleShowPw }}" type="button" aria-label="Show or hide password" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#6A6356;font-size:12px;font-weight:600;padding:6px 8px;cursor:pointer">{{ pwToggleLabel }}</button>
+            </div>
+
+            <button onClick="{{ submitSignin }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" style-hover="{{ primaryHover }}">
+              <sc-if value="{{ signinLoading }}" hint-placeholder-val=""><span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;display:inline-block;animation:envSpin .7s linear infinite"></span></sc-if>
+              <span>{{ signinBtnLabel }}</span>
+            </button>
+
+            <div style="display:flex;gap:10px;background:#E9F0F6;border:1px solid #245B8C;border-radius:8px;padding:12px 13px;margin-top:20px">
+              <span style="color:#245B8C;font-weight:700;font-size:14px;line-height:1.5">🛡</span>
+              <div style="font-size:13px;line-height:1.5;color:#143F66">EnvOcc will never ask for your password or verification code by email, phone, or chat. Always check the address bar before signing in.</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ---- Verification code ---- -->
+        <sc-if value="{{ isCode }}" hint-placeholder-val="">
+          <div>
+            <a onClick="{{ goSignin }}" style="font-size:13px;color:#7A4F0E;text-decoration:underline;cursor:pointer">← Back</a>
+            <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:26px;line-height:1.2;letter-spacing:-0.01em;margin:14px 0 6px">Enter your verification code</h1>
+            <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 22px">Open your authenticator app and enter the 6-digit code for EnvOcc.</p>
+
+            <div role="group" aria-label="6-digit verification code" style="display:flex;gap:9px;margin-bottom:6px">
+              <sc-for list="{{ codeCells }}" as="cell" hint-placeholder-count="6">
+                <input id="{{ cell.id }}" value="{{ cell.value }}" onInput="{{ cell.onInput }}" onKeyDown="{{ cell.onKeyDown }}" onPaste="{{ cell.onPaste }}" inputmode="numeric" maxlength="1" aria-label="Digit" style="{{ cell.style }}" />
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ codeError }}" hint-placeholder-val="">
+              <p role="alert" style="font-size:13px;color:#7E2018;margin:8px 0 0">{{ codeError }}</p>
+            </sc-if>
+
+            <button onClick="{{ submitCode }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:22px;display:flex;align-items:center;justify-content:center;gap:8px" style-hover="{{ primaryHover }}">
+              <sc-if value="{{ codeLoading }}" hint-placeholder-val=""><span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;display:inline-block;animation:envSpin .7s linear infinite"></span></sc-if>
+              <span>Verify</span>
+            </button>
+
+            <div style="display:flex;justify-content:center;margin-top:16px">
+              <a onClick="{{ noop }}" style="font-size:13px;color:#7A4F0E;text-decoration:underline;cursor:pointer">Resend code (available in 30s)</a>
+            </div>
+
+            <div style="display:flex;gap:10px;background:#E9F0F6;border:1px solid #245B8C;border-radius:8px;padding:12px 13px;margin-top:20px">
+              <span style="color:#245B8C;font-weight:700;font-size:14px;line-height:1.5">🛡</span>
+              <div style="font-size:13px;line-height:1.5;color:#143F66">We'll never ask for your verification code by email, phone, or chat. The code is only ever typed here.</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ---- Signed in / redirect ---- -->
+        <sc-if value="{{ isRedirect }}" hint-placeholder-val="">
+          <div style="text-align:center;padding:8px 0">
+            <div style="width:52px;height:52px;border-radius:50%;background:#E9F2EA;border:1px solid #2A6B3E;display:flex;align-items:center;justify-content:center;margin:6px auto 16px;color:#1B4F2A;font-size:24px;font-weight:700">✓</div>
+            <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;line-height:1.25;margin:0 0 8px">You're signed in</h1>
+            <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 20px">Returning you to the <strong style="color:#1E2A3D">Occupational Disease Reporting</strong> app…</p>
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px;color:#6A6356;font-size:13px;margin-bottom:20px"><span style="width:14px;height:14px;border:2px solid #DED7CB;border-top-color:#1B3354;border-radius:50%;display:inline-block;animation:envSpin .7s linear infinite"></span> Redirecting</div>
+            <button onClick="{{ goSignin }}" style="padding:9px 16px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Start over</button>
+          </div>
+        </sc-if>
+
+        <!-- ---- Activation ---- -->
+        <sc-if value="{{ isActivate }}" hint-placeholder-val="">
+          <div>
+            <!-- stepper -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+              <sc-for list="{{ actSteps }}" as="s" hint-placeholder-count="3">
+                <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                  <div style="height:4px;border-radius:9999px;background:{{ s.bar }}"></div>
+                  <div style="font-size:11px;font-weight:600;color:{{ s.color }}">{{ s.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <!-- step 0: set password -->
+            <sc-if value="{{ actStep0 }}" hint-placeholder-val="">
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;line-height:1.25;margin:0 0 6px">Set your password</h1>
+              <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 18px">Welcome, <strong style="color:#1E2A3D">{{ actName }}</strong>. Choose a password to activate your account.</p>
+
+              <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">New password</label>
+              <div style="position:relative;margin-bottom:12px">
+                <input value="{{ actPw }}" onInput="{{ onActPw }}" type="{{ actPwType }}" placeholder="Choose a strong password" style="width:100%;padding:11px 44px 11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px" style-focus="{{ inputFocus }}" />
+                <button onClick="{{ toggleActShowPw }}" type="button" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#6A6356;font-size:12px;font-weight:600;padding:6px 8px;cursor:pointer">{{ actPwToggleLabel }}</button>
+              </div>
+
+              <div style="background:#fff;border:1px solid #DED7CB;border-radius:8px;padding:11px 13px;margin-bottom:14px">
+                <sc-for list="{{ pwHints }}" as="h" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.7;color:{{ h.color }}">
+                    <span style="font-weight:700">{{ h.mark }}</span><span>{{ h.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Confirm password</label>
+              <input value="{{ actPw2 }}" onInput="{{ onActPw2 }}" type="password" placeholder="Re-enter your password" style="width:100%;padding:11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px;margin-bottom:6px" style-focus="{{ inputFocus }}" />
+              <sc-if value="{{ actPwMismatch }}" hint-placeholder-val=""><p style="font-size:12px;color:#7E2018;margin:0 0 8px">Passwords don't match yet.</p></sc-if>
+
+              <button onClick="{{ submitActPw }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px" style-hover="{{ primaryHover }}">Continue to authenticator setup</button>
+            </sc-if>
+
+            <!-- step 1: MFA enroll -->
+            <sc-if value="{{ actStep1 }}" hint-placeholder-val="">
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;line-height:1.25;margin:0 0 6px">Set up your authenticator app</h1>
+              <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 16px">Use an authenticator app (such as Google Authenticator or Microsoft Authenticator) to add a verification code to your account.</p>
+
+              <div style="display:flex;gap:16px;align-items:center;background:#fff;border:1px solid #DED7CB;border-radius:8px;padding:16px;margin-bottom:14px">
+                <div style="flex:none;width:128px;height:128px;border:1px solid #DED7CB;border-radius:6px;padding:8px;background:#fff">{{ qrEl }}</div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;margin-bottom:6px">Can't scan the code?</div>
+                  <div style="font-size:12px;color:#6A6356;line-height:1.5;margin-bottom:8px">Enter this setup key manually:</div>
+                  <div style="font-family:'Noto Sans Mono',monospace;font-size:13px;font-weight:600;letter-spacing:0.04em;color:#1E2A3D;background:#F7F5F1;border:1px solid #DED7CB;border-radius:6px;padding:8px 10px;word-break:break-all">JBSW Y3DP EHPK 3PXP</div>
+                </div>
+              </div>
+
+              <label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px">Enter the 6-digit code from your app to confirm</label>
+              <div role="group" aria-label="6-digit confirmation code" style="display:flex;gap:9px;margin-bottom:6px">
+                <sc-for list="{{ mfaCells }}" as="cell" hint-placeholder-count="6">
+                  <input id="{{ cell.id }}" value="{{ cell.value }}" onInput="{{ cell.onInput }}" onKeyDown="{{ cell.onKeyDown }}" onPaste="{{ cell.onPaste }}" inputmode="numeric" maxlength="1" aria-label="Digit" style="{{ cell.style }}" />
+                </sc-for>
+              </div>
+              <sc-if value="{{ mfaError }}" hint-placeholder-val=""><p role="alert" style="font-size:13px;color:#7E2018;margin:8px 0 0">{{ mfaError }}</p></sc-if>
+
+              <button onClick="{{ submitMfa }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:18px" style-hover="{{ primaryHover }}">Activate account</button>
+            </sc-if>
+
+            <!-- step 2: done -->
+            <sc-if value="{{ actStep2 }}" hint-placeholder-val="">
+              <div style="text-align:center;padding:6px 0">
+                <div style="width:52px;height:52px;border-radius:50%;background:#E9F2EA;border:1px solid #2A6B3E;display:flex;align-items:center;justify-content:center;margin:6px auto 16px;color:#1B4F2A;font-size:24px;font-weight:700">✓</div>
+                <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;line-height:1.25;margin:0 0 8px">Your account is now active</h1>
+                <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 18px">You're signed in. We've also emailed a confirmation — if this wasn't you, reset your password now and tell your administrator.</p>
+                <button onClick="{{ goSignin }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">Continue</button>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ---- Password reset ---- -->
+        <sc-if value="{{ isReset }}" hint-placeholder-val="">
+          <div>
+            <!-- step 0: request -->
+            <sc-if value="{{ resetStep0 }}" hint-placeholder-val="">
+              <a onClick="{{ goSignin }}" style="font-size:13px;color:#7A4F0E;text-decoration:underline;cursor:pointer">← Back to sign in</a>
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;line-height:1.25;margin:14px 0 6px">Reset your password</h1>
+              <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 20px">Enter your work email and we'll send you a link to set a new password.</p>
+              <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Work email</label>
+              <input value="{{ resetEmail }}" onInput="{{ onResetEmail }}" type="email" placeholder="name@envocc.go.th" style="width:100%;padding:11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px;margin-bottom:20px" style-focus="{{ inputFocus }}" />
+              <button onClick="{{ submitResetReq }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">Send reset link</button>
+            </sc-if>
+
+            <!-- step 1: generic sent -->
+            <sc-if value="{{ resetStep1 }}" hint-placeholder-val="">
+              <div style="width:48px;height:48px;border-radius:8px;background:#E9F0F6;border:1px solid #245B8C;display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#143F66;font-size:22px">✉</div>
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;line-height:1.25;margin:0 0 8px">Check your email</h1>
+              <p style="font-size:14px;line-height:1.55;color:#1E2A3D;margin:0 0 8px">If an account exists for this email, we've sent a link to reset your password.</p>
+              <p style="font-size:13px;line-height:1.55;color:#6A6356;margin:0 0 20px">The link is single-use and expires shortly. Don't share it — it signs in as you.</p>
+              <button onClick="{{ openResetLink }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:10px" style-hover="{{ primaryHover }}">Open reset link (demo)</button>
+              <button onClick="{{ goSignin }}" style="width:100%;padding:11px 16px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Back to sign in</button>
+            </sc-if>
+
+            <!-- step 2: set new -->
+            <sc-if value="{{ resetStep2 }}" hint-placeholder-val="">
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;line-height:1.25;margin:0 0 6px">Set a new password</h1>
+              <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 18px">Choose a new password for your account. Your authenticator app stays the same.</p>
+              <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">New password</label>
+              <div style="position:relative;margin-bottom:12px">
+                <input value="{{ resetPw }}" onInput="{{ onResetPw }}" type="{{ resetPwType }}" placeholder="Choose a strong password" style="width:100%;padding:11px 44px 11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px" style-focus="{{ inputFocus }}" />
+                <button onClick="{{ toggleResetShowPw }}" type="button" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#6A6356;font-size:12px;font-weight:600;padding:6px 8px;cursor:pointer">{{ resetPwToggleLabel }}</button>
+              </div>
+              <div style="background:#fff;border:1px solid #DED7CB;border-radius:8px;padding:11px 13px;margin-bottom:18px">
+                <sc-for list="{{ resetPwHints }}" as="h" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.7;color:{{ h.color }}"><span style="font-weight:700">{{ h.mark }}</span><span>{{ h.label }}</span></div>
+                </sc-for>
+              </div>
+              <button onClick="{{ submitNewPw }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">Save new password</button>
+            </sc-if>
+
+            <!-- step 3: done -->
+            <sc-if value="{{ resetStep3 }}" hint-placeholder-val="">
+              <div style="width:52px;height:52px;border-radius:50%;background:#E9F2EA;border:1px solid #2A6B3E;display:flex;align-items:center;justify-content:center;margin:6px 0 16px;color:#1B4F2A;font-size:24px;font-weight:700">✓</div>
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;line-height:1.25;margin:0 0 8px">Your password was changed</h1>
+              <p style="font-size:14px;line-height:1.55;color:#1E2A3D;margin:0 0 8px">For your protection, you've been signed out everywhere else. You'll need to sign in again on your other devices.</p>
+              <p style="font-size:13px;line-height:1.55;color:#6A6356;margin:0 0 20px">We've emailed you a confirmation. If this wasn't you, reset your password again and tell your administrator.</p>
+              <button onClick="{{ goSignin }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">Sign in</button>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ---- Key states ---- -->
+        <sc-if value="{{ isStates }}" hint-placeholder-val="">
+          <div>
+            <div style="display:flex;gap:6px;margin-bottom:20px;background:#fff;border:1px solid #DED7CB;border-radius:8px;padding:4px">
+              <sc-for list="{{ stateTabs }}" as="t" hint-placeholder-count="4">
+                <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ stLockout }}" hint-placeholder-val="">
+              <div style="display:flex;gap:10px;background:#F7EEDD;border:1px solid #97601A;border-radius:8px;padding:13px 14px;margin-bottom:18px">
+                <span style="color:#97601A;font-weight:700">⏱</span>
+                <div style="font-size:13px;line-height:1.55;color:#6B440F"><strong>Too many attempts.</strong> Please wait a few minutes and try again. This protects your account whether or not the email is registered.</div>
+              </div>
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:22px;line-height:1.25;margin:0 0 6px">Sign in paused</h1>
+              <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 18px">For your security we've briefly paused sign-in from this device.</p>
+              <button disabled style="width:100%;padding:12px 16px;background:#A9A293;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:not-allowed">Try again in 4:32</button>
+            </sc-if>
+
+            <sc-if value="{{ stExpired }}" hint-placeholder-val="">
+              <div style="display:flex;gap:10px;background:#FBEAE6;border:1px solid #AD2B1E;border-radius:8px;padding:13px 14px;margin-bottom:18px">
+                <span style="color:#AD2B1E;font-weight:700">!</span>
+                <div style="font-size:13px;line-height:1.55;color:#7E2018">This link has expired or has already been used.</div>
+              </div>
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:22px;line-height:1.25;margin:0 0 6px">Link no longer valid</h1>
+              <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 18px">For your security, sign-in links can only be used once and expire after a short time. You can request a fresh one.</p>
+              <button onClick="{{ goForgot }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:10px" style-hover="{{ primaryHover }}">Request a new link</button>
+              <button onClick="{{ goSignin }}" style="width:100%;padding:11px 16px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Back to sign in</button>
+            </sc-if>
+
+            <sc-if value="{{ stSession }}" hint-placeholder-val="">
+              <div style="display:flex;gap:10px;background:#E9F0F6;border:1px solid #245B8C;border-radius:8px;padding:13px 14px;margin-bottom:18px">
+                <span style="color:#245B8C;font-weight:700">⟳</span>
+                <div style="font-size:13px;line-height:1.55;color:#143F66">Your session has ended. Please sign in again to continue.</div>
+              </div>
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:22px;line-height:1.25;margin:0 0 6px">Welcome back, Somchai</h1>
+              <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 18px">For your security you're signed out after a period of inactivity. Sign in again to pick up where you left off.</p>
+              <button onClick="{{ goSignin }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">Sign in again</button>
+            </sc-if>
+
+            <sc-if value="{{ stSignedout }}" hint-placeholder-val="">
+              <div style="width:48px;height:48px;border-radius:8px;background:#F7F5F1;border:1px solid #DED7CB;display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#6A6356;font-size:22px">⏻</div>
+              <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:22px;line-height:1.25;margin:0 0 8px">You've been signed out</h1>
+              <p style="font-size:14px;line-height:1.55;color:#6A6356;margin:0 0 20px">Your session on all EnvOcc apps has ended. Sign in again whenever you're ready.</p>
+              <button onClick="{{ goSignin }}" style="width:100%;padding:12px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">Sign in</button>
+            </sc-if>
+          </div>
+        </sc-if>
+
+      </div>
+
+      <p style="font-size:12px;color:#6A6356;margin-top:20px;text-align:center;max-width:420px;line-height:1.5">Division of Occupational and Environmental Diseases · Ministry of Public Health</p>
+    </div>
+  </sc-if>
+
+  <!-- ============ ADMIN APP ============ -->
+  <sc-if value="{{ isAdmin }}" hint-placeholder-val="">
+    <div style="min-height:100vh;background:#fff">
+      <!-- header -->
+      <header style="background:#1B3354;border-bottom:3px solid #A9711B;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:20">
+        <div style="display:flex;align-items:center;gap:11px">
+          <div style="width:32px;height:32px;border-radius:6px;background:#1B3354;border:1.5px solid #A9711B;display:flex;align-items:center;justify-content:center;font-family:'Noto Serif',serif;font-weight:700;font-size:16px;color:#fff">E</div>
+          <div>
+            <div style="font-family:'Noto Serif',serif;font-weight:700;font-size:16px;color:#fff;line-height:1.1">EnvOcc</div>
+            <div style="font-size:9px;font-weight:700;letter-spacing:0.13em;text-transform:uppercase;color:#A9B6CA;margin-top:1px">Identity Administration</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:18px">
+          <nav style="display:flex;gap:4px">
+            <sc-for list="{{ adminNav }}" as="n" hint-placeholder-count="3">
+              <button onClick="{{ n.onClick }}" style="{{ n.style }}">{{ n.label }}</button>
+            </sc-for>
+          </nav>
+          <div style="width:1px;height:26px;background:rgba(255,255,255,.18)"></div>
+          <div style="display:flex;align-items:center;gap:9px">
+            <div style="text-align:right">
+              <div style="font-size:12px;font-weight:600;color:#fff;line-height:1.2">{{ adminName }}</div>
+              <div style="font-size:11px;color:#A9B6CA;line-height:1.2">{{ adminRoleLabel }}</div>
+            </div>
+            <div style="width:30px;height:30px;border-radius:50%;background:#A9711B;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">{{ adminInitials }}</div>
+          </div>
+        </div>
+      </header>
+
+      <main style="max-width:1280px;margin:0 auto;padding:28px 24px 80px">
+
+        <!-- HR: User list -->
+        <sc-if value="{{ avUserList }}" hint-placeholder-val="">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;gap:16px;flex-wrap:wrap">
+              <div>
+                <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;margin:0 0 4px">Staff accounts</h1>
+                <p style="font-size:13px;color:#6A6356;margin:0">{{ userCountLabel }}</p>
+              </div>
+              <div style="display:flex;gap:10px">
+                <button onClick="{{ goImport }}" style="padding:9px 15px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Import CSV</button>
+                <button onClick="{{ openCreateUser }}" style="padding:9px 15px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">+ Create user</button>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+              <input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search by name or email…" style="flex:1;min-width:240px;padding:10px 13px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:13px" style-focus="{{ inputFocus }}" />
+              <sc-for list="{{ statusFilters }}" as="f" hint-placeholder-count="4">
+                <button onClick="{{ f.onClick }}" style="{{ f.style }}">{{ f.label }}</button>
+              </sc-for>
+            </div>
+
+            <div style="border:1px solid #DED7CB;border-radius:12px;overflow:hidden;background:#fff">
+              <div style="display:grid;grid-template-columns:2.4fr 1.4fr 1fr 1fr;gap:0;padding:11px 18px;background:#F7F5F1;border-bottom:1px solid #DED7CB;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6A6356">
+                <div>Name</div><div>Department</div><div>Status</div><div style="text-align:right">Last sign-in</div>
+              </div>
+              <sc-for list="{{ usersFiltered }}" as="u" hint-placeholder-count="6">
+                <div onClick="{{ u.onClick }}" style="display:grid;grid-template-columns:2.4fr 1.4fr 1fr 1fr;gap:0;padding:13px 18px;border-bottom:1px solid #EEE9DF;cursor:pointer;align-items:center" style-hover="{{ rowHover }}">
+                  <div><div style="font-size:14px;font-weight:600;color:#1E2A3D">{{ u.name }}</div><div style="font-size:12px;color:#6A6356">{{ u.email }}</div></div>
+                  <div style="font-size:13px;color:#6A6356">{{ u.dept }}</div>
+                  <div><span style="{{ u.pillStyle }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ u.dotColor }};display:inline-block"></span>{{ u.status }}</span></div>
+                  <div style="font-size:13px;color:#6A6356;text-align:right">{{ u.lastSignIn }}</div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ usersEmpty }}" hint-placeholder-val="">
+                <div style="padding:48px 18px;text-align:center"><p style="font-size:14px;color:#6A6356;margin:0 0 14px">No staff accounts match your search.</p></div>
+              </sc-if>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:12px;color:#6A6356">
+              <span>{{ paginationLabel }}</span>
+              <div style="display:flex;gap:6px">
+                <button style="padding:6px 11px;background:#fff;color:#9C907A;border:1px solid #DED7CB;border-radius:6px;font-size:12px;font-weight:600;cursor:not-allowed">Previous</button>
+                <button style="padding:6px 11px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Next</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- HR: User detail -->
+        <sc-if value="{{ avUserDetail }}" hint-placeholder-val="">
+          <div>
+            <a onClick="{{ goUserList }}" style="font-size:13px;color:#7A4F0E;text-decoration:underline;cursor:pointer">← All staff accounts</a>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin:14px 0 24px;gap:16px;flex-wrap:wrap">
+              <div style="display:flex;gap:14px;align-items:center">
+                <div style="width:52px;height:52px;border-radius:50%;background:#1B3354;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;font-family:'Noto Serif',serif">{{ duInitials }}</div>
+                <div>
+                  <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;margin:0 0 4px">{{ duName }}</h1>
+                  <div style="display:flex;align-items:center;gap:10px"><span style="font-size:13px;color:#6A6356">{{ duEmail }}</span><span style="{{ duPillStyle }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ duDotColor }};display:inline-block"></span>{{ duStatus }}</span></div>
+                </div>
+              </div>
+              <div style="display:flex;gap:9px;flex-wrap:wrap">
+                <sc-if value="{{ duIsActive }}" hint-placeholder-val=""><button onClick="{{ openDisable }}" style="padding:9px 15px;background:#fff;color:#AD2B1E;border:1px solid #E2A79F;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Disable account</button></sc-if>
+                <sc-if value="{{ duIsDisabled }}" hint-placeholder-val=""><button onClick="{{ reEnableUser }}" style="padding:9px 15px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">Re-enable account</button></sc-if>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start">
+              <!-- profile -->
+              <div style="border:1px solid #DED7CB;border-radius:12px;background:#fff;overflow:hidden">
+                <div style="padding:14px 18px;border-bottom:1px solid #EEE9DF;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6A6356">Profile</div>
+                <div style="padding:6px 18px">
+                  <sc-for list="{{ duProfile }}" as="p" hint-placeholder-count="4">
+                    <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #F1ECE2;font-size:13px"><span style="color:#6A6356">{{ p.k }}</span><span style="font-weight:600;color:#1E2A3D">{{ p.v }}</span></div>
+                  </sc-for>
+                </div>
+                <div style="padding:14px 18px"><button onClick="{{ noop }}" style="padding:8px 14px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Edit profile</button></div>
+              </div>
+
+              <!-- security actions -->
+              <div style="border:1px solid #DED7CB;border-radius:12px;background:#fff;overflow:hidden">
+                <div style="padding:14px 18px;border-bottom:1px solid #EEE9DF;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6A6356">Account security</div>
+                <div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+                  <div>
+                    <div style="font-size:13px;font-weight:600;margin-bottom:3px">Password reset</div>
+                    <div style="font-size:12px;color:#6A6356;line-height:1.5;margin-bottom:8px">Send a single-use link so the user can set a new password.</div>
+                    <button onClick="{{ triggerReset }}" style="padding:8px 14px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Send reset link</button>
+                  </div>
+                  <div style="height:1px;background:#F1ECE2"></div>
+                  <div>
+                    <div style="font-size:13px;font-weight:600;margin-bottom:3px">Reset authenticator (MFA)</div>
+                    <div style="font-size:12px;color:#6A6356;line-height:1.5;margin-bottom:8px">Returns the account to re-activation. Requires out-of-band identity verification.</div>
+                    <button onClick="{{ openResetMfa }}" style="padding:8px 14px;background:#fff;color:#AD2B1E;border:1px solid #E2A79F;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Reset MFA…</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- HR: CSV import -->
+        <sc-if value="{{ avImport }}" hint-placeholder-val="">
+          <div>
+            <a onClick="{{ goUserList }}" style="font-size:13px;color:#7A4F0E;text-decoration:underline;cursor:pointer">← All staff accounts</a>
+            <h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;margin:14px 0 4px">Import staff from CSV</h1>
+            <p style="font-size:13px;color:#6A6356;margin:0 0 22px">Upload a roster to create pending accounts. Nothing is created until you review and confirm.</p>
+
+            <sc-if value="{{ csvDrop }}" hint-placeholder-val="">
+              <div onClick="{{ csvUpload }}" style="border:2px dashed #9C907A;border-radius:12px;background:#F7F5F1;padding:48px 24px;text-align:center;cursor:pointer" style-hover="{{ dropHover }}">
+                <div style="width:46px;height:46px;border-radius:10px;background:#fff;border:1px solid #DED7CB;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px;color:#1B3354">↑</div>
+                <div style="font-size:15px;font-weight:600;margin-bottom:5px">Drop your CSV here, or click to choose a file</div>
+                <div style="font-size:12px;color:#6A6356">Columns: full name, work email. Up to 200 rows per import.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ csvPreview }}" hint-placeholder-val="">
+              <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+                <div style="flex:1;min-width:130px;border:1px solid #DED7CB;border-radius:10px;padding:13px 16px;background:#fff"><div style="font-size:22px;font-weight:700;color:#1B4F2A">{{ csvClean }}</div><div style="font-size:12px;color:#6A6356">Ready to create</div></div>
+                <div style="flex:1;min-width:130px;border:1px solid #DED7CB;border-radius:10px;padding:13px 16px;background:#fff"><div style="font-size:22px;font-weight:700;color:#6B440F">{{ csvDup }}</div><div style="font-size:12px;color:#6A6356">Duplicates (skipped)</div></div>
+                <div style="flex:1;min-width:130px;border:1px solid #DED7CB;border-radius:10px;padding:13px 16px;background:#fff"><div style="font-size:22px;font-weight:700;color:#7E2018">{{ csvErr }}</div><div style="font-size:12px;color:#6A6356">Errors (excluded)</div></div>
+              </div>
+              <div style="border:1px solid #DED7CB;border-radius:12px;overflow:hidden;background:#fff">
+                <div style="display:grid;grid-template-columns:40px 1.6fr 2fr 1.4fr;padding:10px 16px;background:#F7F5F1;border-bottom:1px solid #DED7CB;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6A6356"><div>#</div><div>Name</div><div>Email</div><div>Status</div></div>
+                <sc-for list="{{ csvRows }}" as="r" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:40px 1.6fr 2fr 1.4fr;padding:11px 16px;border-bottom:1px solid #EEE9DF;align-items:center;background:{{ r.bg }}">
+                    <div style="font-size:12px;color:#6A6356">{{ r.n }}</div>
+                    <div style="font-size:13px;font-weight:600;color:#1E2A3D">{{ r.name }}</div>
+                    <div style="font-size:13px;color:#6A6356">{{ r.email }}</div>
+                    <div style="font-size:12px;font-weight:600;color:{{ r.statusColor }}">{{ r.statusText }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:12px;flex-wrap:wrap">
+                <p style="font-size:13px;color:#6A6356;margin:0">{{ csvConfirmHint }}</p>
+                <div style="display:flex;gap:10px">
+                  <button onClick="{{ csvCancel }}" style="padding:10px 16px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+                  <button onClick="{{ csvConfirm }}" style="padding:10px 16px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">{{ csvConfirmLabel }}</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ csvDone }}" hint-placeholder-val="">
+              <div style="border:1px solid #2A6B3E;background:#E9F2EA;border-radius:12px;padding:22px 24px;display:flex;gap:14px;align-items:flex-start">
+                <span style="color:#1B4F2A;font-size:22px;font-weight:700">✓</span>
+                <div>
+                  <h2 style="font-family:'Noto Serif',serif;font-weight:700;font-size:18px;color:#1B4F2A;margin:0 0 6px">{{ csvDoneTitle }}</h2>
+                  <p style="font-size:13px;color:#1B4F2A;line-height:1.55;margin:0 0 16px">Activation emails are being sent. New accounts appear as <strong>Pending</strong> until each person activates.</p>
+                  <button onClick="{{ goUserList }}" style="padding:9px 15px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">View staff accounts</button>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- SYSTEM: Clients -->
+        <sc-if value="{{ avClients }}" hint-placeholder-val="">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;gap:16px;flex-wrap:wrap">
+              <div><h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;margin:0 0 4px">Registered applications</h1><p style="font-size:13px;color:#6A6356;margin:0">{{ clientCountLabel }}</p></div>
+              <button onClick="{{ openRegisterClient }}" style="padding:9px 15px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">+ Register client</button>
+            </div>
+            <div style="border:1px solid #DED7CB;border-radius:12px;overflow:hidden;background:#fff">
+              <div style="display:grid;grid-template-columns:2fr 2.4fr 1fr;padding:11px 18px;background:#F7F5F1;border-bottom:1px solid #DED7CB;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6A6356"><div>Application</div><div>Redirect URI</div><div style="text-align:right">Status</div></div>
+              <sc-for list="{{ clients }}" as="c" hint-placeholder-count="5">
+                <div onClick="{{ c.onClick }}" style="display:grid;grid-template-columns:2fr 2.4fr 1fr;padding:13px 18px;border-bottom:1px solid #EEE9DF;cursor:pointer;align-items:center" style-hover="{{ rowHover }}">
+                  <div><div style="font-size:14px;font-weight:600">{{ c.name }}</div><div style="font-family:'Noto Sans Mono',monospace;font-size:11px;color:#6A6356">{{ c.id }}</div></div>
+                  <div style="font-family:'Noto Sans Mono',monospace;font-size:12px;color:#6A6356;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.redirect }}</div>
+                  <div style="text-align:right"><span style="{{ c.pillStyle }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ c.dotColor }};display:inline-block"></span>{{ c.status }}</span></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- SYSTEM: Audit log -->
+        <sc-if value="{{ avAudit }}" hint-placeholder-val="">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;gap:16px;flex-wrap:wrap">
+              <div><h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;margin:0 0 4px">Audit log</h1><p style="font-size:13px;color:#6A6356;margin:0">Authentication events and administrator actions. Every export is itself recorded.</p></div>
+              <button onClick="{{ noop }}" style="padding:9px 15px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Export</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+              <sc-for list="{{ auditFilters }}" as="f" hint-placeholder-count="4"><button onClick="{{ f.onClick }}" style="{{ f.style }}">{{ f.label }}</button></sc-for>
+            </div>
+            <div style="border:1px solid #DED7CB;border-radius:12px;overflow:hidden;background:#fff">
+              <div style="display:grid;grid-template-columns:1.2fr 1.4fr 2.2fr 1.2fr;padding:11px 18px;background:#F7F5F1;border-bottom:1px solid #DED7CB;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6A6356"><div>Time</div><div>Event</div><div>Detail</div><div>Actor</div></div>
+              <sc-for list="{{ auditRows }}" as="a" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:1.2fr 1.4fr 2.2fr 1.2fr;padding:12px 18px;border-bottom:1px solid #EEE9DF;align-items:center">
+                  <div style="font-size:12px;color:#6A6356;font-family:'Noto Sans Mono',monospace">{{ a.time }}</div>
+                  <div><span style="{{ a.tagStyle }}">{{ a.event }}</span></div>
+                  <div style="font-size:13px;color:#1E2A3D">{{ a.detail }}</div>
+                  <div style="font-size:13px;color:#6A6356">{{ a.actor }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- SYSTEM: Admin users -->
+        <sc-if value="{{ avAdmins }}" hint-placeholder-val="">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;gap:16px;flex-wrap:wrap">
+              <div><h1 style="font-family:'Noto Serif',serif;font-weight:700;font-size:24px;margin:0 0 4px">Administrators</h1><p style="font-size:13px;color:#6A6356;margin:0">Separation of duties is enforced by role. HR and System administrators see different sections.</p></div>
+              <button onClick="{{ openCreateAdmin }}" style="padding:9px 15px;background:#1B3354;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer" style-hover="{{ primaryHover }}">+ Add administrator</button>
+            </div>
+            <div style="border:1px solid #DED7CB;border-radius:12px;overflow:hidden;background:#fff">
+              <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr;padding:11px 18px;background:#F7F5F1;border-bottom:1px solid #DED7CB;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6A6356"><div>Name</div><div>Role</div><div>Status</div><div style="text-align:right">Action</div></div>
+              <sc-for list="{{ adminsList }}" as="a" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr;padding:13px 18px;border-bottom:1px solid #EEE9DF;align-items:center">
+                  <div><div style="font-size:14px;font-weight:600">{{ a.name }}</div><div style="font-size:12px;color:#6A6356">{{ a.email }}</div></div>
+                  <div><span style="font-size:12px;font-weight:600;color:#143F66;background:#E9F0F6;border:1px solid #245B8C;padding:2px 9px;border-radius:9999px">{{ a.role }}</span></div>
+                  <div><span style="{{ a.pillStyle }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ a.dotColor }};display:inline-block"></span>{{ a.status }}</span></div>
+                  <div style="text-align:right"><button onClick="{{ a.onDisable }}" style="padding:6px 12px;background:#fff;color:{{ a.actionColor }};border:1px solid #DED7CB;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">{{ a.action }}</button></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </sc-if>
+
+  <!-- ============ MODALS ============ -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;background:rgba(20,39,68,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" style="width:100%;max-width:460px;background:#fff;border:1px solid #DED7CB;border-radius:12px;box-shadow:0 20px 60px rgba(15,39,66,.25);overflow:hidden">
+
+        <!-- Disable confirm -->
+        <sc-if value="{{ mDisable }}" hint-placeholder-val="">
+          <div style="padding:24px">
+            <h2 style="font-family:'Noto Serif',serif;font-weight:700;font-size:20px;margin:0 0 8px">Disable {{ duName }}?</h2>
+            <p style="font-size:14px;line-height:1.55;color:#1E2A3D;margin:0 0 8px">This person will no longer be able to sign in to any EnvOcc app. Their active sessions and sign-in links are revoked immediately.</p>
+            <p style="font-size:13px;line-height:1.55;color:#6A6356;margin:0 0 22px">You can re-enable the account later. This action is recorded in the audit log.</p>
+            <div style="display:flex;justify-content:flex-end;gap:10px">
+              <button onClick="{{ closeModal }}" style="padding:10px 16px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+              <button onClick="{{ confirmDisable }}" style="padding:10px 16px;background:#AD2B1E;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Disable account</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- Reset MFA: step-up + attestation -->
+        <sc-if value="{{ mResetMfa }}" hint-placeholder-val="">
+          <div style="height:4px;background:#A9711B"></div>
+          <div style="padding:24px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#97601A;margin-bottom:8px">Sensitive action · confirm it's you</div>
+            <h2 style="font-family:'Noto Serif',serif;font-weight:700;font-size:20px;margin:0 0 8px">Reset authenticator for {{ duName }}</h2>
+            <p style="font-size:13px;line-height:1.55;color:#1E2A3D;margin:0 0 18px">This returns the account to re-activation: {{ duFirst }} will re-set their password and enroll a new authenticator via a single-use link. A security email is sent.</p>
+
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Re-enter your password</label>
+            <input value="{{ stepPw }}" onInput="{{ onStepPw }}" type="password" placeholder="Your administrator password" style="width:100%;padding:11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px;margin-bottom:16px" style-focus="{{ inputFocus }}" />
+
+            <label onClick="{{ toggleAttest }}" style="display:flex;gap:11px;align-items:flex-start;background:#F7EEDD;border:1px solid #97601A;border-radius:8px;padding:13px;cursor:pointer;margin-bottom:20px">
+              <span style="flex:none;width:20px;height:20px;border-radius:5px;border:1.5px solid #97601A;background:{{ attestBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-top:1px">{{ attestMark }}</span>
+              <span style="font-size:13px;line-height:1.5;color:#6B440F">I verified this person's identity out-of-band (e.g. a known voice on a call-back, or in person) before resetting their MFA.</span>
+            </label>
+
+            <div style="display:flex;justify-content:flex-end;gap:10px">
+              <button onClick="{{ closeModal }}" style="padding:10px 16px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+              <button onClick="{{ confirmResetMfa }}" style="{{ resetMfaBtnStyle }}">Reset MFA</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- Step-up (register client / add admin) -->
+        <sc-if value="{{ mStepup }}" hint-placeholder-val="">
+          <div style="height:4px;background:#A9711B"></div>
+          <div style="padding:24px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#97601A;margin-bottom:8px">Sensitive action · confirm it's you</div>
+            <h2 style="font-family:'Noto Serif',serif;font-weight:700;font-size:20px;margin:0 0 8px">{{ stepupTitle }}</h2>
+            <p style="font-size:13px;line-height:1.55;color:#1E2A3D;margin:0 0 18px">For your security, please confirm your identity before continuing.</p>
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Re-enter your password</label>
+            <input value="{{ stepPw }}" onInput="{{ onStepPw }}" type="password" placeholder="Your administrator password" style="width:100%;padding:11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px;margin-bottom:20px" style-focus="{{ inputFocus }}" />
+            <div style="display:flex;justify-content:flex-end;gap:10px">
+              <button onClick="{{ closeModal }}" style="padding:10px 16px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+              <button onClick="{{ confirmStepup }}" style="{{ stepupBtnStyle }}">Continue</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- Register client form -->
+        <sc-if value="{{ mClient }}" hint-placeholder-val="">
+          <div style="padding:24px;max-height:80vh;overflow-y:auto">
+            <h2 style="font-family:'Noto Serif',serif;font-weight:700;font-size:20px;margin:0 0 4px">Register client</h2>
+            <p style="font-size:13px;color:#6A6356;margin:0 0 18px">Register a relying-party application to sign in through EnvOcc.</p>
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Application name</label>
+            <input value="{{ clName }}" onInput="{{ onClName }}" placeholder="e.g. Occupational Disease Reporting" style="width:100%;padding:11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px;margin-bottom:14px" style-focus="{{ inputFocus }}" />
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Redirect URI (exact match)</label>
+            <input value="{{ clUri }}" onInput="{{ onClUri }}" placeholder="https://app.envocc.go.th/auth/callback" style="width:100%;padding:11px 12px;background:#fff;border:1px solid {{ clUriBorder }};border-radius:8px;font-size:14px;font-family:'Noto Sans Mono',monospace;margin-bottom:6px" style-focus="{{ inputFocus }}" />
+            <p style="font-size:12px;line-height:1.5;margin:0 0 14px;color:{{ clUriMsgColor }}">{{ clUriMsg }}</p>
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px">Scopes</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+              <sc-for list="{{ scopeChips }}" as="s" hint-placeholder-count="3"><button onClick="{{ s.onClick }}" style="{{ s.style }}">{{ s.label }}</button></sc-for>
+            </div>
+            <div style="background:#F7F5F1;border:1px solid #DED7CB;border-radius:8px;padding:12px 14px;margin-bottom:20px">
+              <div style="font-size:12px;color:#6A6356;margin-bottom:4px">Client credentials are generated on save</div>
+              <div style="font-family:'Noto Sans Mono',monospace;font-size:12px;color:#1E2A3D">client_id · client_secret (shown once)</div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px">
+              <button onClick="{{ closeModal }}" style="padding:10px 16px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+              <button onClick="{{ saveClient }}" style="{{ saveClientStyle }}">Register client</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- Create user -->
+        <sc-if value="{{ mCreateUser }}" hint-placeholder-val="">
+          <div style="padding:24px">
+            <h2 style="font-family:'Noto Serif',serif;font-weight:700;font-size:20px;margin:0 0 4px">Create staff account</h2>
+            <p style="font-size:13px;color:#6A6356;margin:0 0 18px">The new account is created as pending. An activation link is emailed automatically.</p>
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Full name</label>
+            <input value="{{ cuName }}" onInput="{{ onCuName }}" placeholder="e.g. Anong Saetang" style="width:100%;padding:11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px;margin-bottom:14px" style-focus="{{ inputFocus }}" />
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Work email</label>
+            <input value="{{ cuEmail }}" onInput="{{ onCuEmail }}" placeholder="name@envocc.go.th" style="width:100%;padding:11px 12px;background:#fff;border:1px solid #DED7CB;border-radius:8px;font-size:14px;margin-bottom:22px" style-focus="{{ inputFocus }}" />
+            <div style="display:flex;justify-content:flex-end;gap:10px">
+              <button onClick="{{ closeModal }}" style="padding:10px 16px;background:#fff;color:#1B3354;border:1px solid #9C907A;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+              <button onClick="{{ saveUser }}" style="{{ saveUserStyle }}">Create &amp; send activation</button>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- toast -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="">
+    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:60;background:#1E2A3D;color:#fff;padding:12px 20px;border-radius:8px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.25);display:flex;align-items:center;gap:9px">
+      <span style="color:#7FD79A;font-weight:700">✓</span><span>{{ toast }}</span>
+    </div>
+  </sc-if>
+
+  <!-- ============ PROTOTYPE NAVIGATOR ============ -->
+  <div style="position:fixed;bottom:20px;right:20px;z-index:70">
+    <sc-if value="{{ navOpen }}" hint-placeholder-val="">
+      <div style="position:absolute;bottom:54px;right:0;width:268px;background:#16243B;border:1px solid #2C3E5A;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.4);padding:8px;max-height:72vh;overflow-y:auto">
+        <sc-for list="{{ navSections }}" as="sec" hint-placeholder-count="3">
+          <div style="padding:9px 10px 5px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#7E90AD">{{ sec.title }}</div>
+          <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="4">
+            <button onClick="{{ it.onClick }}" style="{{ it.style }}">{{ it.label }}</button>
+          </sc-for>
+        </sc-for>
+      </div>
+    </sc-if>
+    <button onClick="{{ toggleNav }}" style="display:flex;align-items:center;gap:8px;background:#16243B;color:#fff;border:1px solid #2C3E5A;border-radius:9999px;padding:11px 17px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.3)">
+      <span style="font-size:14px">▦</span> Screens
+    </button>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    view: 'signin',
+    navOpen: false,
+    toast: null,
+    // sign-in
+    email: '', password: '', showPw: false, signinError: '', signinLoading: false,
+    // code
+    code: ['','','','','',''], codeError: '', codeLoading: false,
+    // activation
+    actStep: 0, actPw: '', actPw2: '', actShowPw: false, mfaCode: ['','','','','',''], mfaError: '',
+    // reset
+    resetStep: 0, resetEmail: '', resetPw: '', resetShowPw: false,
+    // states
+    stateView: 'lockout',
+    // admin
+    role: 'hr', adminView: 'list', selectedUserId: 2, search: '', statusFilter: 'all',
+    auditFilter: 'all',
+    // modals
+    modal: null, attest: false, stepPw: '',
+    // csv
+    csvStage: 'drop',
+    // create user
+    cuName: '', cuEmail: '',
+    // client form
+    clName: '', clUri: '', clScopes: ['openid','email'],
+    // pending step-up target
+    stepupTarget: null,
+  };
+
+  users = [
+    { id: 1, name: 'Somchai Wattana', email: 'somchai.w@envocc.go.th', dept: 'Laboratory', status: 'Active', lastSignIn: 'Today, 09:14' },
+    { id: 2, name: 'Anong Saetang', email: 'anong.s@envocc.go.th', dept: 'Epidemiology', status: 'Pending', lastSignIn: '—' },
+    { id: 3, name: 'Pranee Chaiyo', email: 'pranee.c@envocc.go.th', dept: 'Human Resources', status: 'Active', lastSignIn: 'Today, 08:02' },
+    { id: 4, name: 'Wirat Thongdee', email: 'wirat.t@envocc.go.th', dept: 'Information Systems', status: 'Active', lastSignIn: 'Yesterday, 17:41' },
+    { id: 5, name: 'Kanya Phongsri', email: 'kanya.p@envocc.go.th', dept: 'Occupational Health', status: 'Active', lastSignIn: '2 days ago' },
+    { id: 6, name: 'Decha Srisuk', email: 'decha.s@envocc.go.th', dept: 'Field Surveillance', status: 'Disabled', lastSignIn: '14 days ago' },
+    { id: 7, name: 'Malee Inthanon', email: 'malee.i@envocc.go.th', dept: 'Environmental Medicine', status: 'Active', lastSignIn: 'Today, 07:36' },
+    { id: 8, name: 'Niran Boonmee', email: 'niran.b@envocc.go.th', dept: 'Records & Archive', status: 'Pending', lastSignIn: '—' },
+  ];
+
+  clients = [
+    { id: 'odr-prod', name: 'Occupational Disease Reporting', redirect: 'https://reporting.envocc.go.th/auth/callback', status: 'Active' },
+    { id: 'docarc-prod', name: 'Document Archive', redirect: 'https://docs.envocc.go.th/oidc/callback', status: 'Active' },
+    { id: 'labsys-prod', name: 'Laboratory System', redirect: 'https://lab.envocc.go.th/signin/callback', status: 'Active' },
+    { id: 'survey-stg', name: 'Field Surveillance (staging)', redirect: 'https://staging.survey.envocc.go.th/cb', status: 'Pending' },
+  ];
+
+  admins = [
+    { id: 'a1', name: 'Pranee Chaiyo', email: 'pranee.c@envocc.go.th', role: 'HR Administrator', status: 'Active' },
+    { id: 'a2', name: 'Rawinan Kittisak', email: 'rawinan.k@envocc.go.th', role: 'System Administrator', status: 'Active' },
+    { id: 'a3', name: 'Suda Meechai', email: 'suda.m@envocc.go.th', role: 'HR Administrator', status: 'Disabled' },
+  ];
+
+  audit = [
+    { time: '09:14:22', event: 'Sign-in', cat: 'auth', detail: 'Successful sign-in · Occupational Disease Reporting', actor: 'somchai.w@…' },
+    { time: '09:12:05', event: 'MFA verified', cat: 'auth', detail: 'Verification code accepted', actor: 'somchai.w@…' },
+    { time: '08:47:10', event: 'Disable user', cat: 'admin', detail: 'Disabled account · Decha Srisuk', actor: 'pranee.c@…' },
+    { time: '08:31:55', event: 'Sign-in failed', cat: 'auth', detail: 'Throttled after repeated attempts', actor: '—' },
+    { time: '08:02:41', event: 'Sign-in', cat: 'auth', detail: 'Successful sign-in · Admin console', actor: 'pranee.c@…' },
+    { time: 'Yesterday', event: 'Reset MFA', cat: 'admin', detail: 'MFA reset (identity attested) · Somchai Wattana', actor: 'pranee.c@…' },
+    { time: 'Yesterday', event: 'Register client', cat: 'admin', detail: 'New client · Laboratory System', actor: 'rawinan.k@…' },
+    { time: 'Yesterday', event: 'Activation', cat: 'auth', detail: 'Account activated · Malee Inthanon', actor: 'malee.i@…' },
+    { time: '2 days ago', event: 'Export audit', cat: 'admin', detail: 'Audit log exported (CSV)', actor: 'rawinan.k@…' },
+  ];
+
+  // ---------- navigation ----------
+  go(view) { this.setState({ view, navOpen: false }); }
+  goSignin = () => this.setState({ view: 'signin', code: ['','','','','',''], codeError: '', signinError: '', email: '', password: '', actStep: 0, resetStep: 0, navOpen: false });
+  goForgot = () => this.setState({ view: 'reset', resetStep: 0, navOpen: false });
+  toggleNav = () => this.setState(s => ({ navOpen: !s.navOpen }));
+  noop = () => {};
+  stop = (e) => { e.stopPropagation(); };
+  flash(msg) { this.setState({ toast: msg }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 2600); }
+
+  // ---------- sign-in ----------
+  onEmail = (e) => this.setState({ email: e.target.value, signinError: '' });
+  onPassword = (e) => this.setState({ password: e.target.value, signinError: '' });
+  toggleShowPw = () => this.setState(s => ({ showPw: !s.showPw }));
+  submitSignin = () => {
+    if (!this.state.email.trim() || !this.state.password) { this.setState({ signinError: 'Enter your work email and password to continue.' }); return; }
+    this.setState({ signinLoading: true });
+    setTimeout(() => this.setState({ signinLoading: false, view: 'code', code: ['','','','','',''], codeError: '' }), 650);
+  };
+
+  // ---------- generic code cells ----------
+  focusCell(key, i) { const el = document.getElementById(key + '-' + i); if (el) { el.focus(); el.select && el.select(); } }
+  cellInput(key, i, e) {
+    const v = e.target.value.replace(/\D/g, '');
+    const arr = this.state[key].slice();
+    arr[i] = v.slice(-1) || '';
+    const patch = { [key]: arr }; if (key === 'code') patch.codeError = ''; if (key === 'mfaCode') patch.mfaError = '';
+    this.setState(patch);
+    if (arr[i] && i < 5) this.focusCell(key, i + 1);
+  }
+  cellKey(key, i, e) {
+    if (e.key === 'Backspace' && !this.state[key][i] && i > 0) { e.preventDefault(); const arr = this.state[key].slice(); arr[i-1] = ''; this.setState({ [key]: arr }); this.focusCell(key, i - 1); }
+    if (e.key === 'ArrowLeft' && i > 0) this.focusCell(key, i - 1);
+    if (e.key === 'ArrowRight' && i < 5) this.focusCell(key, i + 1);
+  }
+  cellPaste(key, e) {
+    e.preventDefault();
+    const digits = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6).split('');
+    const arr = ['','','','','',''];
+    digits.forEach((d, idx) => arr[idx] = d);
+    const patch = { [key]: arr }; if (key === 'code') patch.codeError = ''; if (key === 'mfaCode') patch.mfaError = '';
+    this.setState(patch);
+    this.focusCell(key, Math.min(digits.length, 5));
+  }
+  makeCells(key, invalid) {
+    return this.state[key].map((v, i) => ({
+      id: key + '-' + i, value: v,
+      onInput: (e) => this.cellInput(key, i, e),
+      onKeyDown: (e) => this.cellKey(key, i, e),
+      onPaste: (e) => this.cellPaste(key, e),
+      style: this.cellStyle(v, invalid),
+    }));
+  }
+  cellStyle(v, invalid) {
+    const border = invalid ? '#AD2B1E' : (v ? '#1B3354' : '#DED7CB');
+    const bg = invalid ? '#FBEAE6' : (v ? '#EEF3FA' : '#fff');
+    return { flex: '1', minWidth: '0', height: '52px', textAlign: 'center', border: '1.5px solid ' + border, background: bg, borderRadius: '8px', fontFamily: "'Noto Sans Mono', monospace", fontSize: '22px', fontWeight: '600', color: '#1E2A3D', outline: 'none' };
+  }
+  submitCode = () => {
+    const code = this.state.code.join('');
+    if (code.length < 6) { this.setState({ codeError: 'Enter all 6 digits of your verification code.' }); return; }
+    if (code === '000000') { this.setState({ codeError: "That code didn't match. Open your authenticator app and try the current code." }); return; }
+    this.setState({ codeLoading: true });
+    setTimeout(() => this.setState({ codeLoading: false, view: 'redirect' }), 700);
+  };
+
+  // ---------- activation ----------
+  onActPw = (e) => this.setState({ actPw: e.target.value });
+  onActPw2 = (e) => this.setState({ actPw2: e.target.value });
+  toggleActShowPw = () => this.setState(s => ({ actShowPw: !s.actShowPw }));
+  pwHintList(pw) {
+    const common = ['password','123456789','qwerty','envocc123'];
+    return [
+      { label: 'At least 12 characters', ok: pw.length >= 12 },
+      { label: 'Not a common or previously-breached password', ok: pw.length >= 8 && !common.includes(pw.toLowerCase()) },
+      { label: 'Long passphrases are welcome — length beats complexity', ok: true, info: pw.length === 0 },
+    ];
+  }
+  submitActPw = () => {
+    if (this.state.actPw.length < 12) { this.flash('Password must be at least 12 characters.'); return; }
+    if (this.state.actPw !== this.state.actPw2) { this.flash("Passwords don't match yet."); return; }
+    this.setState({ actStep: 1, mfaCode: ['','','','','',''], mfaError: '' });
+  };
+  submitMfa = () => {
+    const code = this.state.mfaCode.join('');
+    if (code.length < 6) { this.setState({ mfaError: 'Enter the 6-digit code from your authenticator app.' }); return; }
+    if (code === '000000') { this.setState({ mfaError: "That code didn't match. Check your authenticator app and try again." }); return; }
+    this.setState({ actStep: 2 });
+  };
+
+  // ---------- reset ----------
+  onResetEmail = (e) => this.setState({ resetEmail: e.target.value });
+  onResetPw = (e) => this.setState({ resetPw: e.target.value });
+  toggleResetShowPw = () => this.setState(s => ({ resetShowPw: !s.resetShowPw }));
+  submitResetReq = () => this.setState({ resetStep: 1 });
+  openResetLink = () => this.setState({ resetStep: 2, resetPw: '' });
+  submitNewPw = () => { if (this.state.resetPw.length < 12) { this.flash('Password must be at least 12 characters.'); return; } this.setState({ resetStep: 3 }); };
+
+  // ---------- states demo ----------
+  setStateView = (v) => this.setState({ stateView: v });
+
+  // ---------- admin nav ----------
+  enterAdmin(role, adminView) { this.setState({ view: 'admin', role, adminView, navOpen: false, modal: null }); }
+  goUserList = () => this.setState({ adminView: 'list' });
+  goImport = () => this.setState({ adminView: 'import', csvStage: 'drop' });
+  openUser = (id) => this.setState({ adminView: 'detail', selectedUserId: id });
+  onSearch = (e) => this.setState({ search: e.target.value });
+  setStatusFilter = (f) => this.setState({ statusFilter: f });
+  setAuditFilter = (f) => this.setState({ auditFilter: f });
+
+  // ---------- modals ----------
+  openModal = (m) => this.setState({ modal: m, stepPw: '', attest: false });
+  closeModal = () => this.setState({ modal: null, stepPw: '', attest: false });
+  openDisable = () => this.openModal('disable');
+  openResetMfa = () => this.openModal('resetMfa');
+  openCreateUser = () => this.setState({ modal: 'createUser', cuName: '', cuEmail: '' });
+  openRegisterClient = () => this.setState({ stepupTarget: 'client', modal: 'stepup', stepPw: '' });
+  openCreateAdmin = () => this.setState({ stepupTarget: 'admin', modal: 'stepup', stepPw: '' });
+  onStepPw = (e) => this.setState({ stepPw: e.target.value });
+  toggleAttest = (e) => { if (e) e.preventDefault(); this.setState(s => ({ attest: !s.attest })); };
+
+  curUser() { return this.users.find(u => u.id === this.state.selectedUserId) || this.users[0]; }
+
+  confirmDisable = () => { const u = this.curUser(); u.status = 'Disabled'; u.lastSignIn = 'just now'; this.closeModal(); this.flash('Account disabled. Sessions revoked.'); };
+  reEnableUser = () => { const u = this.curUser(); u.status = 'Active'; this.forceUpdate(); this.flash('Account re-enabled.'); };
+  triggerReset = () => this.flash('Reset link sent to ' + this.curUser().email);
+  confirmResetMfa = () => { if (!this.state.stepPw) { this.flash('Re-enter your password to continue.'); return; } if (!this.state.attest) { this.flash('Confirm the identity attestation to continue.'); return; } this.closeModal(); this.flash('MFA reset · re-activation link sent.'); };
+  confirmStepup = () => {
+    if (!this.state.stepPw) { this.flash('Re-enter your password to continue.'); return; }
+    const t = this.state.stepupTarget;
+    if (t === 'client') { this.setState({ modal: 'client', stepPw: '', clName: '', clUri: '', clScopes: ['openid','email'] }); }
+    else if (t === 'admin') { this.closeModal(); this.flash('Identity confirmed — add administrator.'); }
+  };
+
+  // create user
+  onCuName = (e) => this.setState({ cuName: e.target.value });
+  onCuEmail = (e) => this.setState({ cuEmail: e.target.value });
+  saveUser = () => {
+    if (!this.state.cuName.trim() || !this.state.cuEmail.trim()) { this.flash('Enter a name and work email.'); return; }
+    const id = Math.max(...this.users.map(u => u.id)) + 1;
+    this.users.unshift({ id, name: this.state.cuName.trim(), email: this.state.cuEmail.trim(), dept: '—', status: 'Pending', lastSignIn: '—' });
+    this.closeModal(); this.flash('Account created · activation email sent.');
+  };
+
+  // client form
+  onClName = (e) => this.setState({ clName: e.target.value });
+  onClUri = (e) => this.setState({ clUri: e.target.value });
+  uriValid() { const u = this.state.clUri.trim(); if (!u) return null; return /^https:\/\/[^\s*]+\.[^\s*]+\/.+/.test(u) && !u.includes('*'); }
+  toggleScope = (s) => { const arr = this.state.clScopes.slice(); const i = arr.indexOf(s); if (i >= 0) arr.splice(i, 1); else arr.push(s); this.setState({ clScopes: arr }); };
+  saveClient = () => {
+    if (!this.state.clName.trim()) { this.flash('Enter an application name.'); return; }
+    if (this.uriValid() !== true) { this.flash('Enter a valid exact-match redirect URI.'); return; }
+    this.clients.unshift({ id: this.state.clName.trim().toLowerCase().replace(/[^a-z]+/g,'-').slice(0,16) + '-new', name: this.state.clName.trim(), redirect: this.state.clUri.trim(), status: 'Active' });
+    this.closeModal(); this.flash('Client registered · credentials generated.');
+  };
+
+  // csv
+  csvUpload = () => this.setState({ csvStage: 'preview' });
+  csvCancel = () => this.setState({ csvStage: 'drop' });
+  csvConfirm = () => this.setState({ csvStage: 'done' });
+
+  // ---------- pills/helpers ----------
+  pill(status) {
+    if (status === 'Active') return { style: this.pillStyle('#E9F2EA','#1B4F2A','#E9F2EA'), dot: '#2A6B3E' };
+    if (status === 'Pending') return { style: this.pillStyle('#F7EEDD','#6B440F','#F7EEDD'), dot: '#97601A' };
+    return { style: this.pillStyle('#F7F5F1','#6A6356','#DED7CB'), dot: '#9C907A' };
+  }
+  pillStyle(bg, color, border) { return 'display:inline-flex;align-items:center;gap:6px;background:' + bg + ';color:' + color + ';border:1px solid ' + border + ';padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:700;letter-spacing:0.02em'; }
+
+  renderVals() {
+    const s = this.state;
+    const v = s.view;
+    const isAuth = v !== 'admin';
+
+    // ----- code cells -----
+    const codeCells = this.makeCells('code', !!s.codeError);
+    const mfaCells = this.makeCells('mfaCode', !!s.mfaError);
+
+    // ----- QR placeholder -----
+    const qrEl = this.qrEl();
+
+    // ----- activation stepper -----
+    const stepDefs = ['Password', 'Authenticator', 'Done'];
+    const actSteps = stepDefs.map((label, i) => ({
+      label,
+      bar: i <= s.actStep ? '#1B3354' : '#DED7CB',
+      color: i <= s.actStep ? '#1B3354' : '#9C907A',
+    }));
+
+    // ----- pw hints -----
+    const mkHints = (pw) => this.pwHintList(pw).map(h => ({
+      label: h.label,
+      mark: h.info ? '•' : (h.ok ? '✓' : '○'),
+      color: h.info ? '#6A6356' : (h.ok ? '#1B4F2A' : '#6A6356'),
+    }));
+
+    // ----- state tabs -----
+    const stTabDefs = [['lockout','Lockout'],['expired','Expired link'],['session','Session expired'],['signedout','Signed out']];
+    const stateTabs = stTabDefs.map(([k, label]) => ({
+      label,
+      onClick: () => this.setStateView(k),
+      style: 'flex:1;padding:7px 4px;border:none;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;background:' + (s.stateView === k ? '#1B3354' : 'transparent') + ';color:' + (s.stateView === k ? '#fff' : '#6A6356'),
+    }));
+
+    // ----- admin nav -----
+    const navDefs = s.role === 'hr'
+      ? [['list','Staff'],['import','Import']]
+      : [['clients','Clients'],['audit','Audit log'],['admins','Administrators']];
+    const adminNav = navDefs.map(([key, label]) => {
+      const active = (key === 'list' && (s.adminView === 'list' || s.adminView === 'detail')) || s.adminView === key;
+      return { label, onClick: () => this.setState({ adminView: key }), style: 'padding:7px 13px;border-radius:7px;border:none;font-size:13px;font-weight:600;cursor:pointer;background:' + (active ? 'rgba(255,255,255,.14)' : 'transparent') + ';color:' + (active ? '#fff' : '#A9B6CA') };
+    });
+
+    // ----- users filtered -----
+    const q = s.search.trim().toLowerCase();
+    let usersFiltered = this.users.filter(u => {
+      const okq = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+      const okf = s.statusFilter === 'all' || u.status.toLowerCase() === s.statusFilter;
+      return okq && okf;
+    });
+    const usersRows = usersFiltered.map(u => { const p = this.pill(u.status); return { name: u.name, email: u.email, dept: u.dept, status: u.status, lastSignIn: u.lastSignIn, pillStyle: p.style, dotColor: p.dot, onClick: () => this.openUser(u.id) }; });
+
+    const statusFilters = [['all','All'],['active','Active'],['pending','Pending'],['disabled','Disabled']].map(([k, label]) => ({
+      label, onClick: () => this.setStatusFilter(k),
+      style: 'padding:9px 13px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:' + (s.statusFilter === k ? '#1B3354' : '#fff') + ';color:' + (s.statusFilter === k ? '#fff' : '#6A6356') + ';border:1px solid ' + (s.statusFilter === k ? '#1B3354' : '#DED7CB'),
+    }));
+
+    // ----- detail -----
+    const du = this.curUser();
+    const dp = this.pill(du.status);
+    const duProfile = [
+      { k: 'Full name', v: du.name }, { k: 'Work email', v: du.email },
+      { k: 'Department', v: du.dept }, { k: 'Account ID', v: 'usr_' + String(du.id).padStart(4, '0') },
+    ];
+
+    // ----- clients -----
+    const clientsRows = this.clients.map(c => { const p = this.pill(c.status); return { name: c.name, id: c.id, redirect: c.redirect, status: c.status, pillStyle: p.style, dotColor: p.dot, onClick: () => this.flash('Client detail — ' + c.name) }; });
+
+    // ----- audit -----
+    const auditFilters = [['all','All events'],['auth','Authentication'],['admin','Admin actions']].map(([k, label]) => ({
+      label, onClick: () => this.setAuditFilter(k),
+      style: 'padding:8px 13px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:' + (s.auditFilter === k ? '#1B3354' : '#fff') + ';color:' + (s.auditFilter === k ? '#fff' : '#6A6356') + ';border:1px solid ' + (s.auditFilter === k ? '#1B3354' : '#DED7CB'),
+    }));
+    const auditRows = this.audit.filter(a => s.auditFilter === 'all' || a.cat === s.auditFilter).map(a => ({
+      time: a.time, event: a.event, detail: a.detail, actor: a.actor,
+      tagStyle: 'font-size:11px;font-weight:700;letter-spacing:0.02em;padding:2px 9px;border-radius:9999px;' + (a.cat === 'admin' ? 'background:#E9F0F6;color:#143F66;border:1px solid #245B8C' : 'background:#F7F5F1;color:#6A6356;border:1px solid #DED7CB'),
+    }));
+
+    // ----- admins -----
+    const adminsList = this.admins.map(a => { const p = this.pill(a.status); const dis = a.status === 'Disabled'; return { name: a.name, email: a.email, role: a.role, status: a.status, pillStyle: p.style, dotColor: p.dot, action: dis ? 'Re-enable' : 'Disable', actionColor: dis ? '#1B3354' : '#AD2B1E', onDisable: () => this.flash(dis ? 'Administrator re-enabled.' : 'Administrator disabled.') }; });
+
+    // ----- csv preview -----
+    const csvRowsData = [
+      ['Sukanya Pimol','sukanya.p@envocc.go.th','clean'],
+      ['Thanawat Rojana','thanawat.r@envocc.go.th','clean'],
+      ['Pensri Wong','pensri.w@envocc.go.th','clean'],
+      ['Somchai Wattana','somchai.w@envocc.go.th','dup'],
+      ['Apinya Lertch','apinya.lertch@','err'],
+      ['Chai Boon','chai.b@envocc.go.th','clean'],
+    ];
+    const csvRows = csvRowsData.map((r, i) => {
+      const st = r[2];
+      return {
+        n: i + 1, name: r[0], email: r[1],
+        bg: st === 'err' ? '#FBEAE6' : st === 'dup' ? '#F7EEDD' : '#fff',
+        statusText: st === 'err' ? 'Invalid email — excluded' : st === 'dup' ? 'Already exists — skipped' : 'Will be created',
+        statusColor: st === 'err' ? '#7E2018' : st === 'dup' ? '#6B440F' : '#1B4F2A',
+      };
+    });
+    const csvClean = csvRowsData.filter(r => r[2] === 'clean').length;
+    const csvDup = csvRowsData.filter(r => r[2] === 'dup').length;
+    const csvErr = csvRowsData.filter(r => r[2] === 'err').length;
+
+    // ----- scopes -----
+    const scopeChips = [['openid','openid'],['email','email (reconciliation key)'],['profile','profile']].map(([k, label]) => {
+      const on = s.clScopes.includes(k);
+      return { label, onClick: () => this.toggleScope(k), style: 'padding:7px 13px;border-radius:9999px;font-size:12px;font-weight:600;cursor:pointer;font-family:' + (k===label?"'Noto Sans Mono',monospace":'inherit') + ';background:' + (on ? '#1B3354' : '#fff') + ';color:' + (on ? '#fff' : '#6A6356') + ';border:1px solid ' + (on ? '#1B3354' : '#DED7CB') };
+    });
+
+    // ----- uri validation -----
+    const uv = this.uriValid();
+    const clUriBorder = uv === false ? '#AD2B1E' : '#DED7CB';
+    const clUriMsg = uv === false ? 'Must be an exact https:// URL with a path. Wildcards are not allowed.' : 'Exact-match only — the redirect must match this value precisely.';
+    const clUriMsgColor = uv === false ? '#7E2018' : '#6A6356';
+
+    // ----- navigator -----
+    const navItem = (label, fn) => ({ label, onClick: fn, style: 'display:block;width:100%;text-align:left;padding:8px 10px;border:none;border-radius:7px;font-size:12.5px;font-weight:500;cursor:pointer;background:transparent;color:#C7D2E2' });
+    const navSections = [
+      { title: 'A · Staff auth', items: [
+        navItem('Sign in', this.goSignin),
+        navItem('Verification code', () => this.go('code')),
+        navItem('Activation', () => this.setState({ view: 'activate', actStep: 0, actPw: '', actPw2: '', navOpen: false })),
+        navItem('Password reset', () => this.setState({ view: 'reset', resetStep: 0, navOpen: false })),
+        navItem('Key states', () => this.go('states')),
+      ]},
+      { title: 'B · Admin · HR', items: [
+        navItem('User list & search', () => this.enterAdmin('hr', 'list')),
+        navItem('User detail', () => this.enterAdmin('hr', 'detail')),
+        navItem('CSV import', () => { this.enterAdmin('hr', 'import'); this.setState({ csvStage: 'drop' }); }),
+      ]},
+      { title: 'B · Admin · System', items: [
+        navItem('Client list', () => this.enterAdmin('system', 'clients')),
+        navItem('Audit log', () => this.enterAdmin('system', 'audit')),
+        navItem('Administrators', () => this.enterAdmin('system', 'admins')),
+      ]},
+    ];
+
+    const adminName = s.role === 'hr' ? 'Pranee Chaiyo' : 'Rawinan Kittisak';
+    const adminInitials = s.role === 'hr' ? 'PC' : 'RK';
+    const adminRoleLabel = s.role === 'hr' ? 'HR Administrator' : 'System Administrator';
+
+    return {
+      isAuth, navOpen: s.navOpen, toast: s.toast, noop: this.noop, stop: this.stop,
+      primaryHover: { background: '#142744' },
+      inputFocus: { borderColor: '#1B3354', boxShadow: '0 0 0 3px rgba(27,51,84,0.16)' },
+      rowHover: { background: '#F7F5F1' },
+      dropHover: { borderColor: '#1B3354', background: '#F2EEE6' },
+
+      // sign-in
+      isSignin: v === 'signin', email: s.email, password: s.password,
+      pwType: s.showPw ? 'text' : 'password', pwToggleLabel: s.showPw ? 'Hide' : 'Show',
+      onEmail: this.onEmail, onPassword: this.onPassword, toggleShowPw: this.toggleShowPw,
+      submitSignin: this.submitSignin, goForgot: this.goForgot, signinError: s.signinError,
+      signinLoading: s.signinLoading, signinBtnLabel: s.signinLoading ? 'Signing in…' : 'Continue',
+
+      // code
+      isCode: v === 'code', codeCells, codeError: s.codeError, codeLoading: s.codeLoading,
+      submitCode: this.submitCode, goSignin: this.goSignin,
+
+      // redirect
+      isRedirect: v === 'redirect',
+
+      // activation
+      isActivate: v === 'activate', actSteps, actStep0: s.actStep === 0, actStep1: s.actStep === 1, actStep2: s.actStep === 2,
+      actName: 'Anong Saetang', actPw: s.actPw, actPw2: s.actPw2,
+      actPwType: s.actShowPw ? 'text' : 'password', actPwToggleLabel: s.actShowPw ? 'Hide' : 'Show',
+      onActPw: this.onActPw, onActPw2: this.onActPw2, toggleActShowPw: this.toggleActShowPw,
+      pwHints: mkHints(s.actPw), actPwMismatch: s.actPw2.length > 0 && s.actPw !== s.actPw2,
+      submitActPw: this.submitActPw, qrEl, mfaCells, mfaError: s.mfaError, submitMfa: this.submitMfa,
+
+      // reset
+      isReset: v === 'reset', resetStep0: s.resetStep === 0, resetStep1: s.resetStep === 1, resetStep2: s.resetStep === 2, resetStep3: s.resetStep === 3,
+      resetEmail: s.resetEmail, onResetEmail: this.onResetEmail, submitResetReq: this.submitResetReq, openResetLink: this.openResetLink,
+      resetPw: s.resetPw, resetPwType: s.resetShowPw ? 'text' : 'password', resetPwToggleLabel: s.resetShowPw ? 'Hide' : 'Show',
+      onResetPw: this.onResetPw, toggleResetShowPw: this.toggleResetShowPw, resetPwHints: mkHints(s.resetPw), submitNewPw: this.submitNewPw,
+
+      // states
+      isStates: v === 'states', stateTabs,
+      stLockout: s.stateView === 'lockout', stExpired: s.stateView === 'expired', stSession: s.stateView === 'session', stSignedout: s.stateView === 'signedout',
+
+      // admin shell
+      isAdmin: v === 'admin', adminNav, adminName, adminInitials, adminRoleLabel,
+      avUserList: s.adminView === 'list', avUserDetail: s.adminView === 'detail', avImport: s.adminView === 'import',
+      avClients: s.adminView === 'clients', avAudit: s.adminView === 'audit', avAdmins: s.adminView === 'admins',
+
+      // user list
+      usersFiltered: usersRows, usersEmpty: usersRows.length === 0, statusFilters,
+      userCountLabel: this.users.length + ' accounts · ' + this.users.filter(u=>u.status==='Active').length + ' active, ' + this.users.filter(u=>u.status==='Pending').length + ' pending',
+      paginationLabel: 'Showing ' + usersRows.length + ' of ' + this.users.length, search: s.search, onSearch: this.onSearch,
+      goImport: this.goImport, openCreateUser: this.openCreateUser,
+
+      // detail
+      duName: du.name, duFirst: du.name.split(' ')[0], duEmail: du.email, duStatus: du.status, duInitials: du.name.split(' ').map(x=>x[0]).join('').slice(0,2),
+      duPillStyle: dp.style, duDotColor: dp.dot, duIsActive: du.status === 'Active', duIsDisabled: du.status === 'Disabled',
+      duProfile, goUserList: this.goUserList, openDisable: this.openDisable, reEnableUser: this.reEnableUser,
+      triggerReset: this.triggerReset, openResetMfa: this.openResetMfa,
+
+      // csv
+      csvDrop: s.csvStage === 'drop', csvPreview: s.csvStage === 'preview', csvDone: s.csvStage === 'done',
+      csvUpload: this.csvUpload, csvCancel: this.csvCancel, csvConfirm: this.csvConfirm,
+      csvRows, csvClean, csvDup, csvErr,
+      csvConfirmHint: csvDup + csvErr + ' of ' + csvRowsData.length + ' rows will be skipped. ' + csvClean + ' clean rows will be created.',
+      csvConfirmLabel: 'Create ' + csvClean + ' accounts',
+      csvDoneTitle: csvClean + ' accounts created',
+
+      // clients
+      clients: clientsRows, clientCountLabel: this.clients.length + ' applications registered', openRegisterClient: this.openRegisterClient,
+
+      // audit
+      auditFilters, auditRows,
+
+      // admins
+      adminsList, openCreateAdmin: this.openCreateAdmin,
+
+      // modals
+      modalOpen: !!s.modal, closeModal: this.closeModal,
+      mDisable: s.modal === 'disable', confirmDisable: this.confirmDisable,
+      mResetMfa: s.modal === 'resetMfa', stepPw: s.stepPw, onStepPw: this.onStepPw,
+      attest: s.attest, toggleAttest: this.toggleAttest, attestMark: s.attest ? '✓' : '', attestBg: s.attest ? '#97601A' : '#fff',
+      confirmResetMfa: this.confirmResetMfa,
+      resetMfaBtnStyle: 'padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:' + (s.stepPw && s.attest ? '#AD2B1E' : '#D8A59E'),
+      mStepup: s.modal === 'stepup', confirmStepup: this.confirmStepup,
+      stepupTitle: s.stepupTarget === 'client' ? 'Register a new client' : 'Add an administrator',
+      stepupBtnStyle: 'padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:' + (s.stepPw ? '#1B3354' : '#9FB0C6'),
+      mClient: s.modal === 'client', clName: s.clName, onClName: this.onClName, clUri: s.clUri, onClUri: this.onClUri,
+      clUriBorder, clUriMsg, clUriMsgColor, scopeChips, saveClient: this.saveClient,
+      saveClientStyle: 'padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:' + (s.clName.trim() && uv === true ? '#1B3354' : '#9FB0C6'),
+      mCreateUser: s.modal === 'createUser', cuName: s.cuName, cuEmail: s.cuEmail, onCuName: this.onCuName, onCuEmail: this.onCuEmail, saveUser: this.saveUser,
+      saveUserStyle: 'padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:' + (s.cuName.trim() && s.cuEmail.trim() ? '#1B3354' : '#9FB0C6'),
+
+      // navigator
+      navSections, toggleNav: this.toggleNav,
+    };
+  }
+
+  qrEl() {
+    const n = 21, cells = [];
+    let seed = 23;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed >> 18) & 1; };
+    const finder = (r, c) => {
+      const regions = [[0,0],[0,n-7],[n-7,0]];
+      for (const [or, oc] of regions) {
+        const lr = r - or, lc = c - oc;
+        if (lr >= 0 && lr < 7 && lc >= 0 && lc < 7) {
+          if (lr === 0 || lr === 6 || lc === 0 || lc === 6) return 1;
+          if (lr >= 2 && lr <= 4 && lc >= 2 && lc <= 4) return 1;
+          return 0;
+        }
+      }
+      return -1;
+    };
+    for (let i = 0; i < n * n; i++) {
+      const r = Math.floor(i / n), c = i % n;
+      const f = finder(r, c);
+      const on = f === -1 ? rnd() : f;
+      cells.push(React.createElement('div', { key: i, style: { background: on ? '#1B3354' : 'transparent' } }));
+    }
+    return React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(21,1fr)', width: '100%', height: '100%' } }, cells);
+  }
+}
+</script>
+</body>
+</html>

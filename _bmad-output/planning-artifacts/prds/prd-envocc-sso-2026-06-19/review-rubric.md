@@ -1,0 +1,74 @@
+# PRD Quality Review — envocc-sso
+
+## Overall verdict
+
+This is a genuinely strong chain-top PRD: it has a real thesis ("*who you are, not what you may do*"; "security rigor, not feature count, as the definition of done"), an honestly-decided build-vs-buy that admits off-the-shelf would have been "faster and safer," and NFRs carrying product-specific thresholds rather than boilerplate. What's at risk is concentrated downstream: a handful of FRs and NFRs lean on adjectives ("branded login experience matching EnvOcc identity," "responsive authentication / low latency," "without deep auth expertise") where story creation will want a bound, and there is **no formal Glossary** despite the PRD coining several load-bearing domain nouns (reconciliation key, canonical identity, lifecycle states). Neither risk threatens the verdict — this PRD is build-ready in substance; it needs a tightening pass on done-ness and one extraction pass for terminology.
+
+## Decision-readiness — strong
+
+The PRD treats decisions as decisions. Build-vs-buy is resolved and *honestly* framed rather than rationalized post-hoc: the addendum (§A) opens with "Off-the-shelf would have been faster and safer," names that Keycloak/Authentik "deliver OIDC, MFA, password policy, account lockout, token rotation … in days not months," and even concedes "Branded login did not require a custom build." It then weights the drivers explicitly — "(#3) in-house mandate *(decisive)* > (#4) own/understand the auth layer > (#2) full UX control" — and records that "#4 and #2 would not justify the build on their own." Residual risk is "explicitly **accepted with compensating controls**." This is the opposite of a smoothed-to-neutral choice; an objector arguing "you should have bought" finds their objection already on the page and answered with a mandate, not dodged.
+
+Open Questions are actually open. OQ1 (which 1–2 pilot apps + stacks) and OQ2 (build stack) carry real "Blocks…" columns and remain unresolved; OQ3–OQ6 are explicitly moved to a "Resolved this session" block with resolution paths, not left as rhetorical. The PDPA item (OQ3) is the sharpest example of honest framing: technical controls are claimed done (NFR11–15) while the organizational sign-off is flagged "**Non-blocking for v1 build**" with "*Rawinan is the builder, not the DPO*" — a real boundary drawn rather than a checkbox ticked.
+
+Trade-offs are named with what was given up. FR25 states disable "MUST immediately block all **new** authentication" but that "lockout of already-running app sessions is **bounded by token/session lifetime** … not instantaneous — v1 has no back-channel revocation." The cost of the no-SLO decision is stated at the point of the requirement, not hidden.
+
+## Substance over theater — strong
+
+The content is earned. NFRs carry product-specific thresholds, not boilerplate: NFR1 specifies "Argon2id (OWASP floor: ≥19 MiB memory, ≥2 iterations, parallelism 1)"; NFR2 sets "≤~20 min lifetime, ≥128-bit entropy" on email tokens; NFR15 ties to "PDPC notification within 72 hours"; FR38 fixes "retained for 90 days." This is the inverse of NFR theater — every "must be secure" is cashed out into a number or a named standard (RFC 9700, ASVS L2/L3, NIST SP 800-63B).
+
+The Vision is not swappable into another PRD. The problem statement is grounded in a concrete, division-specific image — "*Somchai in the lab system, Somchai in the reporting tool, Somchai in the document archive*" — and the stakes are named for *this* domain: "For a division handling occupational and environmental health work, scattered and un-revoked access is a genuine security and governance liability."
+
+No persona theater: four roles (Staff, HR Administrator, System Administrator, App Owner), at or under the four-persona line, and each drives real FRs — HR Admin → FG-4, System Admin → FG-5, App Owner → FG-7, Staff → FG-2. The two-role separation of duties is a genuine design constraint (FR33), not decoration. No innovation theater either — the PRD declines to claim novelty and instead concedes the off-the-shelf alternative was superior on speed and safety.
+
+## Strategic coherence — strong
+
+There is a clear, repeated thesis and the features serve it. The bet — authenticate first, authorize later ("*who you are*, not yet *what you may do*", §1; restated in FR scope, the addendum roadmap, and Non-Goals) — drives the scope cut to centralized authorization (Section 3 Out-of-scope; addendum §B item 1). The second thesis — "security rigor, not feature count, as the definition of done," with "no fixed deadline; readiness gates release" — explains why the FR surface is deliberately tight and why NFRs are unusually heavy for a 150-user tool. Feature grouping (FG-1…FG-7) follows the thesis arc (core OIDC → staff experience → store → admin → audit → enablement), not "what's easy first."
+
+Success Metrics validate the thesis rather than measure activity: SM1 ("logins routed exclusively through envocc-sso — 100%, zero separate logins remain"), SM5 ("0 outstanding security defects … OWASP ASVS L2 checklist passed"), SM8 ("0 staff with more than one canonical identity"). No DAU/MAU vanity metric. Counter-metrics are present and pointed — CM1 guards over-tight lockout, CM2 explicitly "guards the admin-assisted-only MFA call," CM3 guards stalled activation — and are honestly marked "provisional starting thresholds … recalibrate once the pilot establishes a real traffic baseline." MVP scope kind is problem-solving (kill account sprawl + un-revoked access), and the scope logic matches.
+
+## Done-ness clarity — adequate
+
+This is the dimension carrying the most downstream weight and the one with the most concrete soft spots. Most FRs are testable — FR3 ("MUST NOT offer Implicit or ROPC"), FR4 ("exact-match redirect URIs … no wildcard/substring"), FR9 ("rotate on use with reuse-detection that revokes the token family"), FR20 ("identical, generic responses whether or not an account exists") all carry a verifiable consequence. SM2 ("0 re-authentications within a valid session") and SM4 ("100% of active accounts") give engineers a clear bar. But several requirements lean on adjectives a story author cannot test:
+
+- **FR12** — "branded login experience **matching EnvOcc identity**" has no bound on what "matching" verifies against (no brand asset, no acceptance reference), and "structured for localization" is an architecture property with no stated test.
+- **NFR17 / NFR18** — "**responsive authentication** (low login/token latency)" and "responsive authentication" appear with no number. The PRD defers "Precise SLO … to architecture," which is legitimate, but leaves *no* FR-level latency bound at all — story creation gets an adjective.
+- **FR18** — "a **sensible** minimum length" is unbounded; the breached-list-screening and no-composition-rules clauses are crisp, but "sensible" should be a number (NIST 800-63B gives one).
+- **FR40** — "without **deep auth expertise**" is unmeasurable as written; it is closer to a success criterion than an FR consequence (and is partly captured by the pilot-as-validation, but no FR-level test exists).
+
+No standalone Acceptance section exists; the PRD relies on FR consequences carrying done-ness, which works for the crisp FRs above but not for the four flagged ones.
+
+### Findings
+- **medium** Latency requirement is an adjective, not a bound (§5 NFR17/NFR18) — "responsive authentication (low login/token latency)" with no number and no FR-level bound; deferral of the *SLO* to architecture is fine but leaves story creation nothing testable. *Fix:* state a target login/token-issuance latency bound (e.g., p95 ≤ Nms at 150-user scale) even if the formal SLO is refined in architecture.
+- **medium** "Branded login matching EnvOcc identity" is untestable (§4 FR12) — no brand reference or acceptance condition for "matching"; "structured for localization" has no stated test. *Fix:* point FR12 at a named brand asset / acceptance reference, and express localization-readiness as a testable property (e.g., all UI strings externalized, no hard-coded copy).
+- **low** "Sensible minimum length" is unbounded (§4 FR18) — leaves the one number NIST 800-63B actually pins. *Fix:* state the minimum length explicitly (e.g., ≥ 8–12 chars) and keep the passphrase/no-composition clauses.
+- **low** "Without deep auth expertise" is unmeasurable (§4 FR40) — reads as a success criterion, not a testable FR consequence. *Fix:* anchor it to the reference client (FR43) + integration guide as the testable artifact, or move the aspiration to Success Metrics.
+
+## Scope honesty — strong
+
+Omissions are explicit, not inferred. Section 3 carries a substantial "Out of scope / deferred — v1" list that does real work: centralized authorization, wiring all 10–15 apps, external/public users, social login/federation/SCIM/WebAuthn, automated cross-app merge, and back-channel SLO are each named with a one-line reason ("the IdP cannot see app databases; reconciliation is seeding + claim contract"). De-scoping is proposed openly: refresh tokens are "**optional** in v1 (architecture's decision)" with the rotation constraint preserved (FR9); self-service MFA recovery is deferred with the inline note "*(Self-service recovery codes deferred to post-v1.)*" at FR15.
+
+Inferences are tagged. The two `[ASSUMPTION]` entries (pilot apps are confidential server-side clients; protagonist names illustrative) sit in a "Standing assumptions" block flagged "*for confirmation downstream*." The leaver-handling decision ("Leavers are **disabled, not deleted** in v1") is stated with rationale rather than left silent.
+
+Open-items density is appropriate to stakes: two genuinely-open OQs, four resolved-with-path, two assumptions. For a green-light-to-build PRD that is low and healthy — nothing build-blocking is left floating except the pilot-app identity (OQ1), which correctly blocks only integration, not the core build. The one watch-item is that this PRD has no `[NOTE FOR PM]` callouts; the tensions are real (24/7 target on a solo operator; PDPA sign-off dependency) but are carried in Risks (R1, R2) and OQ3 instead — acceptable, since they are surfaced, just not in that notation.
+
+## Downstream usability — adequate
+
+As a chain-top PRD this dimension matters more than usual, and it is mostly well-served — with one real gap. IDs are contiguous, unique, and resolve: FR1–FR43, NFR1–NFR19, UJ-1–UJ-8, SM1–SM8, CM1–CM3, R1–R7, OQ1–OQ6 with no observed gaps or duplicates. Cross-references resolve (UJs cite FRs; FR41 cites FR11/FR1/FR4/FR32/FR5; FR42 cites FR22; metrics cite NFRs). Every UJ has a named protagonist carrying context inline (Somchai/Anong/Pranee/Wirat/Rawinan) — no floating UJs. Sections largely stand alone.
+
+The gap: **there is no formal Glossary**, despite the PRD coining several load-bearing domain nouns that UX/architecture/story creation will need to source-extract identically — "reconciliation key" / "work-email key" / "work-email reconciliation key," "canonical identity," "stable subject (`sub`)," and the lifecycle states "pending activation → active → disabled." These are defined inline and used consistently, but the definitions are scattered (FR5, FR21–FR22, FR24, addendum §C), and the reconciliation-key term itself drifts in surface form (see Mechanical notes). For a standalone PRD this would be minor; for one explicitly feeding three downstream workflows, a single Glossary anchoring these terms would materially reduce extraction ambiguity.
+
+### Findings
+- **medium** No Glossary for load-bearing domain nouns (whole doc) — "reconciliation key," "canonical identity," "stable subject," and lifecycle states are defined inline and scattered across FR5/FR21–24/§C; a chain-top PRD feeding UX → architecture → stories should anchor them once. *Fix:* add a Glossary section defining each domain noun with its canonical surface form, and reference it from FRs instead of re-defining inline.
+
+## Shape fit — strong
+
+The PRD is fitted to the product, not forced into a template. It is correctly a hybrid: multi-stakeholder enough (four distinct roles, separation-of-duties) that named-protagonist UJs are load-bearing and justified — the eight UJs each illuminate a distinct role's path (returning login, activation, reset, onboarding, offboarding, app-owner integration, MFA recovery, client registration). At the same time it is security-critical, which earns the unusually heavy NFR section, and solo-built, which the PRD handles with an explicit compensating-controls frame (NFR8–NFR10, addendum §D, R1 headline risk) rather than pretending a team exists. Operational SMs (SM7 availability, SM8 reconciliation integrity) sit appropriately alongside the user-facing ones. Nothing is over-formalized (no UJ padding) and nothing critical is under-formalized. The brownfield-adjacent reality — apps with existing local user tables — is handled precisely via the claim-contract / email-mapping mechanic (FR22, FR42) rather than glossed.
+
+## Mechanical notes
+
+- **Glossary drift (low).** The reconciliation key appears as "work-email key" (Section 3, FR31), "work-email reconciliation key" (FR5, FR42), and "reconciliation key" (FR22) — same concept, three surface forms. "Subject" appears as "stable internal subject identifier" (FR21), "stable subject" (Section 3, FR42), and "`sub`" (addendum §C). Consistent in meaning, drifting in form; a Glossary (see Downstream finding) would resolve both.
+- **ID continuity (clean).** FR1–FR43, NFR1–NFR19, UJ-1–UJ-8, SM1–SM8, CM1–CM3, R1–R7, OQ1–OQ6 — no gaps, no duplicates observed. Cross-references (FR↔FR, UJ→FR, SM→NFR, Risk→NFR) all resolve to existing IDs.
+- **Assumptions Index roundtrip (clean, light).** Two inline `[ASSUMPTION]` tags, both in the "Standing assumptions" block at the end; no orphan index entries and no un-indexed inline tags. Density is appropriately low for the stakes.
+- **UJ protagonist naming (clean).** All eight UJs carry a named protagonist with role context inline. The PRD pre-empts the obvious objection by flagging the names as illustrative (`[ASSUMPTION]`).
+- **Required sections (present).** Vision, Users/Stakeholders, Scope, FRs, NFRs, User Journeys, Success Metrics, Risks & Open Questions, plus an addendum carrying rejected-alternative rationale, parked roadmap, technical implications, and PDPA detail — complete for the agreed stakes and product type. One absent-but-not-required convention: no `[NOTE FOR PM]` callouts (tensions are carried in Risks/OQ instead — acceptable).
+- **Status caveat.** Front-matter still reads "**Status: draft**" and the banner says "FG-2…FG-7, NFRs, journeys, metrics, and risks **in progress**," but those sections are in fact fully drafted. Update the status banner before this is consumed downstream, or readers may discount complete sections as provisional.

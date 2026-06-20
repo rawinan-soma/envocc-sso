@@ -1,0 +1,97 @@
+# ─── Secrets & credentials ───────────────────────────────────────────────────
+.env
+.env.*
+*.env
+secrets/
+*.p12
+*.jks
+*.keystore
+*.pem
+*.key
+*.crt
+*.pfx
+
+# ─── Ruby on Rails ───────────────────────────────────────────────────────────
+*.gem
+*.rbc
+/.config
+/coverage/
+/InstalledFiles
+/pkg/
+/spec/reports/
+/spec/examples.txt
+/test/tmp/
+/test/version_tmp/
+/tmp/
+
+# Rails specific
+log/
+tmp/
+storage/
+/public/system
+/public/uploads
+/vendor/bundle
+/vendor/cache
+
+# Rails credentials (project-specific key)
+config/credentials/*.key
+config/master.key
+config/credentials/production.key
+config/credentials/staging.key
+
+# Database
+db/*.sqlite3
+db/*.sqlite3-journal
+db/*.sqlite3-shm
+db/*.sqlite3-wal
+
+# bundler
+.bundle/
+Gemfile.lock
+
+# ─── Keycloak / Docker ───────────────────────────────────────────────────────
+keycloak/data/
+keycloak/themes/custom/
+# Docker override files with secrets
+docker-compose.override.yml
+docker-compose.local.yml
+.docker/
+
+# ─── Node.js ─────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp/
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+dist/
+build/
+.next/
+.nuxt/
+.output/
+.cache/
+.parcel-cache/
+*.local
+
+# ─── OS / Editor ─────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ─── Claude Code internal ─────────────────────────────────────────────────────
+# (keep .claude/ tracked — it holds project settings, not secrets)
+# .worktrees is ephemeral scratch space
+.worktrees/
