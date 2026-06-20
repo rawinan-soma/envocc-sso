@@ -1,0 +1,26 @@
+# Lefthook pre-commit hooks for envocc-sso
+# https://github.com/evilmartians/lefthook
+#
+# Installation:
+#   gem install lefthook   (or: brew install lefthook)
+#   lefthook install
+#
+# The pre-commit hook runs gitleaks on staged files only (fast scan).
+# CI runs gitleaks on the full source tree (see .github/workflows/ci.yml).
+#
+# Prerequisites: gitleaks must be installed
+#   brew install gitleaks
+#   OR: https://github.com/gitleaks/gitleaks/releases
+
+pre-commit:
+  parallel: false
+  commands:
+    gitleaks:
+      run: gitleaks protect --staged --redact --config .gitleaks.toml
+      fail_text: |
+        🚨 gitleaks found a potential secret in staged files!
+        The commit has been blocked to protect credentials.
+
+        To investigate: gitleaks protect --staged --verbose --config .gitleaks.toml
+        To allow a false positive: add the pattern to [allowlist] in .gitleaks.toml
+        NEVER commit real secrets — use .env (gitignored) for real credentials.

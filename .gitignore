@@ -1,6 +1,7 @@
 # ─── Secrets & credentials ───────────────────────────────────────────────────
 .env
 .env.*
+!.env.example
 *.env
 secrets/
 *.p12
@@ -10,6 +11,15 @@ secrets/
 *.key
 *.crt
 *.pfx
+
+# Keycloak admin credentials master key
+admin/config/master.key
+
+# Kamal secrets
+.kamal/secrets
+
+# Full (un-stripped) realm exports — only stripped export is committed
+*.full-export.json
 
 # ─── Ruby on Rails ───────────────────────────────────────────────────────────
 *.gem

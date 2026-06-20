@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-20
-last_updated: 2026-06-20
+last_updated: 2026-06-21
 project: envocc-sso
 project_key: NOKEY
 tracking_system: file-system
@@ -43,8 +43,8 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # ── Epic 1: Keycloak IdP Foundation & SSO Core ──────────────────────────────
-  epic-1: backlog
-  1-1-keycloak-stand-up-baseline-realm-and-secret-hygiene: backlog
+  epic-1: in-progress
+  1-1-keycloak-stand-up-baseline-realm-and-secret-hygiene: done
   1-2-realm-oidc-client-configuration-auth-code-and-pkce-only: backlog
   1-3-realm-keys-and-token-issuance: backlog
   1-4-sessions-brute-force-password-policy-and-enumeration-resistance: backlog

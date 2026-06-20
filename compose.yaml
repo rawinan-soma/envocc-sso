@@ -1,0 +1,113 @@
+# envocc-sso — Docker Compose (development)
+#
+# Services:
+#   postgres   — PostgreSQL 17 with keycloak_db + rails_db
+#   keycloak   — Keycloak 26.2.5 (Quarkus, start-dev, imports envocc realm)
+#   mailpit    — Local SMTP trap for email testing (Mailhog replacement)
+#
+# Usage:
+#   cp .env.example .env    # fill in real dev passwords
+#   docker compose up -d
+#
+# All credentials come from .env (never hardcoded here).
+# See .env.example for required variables.
+
+services:
+
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      # init.sh creates the keycloak_db/rails_db databases and their owner roles.
+      # It reads these to set each role's password at first-boot (TCP auth needs
+      # a stored password). Sourced from .env — never hardcoded here.
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      RAILS_DB_USERNAME: ${RAILS_DB_USERNAME:-rails}
+      RAILS_DB_PASSWORD: ${RAILS_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # NOTE: init scripts run ONCE on an empty data dir. After editing init.sh
+      # you must `docker compose down -v` to wipe the volume and re-run it.
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── Keycloak ───────────────────────────────────────────────────────────────
+  keycloak:
+    build:
+      context: ./keycloak
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Database (Quarkus JDBC format).
+      # Both values are sourced from .env so they can be overridden (e.g. to
+      # point at an external Postgres for staging). The defaults below match
+      # the internal postgres service defined in this file.
+      KC_DB: ${KC_DB:-postgres}
+      KC_DB_URL: ${KC_DB_URL:-jdbc:postgresql://postgres:5432/keycloak_db}
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      # Initial admin bootstrap (only effective on first boot). Keycloak 26
+      # renamed KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD to KC_BOOTSTRAP_ADMIN_*.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Dev: HTTP only, no reverse proxy needed
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      # Expose /health/* and /metrics on the management port (9000).
+      # Required for the healthcheck below — disabled by default in KC 26.
+      KC_HEALTH_ENABLED: "true"
+      # Mailpit SMTP for email flows (used from Story 1.6+)
+      KC_SPI_TRUSTSTORE_FILE_HOSTNAME_VERIFICATION_POLICY: ANY
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # The Keycloak image ships no curl/wget, so probe with bash /dev/tcp.
+      # Health is served on the management port 9000 (not 8080) in KC 26.
+      # We invoke bash explicitly (not sh) because /dev/tcp is a bash built-in
+      # and is not available in dash/sh.  Keycloak 26 on UBI9-minimal ships
+      # bash at /bin/bash; CMD-SHELL would invoke /bin/sh which may differ
+      # on future base images.  Using CMD form with bash is more explicit.
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - >-
+          exec 3<>/dev/tcp/localhost/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status":"UP"' <&3
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ─── Mailpit (local SMTP trap) ───────────────────────────────────────────────
+  # Replaces Mailhog (unmaintained). Catches all outgoing email in dev.
+  # SMTP: localhost:1025 | Web UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.24.0
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+volumes:
+  postgres_data:
+    driver: local

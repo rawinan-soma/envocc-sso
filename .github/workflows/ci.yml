@@ -1,0 +1,98 @@
+# CI Pipeline — envocc-sso
+# Story 1.1: Gitleaks secret-scanning gate (grows in subsequent stories)
+#
+# Subsequent stories will add:
+#   - Docker Compose smoke test (Keycloak health, realm import)
+#   - RSpec test suite (Story 3.1)
+#   - Brakeman static analysis (Story 3.1)
+#   - BATS integration tests (Stories 1.2+)
+
+name: CI
+
+on:
+  push:
+    branches: ["main", "develop", "story-*"]
+  pull_request:
+    branches: ["main", "develop"]
+
+# Single source of truth for the gitleaks version used by all jobs.
+# Bump here to upgrade both the secret-scan gate and the realm-export check.
+# Also update GITLEAKS_SHA256 to match the new linux_x64 release tarball.
+env:
+  GITLEAKS_VERSION: "8.24.0"
+  # SHA-256 of gitleaks_8.24.0_linux_x64.tar.gz (from official checksums.txt).
+  # Update this when bumping GITLEAKS_VERSION to prevent supply-chain tampering.
+  GITLEAKS_SHA256: "cb49b7de5ee986510fe8666ca0273a6cc15eb82571f2f14832c9e8920751f3a4"
+
+jobs:
+
+  # ─── Secret Scanning Gate ──────────────────────────────────────────────────
+  # Blocks the build if any secret pattern is detected in the source tree.
+  # This is a hard gate — a match means the PR/push cannot merge.
+  #
+  # We invoke the gitleaks BINARY directly rather than gitleaks/gitleaks-action@v2:
+  # the v2 action requires a paid GITLEAKS_LICENSE for organization-owned repos
+  # (it exits non-zero without one), which would make the gate fail for the wrong
+  # reason. The binary needs no license and lets us pass --redact explicitly.
+  gitleaks:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history so gitleaks can scan commits (not just the working tree).
+          # NOTE: use `gitleaks detect` (without --no-git) below to actually scan history.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -o "$tmp/gitleaks.tar.gz"
+          # Verify checksum before installing — guards against MITM / CDN compromise.
+          echo "${GITLEAKS_SHA256}  $tmp/gitleaks.tar.gz" | sha256sum --check --status
+          tar -xzf "$tmp/gitleaks.tar.gz" -C "$tmp" gitleaks
+          sudo install -m 0755 "$tmp/gitleaks" /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Run gitleaks (working tree + git history)
+        run: |
+          # Scan the working tree AND git commit history.
+          # --no-git is intentionally omitted so gitleaks walks git history (enabled by fetch-depth: 0 above).
+          # --redact keeps any matched secret value out of the CI logs.
+          gitleaks detect --source . --config .gitleaks.toml --redact --verbose
+
+  # ─── Realm Export Secret Check ─────────────────────────────────────────────
+  # Extra targeted check: confirm the committed realm export contains no secrets.
+  realm-export-check:
+    name: Realm Export Clean
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -o "$tmp/gitleaks.tar.gz"
+          # Verify checksum before installing — guards against MITM / CDN compromise.
+          echo "${GITLEAKS_SHA256}  $tmp/gitleaks.tar.gz" | sha256sum --check --status
+          tar -xzf "$tmp/gitleaks.tar.gz" -C "$tmp" gitleaks
+          sudo install -m 0755 "$tmp/gitleaks" /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Verify realm-export.json has no secrets
+        run: |
+          gitleaks detect \
+            --source keycloak/realm-export.json \
+            --no-git \
+            --config .gitleaks.toml \
+            --redact \
+            --verbose
+          echo "realm-export.json passed secret scan — safe to commit."
