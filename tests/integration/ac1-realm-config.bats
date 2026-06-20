@@ -15,11 +15,6 @@
 KC_PORT="${KC_PORT:-8080}"
 REALM="envocc"
 
-# Shared cache: populated once in setup_file, reused by all runtime tests.
-# This avoids 8 separate token fetches + 8 identical Admin REST API calls,
-# which could trigger Keycloak's brute-force detection under rapid test runs.
-_REALM_JSON=""
-
 # Helper: get an admin bearer token from the master realm
 _admin_token() {
   local admin_user="${KEYCLOAK_ADMIN:-admin}"
@@ -40,9 +35,13 @@ kc_running() {
   curl -sf -o /dev/null -w "%{http_code}" "http://localhost:${KC_PORT}/realms/${REALM}" 2>/dev/null | grep -q "200"
 }
 
-# Fetch the realm JSON once before the test file runs, cache it in _REALM_JSON.
-# All runtime tests that need the realm object grep this cached copy instead of
-# making independent HTTP calls.  Static tests (RC-09 onward) do not use it.
+# Fetch the realm JSON once before the test file runs, persist it via
+# $BATS_FILE_TMPDIR so all @test subprocesses can read the cached copy.
+# This avoids 8 separate token fetches + 8 identical Admin REST API calls,
+# which could trigger Keycloak's brute-force detection under rapid test runs.
+# $BATS_FILE_TMPDIR is provided by bats-core and is shared across all tests
+# in a single file execution (unlike regular env vars which are lost when
+# @test functions run in isolated subprocesses).
 setup_file() {
   if ! kc_running; then
     # Cannot prefetch — tests will skip individually via kc_running() guard.
@@ -54,9 +53,19 @@ setup_file() {
     echo "setup_file: failed to obtain admin token; runtime tests will be skipped." >&2
     return 0
   fi
-  _REALM_JSON="$(curl -sf -H "Authorization: Bearer ${token}" \
+  local realm_json
+  realm_json="$(curl -sf -H "Authorization: Bearer ${token}" \
     "http://localhost:${KC_PORT}/admin/realms/${REALM}")"
-  export _REALM_JSON
+  # Persist to a temp file shared across @test subprocess boundaries.
+  echo "$realm_json" > "${BATS_FILE_TMPDIR}/realm.json"
+}
+
+# Internal helper: read the cached realm JSON from the temp file.
+# Returns empty string if the file is absent (Keycloak was not running in setup_file).
+_realm_json() {
+  if [ -f "${BATS_FILE_TMPDIR}/realm.json" ]; then
+    cat "${BATS_FILE_TMPDIR}/realm.json"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -64,8 +73,8 @@ setup_file() {
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-01] envocc realm has registrationAllowed=false" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
-  [ -n "$_REALM_JSON" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
-  echo "$_REALM_JSON" | grep -q '"registrationAllowed":false'
+  [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
+  _realm_json | grep -q '"registrationAllowed":false'
 }
 
 # ---------------------------------------------------------------------------
@@ -73,8 +82,8 @@ setup_file() {
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-02] envocc realm has resetPasswordAllowed=true" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
-  [ -n "$_REALM_JSON" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
-  echo "$_REALM_JSON" | grep -q '"resetPasswordAllowed":true'
+  [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
+  _realm_json | grep -q '"resetPasswordAllowed":true'
 }
 
 # ---------------------------------------------------------------------------
@@ -82,8 +91,8 @@ setup_file() {
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-03] envocc realm has rememberMe=false" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
-  [ -n "$_REALM_JSON" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
-  echo "$_REALM_JSON" | grep -q '"rememberMe":false'
+  [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
+  _realm_json | grep -q '"rememberMe":false'
 }
 
 # ---------------------------------------------------------------------------
@@ -91,11 +100,11 @@ setup_file() {
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-04] envocc realm has loginWithEmailAllowed=true and registrationEmailAsUsername=true" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
-  [ -n "$_REALM_JSON" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
-  echo "$_REALM_JSON" | grep -q '"loginWithEmailAllowed":true'
+  [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
+  _realm_json | grep -q '"loginWithEmailAllowed":true'
   # registrationEmailAsUsername is the Keycloak Admin REST API field for "use email as username"
   # (not duplicateEmailsAllowed, which is a separate concern)
-  echo "$_REALM_JSON" | grep -q '"registrationEmailAsUsername":true'
+  _realm_json | grep -q '"registrationEmailAsUsername":true'
 }
 
 # ---------------------------------------------------------------------------
@@ -103,9 +112,9 @@ setup_file() {
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-05] envocc realm has correct SSO session timeouts" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
-  [ -n "$_REALM_JSON" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
-  echo "$_REALM_JSON" | grep -q '"ssoSessionIdleTimeout":1800'
-  echo "$_REALM_JSON" | grep -q '"ssoSessionMaxLifespan":28800'
+  [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
+  _realm_json | grep -q '"ssoSessionIdleTimeout":1800'
+  _realm_json | grep -q '"ssoSessionMaxLifespan":28800'
 }
 
 # ---------------------------------------------------------------------------
@@ -113,9 +122,9 @@ setup_file() {
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-06] envocc realm has eventsEnabled=true and adminEventsEnabled=true" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
-  [ -n "$_REALM_JSON" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
-  echo "$_REALM_JSON" | grep -q '"eventsEnabled":true'
-  echo "$_REALM_JSON" | grep -q '"adminEventsEnabled":true'
+  [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
+  _realm_json | grep -q '"eventsEnabled":true'
+  _realm_json | grep -q '"adminEventsEnabled":true'
 }
 
 # ---------------------------------------------------------------------------
@@ -123,8 +132,8 @@ setup_file() {
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-07] envocc realm has eventsExpiration=2592000 (30 days)" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
-  [ -n "$_REALM_JSON" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
-  echo "$_REALM_JSON" | grep -q '"eventsExpiration":2592000'
+  [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
+  _realm_json | grep -q '"eventsExpiration":2592000'
 }
 
 # ---------------------------------------------------------------------------
@@ -132,8 +141,8 @@ setup_file() {
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-08] envocc realm displayName is 'EnvOcc SSO'" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
-  [ -n "$_REALM_JSON" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
-  echo "$_REALM_JSON" | grep -q '"displayName":"EnvOcc SSO"'
+  [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached (token fetch failed in setup_file)"
+  _realm_json | grep -q '"displayName":"EnvOcc SSO"'
 }
 
 # ---------------------------------------------------------------------------
