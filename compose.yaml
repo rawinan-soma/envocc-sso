@@ -1,0 +1,86 @@
+# envocc-sso — Docker Compose (development)
+#
+# Services:
+#   postgres   — PostgreSQL 17 with keycloak_db + rails_db
+#   keycloak   — Keycloak 26.2.5 (Quarkus, start-dev, imports envocc realm)
+#   mailpit    — Local SMTP trap for email testing (Mailhog replacement)
+#
+# Usage:
+#   cp .env.example .env    # fill in real dev passwords
+#   docker compose up -d
+#
+# All credentials come from .env (never hardcoded here).
+# See .env.example for required variables.
+
+services:
+
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Let init.sql handle database + role creation
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── Keycloak ───────────────────────────────────────────────────────────────
+  keycloak:
+    build:
+      context: ./keycloak
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Database (Quarkus JDBC format)
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      # Initial admin credentials (only effective on first boot)
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Dev: HTTP only, no reverse proxy needed
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      # Mailpit SMTP for email flows (used from Story 1.6+)
+      KC_SPI_TRUSTSTORE_FILE_HOSTNAME_VERIFICATION_POLICY: ANY
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ─── Mailpit (local SMTP trap) ───────────────────────────────────────────────
+  # Replaces Mailhog (unmaintained). Catches all outgoing email in dev.
+  # SMTP: localhost:1025 | Web UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.24.0
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+volumes:
+  postgres_data:
+    driver: local

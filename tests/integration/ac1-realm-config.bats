@@ -1,13 +1,13 @@
 #!/usr/bin/env bats
 # =============================================================================
-# ATDD Red-Phase Acceptance Tests — Story 1.1
+# ATDD Acceptance Tests — Story 1.1
 # AC1 (extended): Baseline realm configuration validation
 #
 # These tests verify the envocc realm's specific settings beyond mere existence:
 # login settings, user profile, token lifetimes, event capture.
 #
-# TDD Phase: RED — all tests are @skip until realm-export.json is implemented.
-# To activate: remove the `skip` call from the test you are implementing.
+# TDD Phase: GREEN — realm-export.json implemented; skip guards removed.
+# Runtime tests are guard-skipped if Keycloak is not running.
 #
 # Prereqs: Keycloak running (ac1-docker-compose-smoke.bats passed)
 # =============================================================================
@@ -28,11 +28,16 @@ _admin_token() {
     | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4
 }
 
+# Helper: skip if Keycloak isn't running
+kc_running() {
+  curl -sf -o /dev/null "http://localhost:${KC_PORT}/health/ready" 2>/dev/null
+}
+
 # ---------------------------------------------------------------------------
 # [P0] AC1-RC-01 — Realm registration (self-registration) is OFF
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-01] envocc realm has registrationAllowed=false" {
-  skip "RED PHASE — realm-export.json not yet created"
+  kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
   local token
   token=$(_admin_token)
@@ -48,7 +53,7 @@ _admin_token() {
 # [P0] AC1-RC-02 — Forgot-password is ON
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-02] envocc realm has resetPasswordAllowed=true" {
-  skip "RED PHASE — realm-export.json not yet created"
+  kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
   local token
   token=$(_admin_token)
@@ -64,7 +69,7 @@ _admin_token() {
 # [P0] AC1-RC-03 — Remember-me is OFF
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-03] envocc realm has rememberMe=false" {
-  skip "RED PHASE — realm-export.json not yet created"
+  kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
   local token
   token=$(_admin_token)
@@ -80,7 +85,7 @@ _admin_token() {
 # [P0] AC1-RC-04 — Email-as-username is ON
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-04] envocc realm has loginWithEmailAllowed=true and emailAsUsername=true" {
-  skip "RED PHASE — realm-export.json not yet created"
+  kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
   local token
   token=$(_admin_token)
@@ -97,7 +102,7 @@ _admin_token() {
 # [P0] AC1-RC-05 — SSO session idle = 1800 s, SSO session max = 28800 s
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-05] envocc realm has correct SSO session timeouts" {
-  skip "RED PHASE — realm-export.json not yet created"
+  kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
   local token
   token=$(_admin_token)
@@ -114,7 +119,7 @@ _admin_token() {
 # [P0] AC1-RC-06 — Login events and admin events are enabled
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-06] envocc realm has eventsEnabled=true and adminEventsEnabled=true" {
-  skip "RED PHASE — realm-export.json not yet created"
+  kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
   local token
   token=$(_admin_token)
@@ -131,7 +136,7 @@ _admin_token() {
 # [P0] AC1-RC-07 — Event expiry is set (30 days = 2592000 s)
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-07] envocc realm has eventsExpiration=2592000 (30 days)" {
-  skip "RED PHASE — realm-export.json not yet created"
+  kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
   local token
   token=$(_admin_token)
@@ -147,7 +152,7 @@ _admin_token() {
 # [P0] AC1-RC-08 — Realm display name is 'EnvOcc SSO'
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-08] envocc realm displayName is 'EnvOcc SSO'" {
-  skip "RED PHASE — realm-export.json not yet created"
+  kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
   local token
   token=$(_admin_token)
@@ -163,8 +168,6 @@ _admin_token() {
 # [P1] AC1-RC-09 — realm-export.json is valid JSON (offline static check)
 # ---------------------------------------------------------------------------
 @test "[P1][AC1-RC-09] keycloak/realm-export.json is valid JSON" {
-  skip "RED PHASE — realm-export.json not yet created"
-
   [ -f "keycloak/realm-export.json" ]
 
   # python3 is universally available; use it to validate JSON
@@ -176,8 +179,6 @@ _admin_token() {
 # [P1] AC1-RC-10 — realm-export.json declares realm id/name as 'envocc'
 # ---------------------------------------------------------------------------
 @test "[P1][AC1-RC-10] realm-export.json has realm=envocc" {
-  skip "RED PHASE — realm-export.json not yet created"
-
   [ -f "keycloak/realm-export.json" ]
   grep -q '"realm":"envocc"' keycloak/realm-export.json
 }
@@ -186,8 +187,6 @@ _admin_token() {
 # [P1] AC1-RC-11 — keycloak/Dockerfile exists, pinned FROM, copies realm-export.json
 # ---------------------------------------------------------------------------
 @test "[P1][AC1-RC-11] keycloak/Dockerfile exists with pinned image and realm import" {
-  skip "RED PHASE — keycloak/Dockerfile not yet created"
-
   [ -f "keycloak/Dockerfile" ]
 
   # Must FROM a pinned quay.io/keycloak/keycloak image (with explicit tag, not 'latest')
@@ -205,8 +204,6 @@ _admin_token() {
 # [P1] AC1-RC-12 — compose.yaml exists and defines postgres, keycloak, mailpit services
 # ---------------------------------------------------------------------------
 @test "[P1][AC1-RC-12] compose.yaml defines required services" {
-  skip "RED PHASE — compose.yaml not yet created"
-
   [ -f "compose.yaml" ]
   grep -q "postgres" compose.yaml
   grep -q "keycloak" compose.yaml
@@ -217,8 +214,6 @@ _admin_token() {
 # [P1] AC1-RC-13 — compose.yaml does NOT hard-code any credential values
 # ---------------------------------------------------------------------------
 @test "[P1][AC1-RC-13] compose.yaml has no hardcoded password values" {
-  skip "RED PHASE — compose.yaml not yet created"
-
   [ -f "compose.yaml" ]
 
   # Passwords must come from env vars, not literal values in compose.yaml
@@ -233,8 +228,6 @@ _admin_token() {
 # [P1] AC1-RC-14 — postgres/init.sql exists and creates both databases
 # ---------------------------------------------------------------------------
 @test "[P1][AC1-RC-14] postgres/init.sql creates keycloak_db and rails_db" {
-  skip "RED PHASE — postgres/init.sql not yet created"
-
   [ -f "postgres/init.sql" ]
   grep -qi "CREATE DATABASE" postgres/init.sql
   grep -qi "keycloak_db" postgres/init.sql
@@ -245,8 +238,6 @@ _admin_token() {
 # [P2] AC1-RC-15 — REALM-EXPORT-NOTES.md documents which fields are stripped
 # ---------------------------------------------------------------------------
 @test "[P2][AC1-RC-15] keycloak/REALM-EXPORT-NOTES.md documents stripped secret fields" {
-  skip "RED PHASE — REALM-EXPORT-NOTES.md not yet created"
-
   [ -f "keycloak/REALM-EXPORT-NOTES.md" ]
   grep -q "clientSecret" keycloak/REALM-EXPORT-NOTES.md
   grep -q "privateKey" keycloak/REALM-EXPORT-NOTES.md

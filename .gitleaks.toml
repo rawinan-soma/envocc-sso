@@ -1,0 +1,102 @@
+# gitleaks configuration for envocc-sso
+# https://github.com/gitleaks/gitleaks
+#
+# Uses the gitleaks default ruleset as a base, with additional rules
+# and allowlists specific to this project's Keycloak + Rails stack.
+#
+# Usage:
+#   gitleaks detect --source . --redact           # scan working tree (CI)
+#   gitleaks protect --staged --redact            # scan staged files (pre-commit)
+#   gitleaks detect --source keycloak/realm-export.json --verbose  # spot-check
+
+title = "envocc-sso gitleaks config"
+
+# ─── Extend the default ruleset ─────────────────────────────────────────────
+[extend]
+# Pull in gitleaks' built-in rules (covers AWS, GCP, GitHub tokens, JWTs, etc.)
+useDefault = true
+
+# ─── Custom rules ─────────────────────────────────────────────────────────────
+
+[[rules]]
+id          = "keycloak-admin-password"
+description = "Keycloak admin password with a real value"
+regex       = '''(?i)KEYCLOAK_ADMIN_PASSWORD\s*=\s*(?!change-me|CHANGE.ME|placeholder|test-only|changeit|your.password)[^\s"']{8,}'''
+tags        = ["keycloak", "password"]
+severity    = "critical"
+
+[[rules]]
+id          = "keycloak-db-password"
+description = "Keycloak DB password with a real value"
+regex       = '''(?i)(KEYCLOAK_DB_PASSWORD|KC_DB_PASSWORD)\s*=\s*(?!change-me|CHANGE.ME|placeholder|test-only|changeit|your.password)[^\s"']{8,}'''
+tags        = ["keycloak", "database", "password"]
+severity    = "critical"
+
+[[rules]]
+id          = "rails-db-password"
+description = "Rails database password with a real value"
+regex       = '''(?i)RAILS_DB_PASSWORD\s*=\s*(?!change-me|CHANGE.ME|placeholder|test-only|changeit|your.password)[^\s"']{8,}'''
+tags        = ["rails", "database", "password"]
+severity    = "critical"
+
+[[rules]]
+id          = "postgres-password"
+description = "PostgreSQL password with a real value"
+regex       = '''(?i)POSTGRES_PASSWORD\s*=\s*(?!change-me|CHANGE.ME|placeholder|test-only|changeit|your.password)[^\s"']{8,}'''
+tags        = ["postgres", "password"]
+severity    = "critical"
+
+[[rules]]
+id          = "keycloak-client-secret"
+description = "Keycloak client secret with a real value (non-empty)"
+regex       = '''"clientSecret"\s*:\s*"(?!"|change-me|placeholder|test-only)[^"]{16,}"'''
+tags        = ["keycloak", "client-secret"]
+severity    = "critical"
+
+[[rules]]
+id          = "keycloak-private-key"
+description = "Keycloak RSA private key embedded in realm export or config"
+regex       = '''"privateKey"\s*:\s*"(?!"|\s*)[^"]{64,}"'''
+tags        = ["keycloak", "private-key"]
+severity    = "critical"
+
+[[rules]]
+id          = "keycloak-hmac-secret"
+description = "Keycloak HMAC secret in key provider config (non-empty)"
+regex       = '''"secret"\s*:\s*\[\s*"(?!"|\s*)[^"]{16,}"\s*\]'''
+tags        = ["keycloak", "hmac-secret"]
+severity    = "high"
+
+[[rules]]
+id          = "rails-master-key"
+description = "Rails credentials master key"
+regex       = '''(?i)(master\.key|RAILS_MASTER_KEY)\s*[:=]\s*[0-9a-f]{32,}'''
+tags        = ["rails", "master-key"]
+severity    = "critical"
+
+# ─── Allowlist ────────────────────────────────────────────────────────────────
+[allowlist]
+description = "Known-safe patterns: placeholders, examples, test fixtures"
+
+# Allow placeholder values used in .env.example and documentation
+regexes = [
+  # Explicit placeholders
+  '''change-me''',
+  '''CHANGE.ME''',
+  '''placeholder[-_]?replaced[-_]?by[-_]?env''',
+  '''placeholder''',
+  '''test-only-not-real''',
+  # Empty secrets in realm export (blanked before commit)
+  '''"secret"\s*:\s*\[""\]''',
+  '''"privateKey"\s*:\s*\[""\]''',
+  '''"certificate"\s*:\s*\[""\]''',
+  '''"clientSecret"\s*:\s*""''',
+]
+
+# Files that are explicitly safe (example files, test fixtures)
+paths = [
+  '''.env.example''',
+  '''keycloak/REALM-EXPORT-NOTES.md''',
+  '''keycloak/PINNED-VERSION.md''',
+  '''README.md''',
+]

@@ -31,9 +31,9 @@ cd "$REPO_ROOT"
 FILTER="${1:-all}"
 
 case "$FILTER" in
-  secrets)
+  secrets|secret-hygiene)
     echo "Running AC2 Secret Hygiene tests..."
-    bats tests/secrets/ac2-secret-hygiene.bats
+    bats tests/secret-hygiene/ac2-secret-hygiene.bats
     ;;
   integration)
     echo "Running AC1 Docker Compose + Realm Config tests..."
@@ -45,7 +45,7 @@ case "$FILTER" in
     echo "=========================================="
     echo "NOTE: All tests should SKIP in RED phase."
     echo "=========================================="
-    bats tests/secrets/ac2-secret-hygiene.bats
+    bats tests/secret-hygiene/ac2-secret-hygiene.bats
     bats tests/integration/ac1-docker-compose-smoke.bats
     bats tests/integration/ac1-realm-config.bats
     ;;
