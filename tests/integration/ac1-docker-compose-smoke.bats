@@ -192,14 +192,30 @@ kc_running() {
 # ---------------------------------------------------------------------------
 # [P1] AC1-11 — No real secrets in .env.example (only placeholder values)
 # ---------------------------------------------------------------------------
-@test "[P1][AC1-11] .env.example contains only placeholder values (change-me or CHANGE_ME)" {
+@test "[P1][AC1-11] .env.example secret variables contain only placeholder values" {
   [ -f ".env.example" ]
-  # All password fields must be set to placeholder values only
-  # This regex rejects any value that looks like a real secret (len > 20, mixed chars)
+  # Only check variables whose underscore-delimited name segments indicate secrets:
+  # PASSWORD, SECRET, KEY, TOKEN, or MASTER as a whole segment (not as a substring).
+  # Pattern (^|_)KEYWORD(_|=) anchors on _ boundaries so KEYCLOAK_ADMIN is skipped
+  # but KEYCLOAK_ADMIN_PASSWORD, KC_DB_PASSWORD, SECRET_KEY, MASTER_KEY are caught.
+  # Non-secret vars like KC_DB_URL (a JDBC connection string) are intentionally excluded.
+  # Review fix: previous regex '^[A-Z_]+=.{20,}$' falsely flagged KC_DB_URL (43 chars).
   while IFS= read -r line; do
-    if echo "$line" | grep -qE '^[A-Z_]+=.{20,}$'; then
-      echo "Suspicious non-placeholder value in .env.example: $line"
-      return 1
+    # Skip blank lines and comments
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "$line" ]] && continue
+    # Extract var name (part before first '=')
+    local varname
+    varname="${line%%=*}"
+    # Check if any underscore-delimited segment is a secret keyword
+    if echo "_${varname}=" | grep -qE '_(PASSWORD|SECRET|KEY|TOKEN|MASTER)(_|=)'; then
+      local val
+      val="${line#*=}"
+      # Value must be a known placeholder (case-insensitive) or empty
+      if ! echo "$val" | grep -qiE '^(change-me|change_me|placeholder|test-only|changeit|your[-_]password|)$'; then
+        echo "Non-placeholder secret value detected in .env.example: $line"
+        return 1
+      fi
     fi
   done < .env.example
 }

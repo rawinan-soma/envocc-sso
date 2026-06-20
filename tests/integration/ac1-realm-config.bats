@@ -29,8 +29,9 @@ _admin_token() {
 }
 
 # Helper: skip if Keycloak isn't running
+# Explicitly check for HTTP 200 (consistent with ac1-docker-compose-smoke.bats)
 kc_running() {
-  curl -sf -o /dev/null "http://localhost:${KC_PORT}/health/ready" 2>/dev/null
+  curl -sf -o /dev/null -w "%{http_code}" "http://localhost:${KC_PORT}/health/ready" 2>/dev/null | grep -q "200"
 }
 
 # ---------------------------------------------------------------------------
@@ -84,7 +85,7 @@ kc_running() {
 # ---------------------------------------------------------------------------
 # [P0] AC1-RC-04 — Email-as-username is ON
 # ---------------------------------------------------------------------------
-@test "[P0][AC1-RC-04] envocc realm has loginWithEmailAllowed=true and emailAsUsername=true" {
+@test "[P0][AC1-RC-04] envocc realm has loginWithEmailAllowed=true and registrationEmailAsUsername=true" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
   local token
@@ -95,7 +96,9 @@ kc_running() {
     "http://localhost:${KC_PORT}/admin/realms/${REALM}"
   [ "$status" -eq 0 ]
   echo "$output" | grep -q '"loginWithEmailAllowed":true'
-  echo "$output" | grep -q '"duplicateEmailsAllowed":false'
+  # registrationEmailAsUsername is the Keycloak Admin REST API field for "use email as username"
+  # (not duplicateEmailsAllowed, which is a separate concern)
+  echo "$output" | grep -q '"registrationEmailAsUsername":true'
 }
 
 # ---------------------------------------------------------------------------
