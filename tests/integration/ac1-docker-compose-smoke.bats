@@ -196,7 +196,8 @@ kc_running() {
   [ -f ".env.example" ]
   grep -q "KEYCLOAK_ADMIN=" .env.example
   grep -q "KEYCLOAK_ADMIN_PASSWORD=" .env.example
-  grep -q "KEYCLOAK_DB_PASSWORD=" .env.example
+  # KC_DB_PASSWORD (not KEYCLOAK_DB_PASSWORD) is the variable consumed by compose.yaml and init.sh
+  grep -q "KC_DB_PASSWORD=" .env.example
   grep -q "POSTGRES_PASSWORD=" .env.example
   grep -q "RAILS_DB_PASSWORD=" .env.example
 }

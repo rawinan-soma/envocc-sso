@@ -37,33 +37,40 @@ if [ -z "${RAILS_DB_PASSWORD:-}" ]; then
 fi
 
 # Run as the superuser the entrypoint already authenticated us as.
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --no-password <<-SQL
+# Passwords are passed as psql variables (:'varname') so psql handles quoting,
+# preventing SQL injection from passwords that contain single quotes or backslashes.
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --no-password \
+  -v kc_user="${KC_DB_USERNAME}" \
+  -v kc_pass="${KC_DB_PASSWORD}" \
+  -v rails_user="${RAILS_DB_USERNAME}" \
+  -v rails_pass="${RAILS_DB_PASSWORD}" \
+  <<-'SQL'
 	-- ─── Keycloak role + database ──────────────────────────────────────────────
-	DO \$\$
+	DO $$
 	BEGIN
-	  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${KC_DB_USERNAME}') THEN
-	    CREATE ROLE "${KC_DB_USERNAME}" WITH LOGIN PASSWORD '${KC_DB_PASSWORD}';
+	  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = :'kc_user') THEN
+	    EXECUTE format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'kc_user', :'kc_pass');
 	  ELSE
-	    ALTER ROLE "${KC_DB_USERNAME}" WITH LOGIN PASSWORD '${KC_DB_PASSWORD}';
+	    EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'kc_user', :'kc_pass');
 	  END IF;
 	END
-	\$\$;
+	$$;
 
-	SELECT 'CREATE DATABASE keycloak_db OWNER "${KC_DB_USERNAME}"'
+	SELECT format('CREATE DATABASE keycloak_db OWNER %I', :'kc_user')
 	  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak_db')\gexec
 
 	-- ─── Rails role + database (Story 3.1 scaffolds the schema) ────────────────
-	DO \$\$
+	DO $$
 	BEGIN
-	  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${RAILS_DB_USERNAME}') THEN
-	    CREATE ROLE "${RAILS_DB_USERNAME}" WITH LOGIN PASSWORD '${RAILS_DB_PASSWORD}';
+	  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = :'rails_user') THEN
+	    EXECUTE format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'rails_user', :'rails_pass');
 	  ELSE
-	    ALTER ROLE "${RAILS_DB_USERNAME}" WITH LOGIN PASSWORD '${RAILS_DB_PASSWORD}';
+	    EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'rails_user', :'rails_pass');
 	  END IF;
 	END
-	\$\$;
+	$$;
 
-	SELECT 'CREATE DATABASE rails_db OWNER "${RAILS_DB_USERNAME}"'
+	SELECT format('CREATE DATABASE rails_db OWNER %I', :'rails_user')
 	  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'rails_db')\gexec
 SQL
 

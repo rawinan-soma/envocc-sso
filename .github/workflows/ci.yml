@@ -34,7 +34,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Fetch full history so gitleaks can scan all commits
+          # Fetch full history so gitleaks can scan commits (not just the working tree).
+          # NOTE: use `gitleaks detect` (without --no-git) below to actually scan history.
           fetch-depth: 0
 
       - name: Install gitleaks
@@ -48,10 +49,12 @@ jobs:
           sudo install -m 0755 "$tmp/gitleaks" /usr/local/bin/gitleaks
           gitleaks version
 
-      - name: Run gitleaks (full working tree)
+      - name: Run gitleaks (working tree + git history)
         run: |
+          # Scan the working tree AND git commit history.
+          # --no-git is intentionally omitted so gitleaks walks git history (enabled by fetch-depth: 0 above).
           # --redact keeps any matched secret value out of the CI logs.
-          gitleaks detect --source . --no-git --config .gitleaks.toml --redact --verbose
+          gitleaks detect --source . --config .gitleaks.toml --redact --verbose
 
   # ─── Realm Export Secret Check ─────────────────────────────────────────────
   # Extra targeted check: confirm the committed realm export contains no secrets.
@@ -77,14 +80,14 @@ jobs:
 
       - name: Verify realm-export.json has no secrets
         run: |
-          if [ -f keycloak/realm-export.json ]; then
-            gitleaks detect \
-              --source keycloak/realm-export.json \
-              --no-git \
-              --config .gitleaks.toml \
-              --redact \
-              --verbose
-            echo "realm-export.json passed secret scan — safe to commit."
-          else
-            echo "keycloak/realm-export.json not found — skipping realm check."
+          if [ ! -f keycloak/realm-export.json ]; then
+            echo "ERROR: keycloak/realm-export.json not found — this file is required." >&2
+            exit 1
           fi
+          gitleaks detect \
+            --source keycloak/realm-export.json \
+            --no-git \
+            --config .gitleaks.toml \
+            --redact \
+            --verbose
+          echo "realm-export.json passed secret scan — safe to commit."

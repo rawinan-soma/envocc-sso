@@ -103,6 +103,11 @@ tags        = ["rails", "master-key"]
 # ─── Allowlist ────────────────────────────────────────────────────────────────
 [allowlist]
 description = "Known-safe patterns: placeholders, examples, test fixtures"
+# regexTarget = "match" ensures regexes below are tested against just the
+# captured secret value (e.g. "change-me"), not the entire source line.
+# Without this, anchored patterns like ^change[-_]me$ never fire because the
+# full line (e.g. KC_DB_PASSWORD=change-me) doesn't match the anchored form.
+regexTarget = "match"
 
 # Global value allowlist — kept deliberately NARROW and ANCHORED so a real
 # weak secret (e.g. "change-meNOW123") is NOT masked. Only exact placeholder
