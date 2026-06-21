@@ -2,18 +2,20 @@
 title: "Product Brief: envocc-sso"
 status: final
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-21
 ---
 
 # Product Brief: envocc-sso
 
+> Product brief — fixes the **what** and the **why**, not the **how**. All implementation, stack, and tooling choices are deferred to the architecture phase.
+
 ## Executive Summary
 
-**envocc-sso** is a custom, in-house **OpenID Connect (OIDC) Identity Provider (IdP)** for the **Division of Occupational and Environmental Diseases** — built frontend and backend from the ground up rather than deployed from an off-the-shelf product like Keycloak or Authentik. It exists to solve a concrete organizational problem: today, ~100–150 staff each maintain separate accounts across 10–15 internal applications, and there is **no central record of who works here**. envocc-sso becomes that missing source of truth — one identity, one login, one place to grant and revoke access.
+**envocc-sso** is a single sign-on and central identity system for the **Division of Occupational and Environmental Diseases (EnvOcc)**. Today ~100–150 staff each maintain separate accounts across 10–15 internal applications, and there is **no central record of who works here**. envocc-sso becomes that missing source of truth — one identity, one login, one place to grant and revoke access.
 
-The system has two halves. For **staff**, a single branded login (with multi-factor authentication and self-service password reset) replaces a drawer full of separate app credentials. For **HR administrators**, an admin console replaces the impossible task of tracking accounts scattered across a dozen systems — they provision people once, and disable them when they leave.
+The system has **two co-equal halves**. For **staff**, a single branded login (with multi-factor authentication and self-service password reset) replaces a drawer full of separate app credentials. For **HR administrators**, an admin console replaces the impossible task of tracking accounts scattered across a dozen systems — they provision people once, and disable them when they leave.
 
-Building this in-house is an organizational mandate, not a convenience choice. That mandate is accepted with eyes open: a custom IdP is security-critical infrastructure, so this brief scopes v1 deliberately tight (authentication only), phases the rollout to prove safety before scale, and treats security rigor — not feature count — as the definition of done. There is no fixed deadline; readiness is the deadline.
+This is security-critical infrastructure: it guards every other app and is the system of record for staff credentials. v1 is therefore scoped deliberately tight (authentication only), the rollout is phased to prove safety before scale, and **security rigor — not feature count — is the definition of done**. There is no fixed deadline; readiness is the deadline.
 
 ## The Problem
 
@@ -25,39 +27,39 @@ This creates real, daily costs:
 - **For administrators:** no way to answer "what can this person access?" or "is everyone who left actually locked out?" Onboarding means creating accounts in many places; offboarding means *remembering* to remove them from many places — and missed offboarding is a live security hole.
 - **For the organization:** there is no central identity record at all. Access lives implicitly inside each app's database. There is no single point to enforce a password policy, require MFA, or audit who can get in.
 
-The status quo isn't just inconvenient — for an organization handling occupational and environmental health data, scattered and un-revoked access is a genuine security and governance liability.
+For an organization handling occupational and environmental health data, scattered and un-revoked access is a genuine security and governance liability.
 
 ## The Solution
 
-A purpose-built OIDC Identity Provider that becomes EnvOcc's first central identity system. Apps redirect users to envocc-sso to log in; envocc-sso authenticates them and issues a standard OIDC token the app trusts. One identity, reused everywhere.
+A central identity provider that becomes EnvOcc's first single sign-on. Apps redirect users to envocc-sso to sign in; it authenticates them and issues a standard token the app trusts. One identity, reused everywhere.
 
-Core capabilities for the first version:
+Core capabilities for v1:
 
-- **Single sign-on via OIDC** (standard Authorization Code flow) so internal apps can adopt it with off-the-shelf OIDC client libraries.
-- **Custom, branded login experience** — fully owned frontend, matching EnvOcc's identity.
-- **Multi-factor authentication (MFA)** from day one (e.g. TOTP authenticator app).
-- **Self-service password reset** via email, so 150 users don't funnel reset requests through admins.
-- **Admin console for HR administrators** — provision accounts, assign access, and disable leavers from one place. This is a first-class half of the product, not an afterthought.
-- **First-login account activation** — since legacy app passwords can't be migrated, admins create accounts and each user sets their own password on first sign-in via an emailed activation link.
+- **Standards-based single sign-on** so internal apps can integrate using off-the-shelf client libraries.
+- **Branded, organization-owned login experience** matching EnvOcc's identity — the branding is a **trust / anti-phishing signal**: a non-technical staff member, redirected here from another app, must immediately recognize this as the real, sanctioned login and not an imitation.
+- **Multi-factor authentication (MFA)** from day one.
+- **Self-service password reset** via email, so ~150 users don't funnel reset requests through admins.
+- **Admin console for HR administrators** — provision accounts, enable/disable, basic account management. A first-class half of the product, not an afterthought.
+- **First-login account activation** — admins create accounts and each user sets their own password on first sign-in via an emailed activation link.
 - **Integration documentation** so each app's owner can wire their app to envocc-sso themselves.
 
-The interface is built **English-first** during development, designed for localization; Thai (the target locale) is translated separately by the owner after the UI stabilizes.
+Built **English-first**, structured for localization; Thai is translated separately by the owner after the UI stabilizes.
 
 ## Scope
 
 **In scope (v1):**
-- OIDC Identity Provider (authentication + token issuance)
+- Identity provider — authentication + token issuance via standards-based SSO
 - Central user store — envocc-sso is the system of record for identity
-- Branded login UI + MFA (TOTP) + self-service password reset
-- Admin console: user provisioning, enable/disable, password reset, basic account management for HR admins
-- Activation/first-login password-set flow (email-based)
-- Account reconciliation: collapsing each person's scattered per-app accounts into one canonical identity
-- OIDC integration guide for app owners
+- Branded login + MFA + self-service password reset
+- Admin console — user provisioning, enable/disable, password reset, basic account management
+- Activation / first-login password-set flow (email-based)
+- Account reconciliation — collapsing each person's scattered per-app accounts into one canonical identity
+- Integration guide for app owners
 - Pilot integration with the first 1–2 apps
 
 **Out of scope (v1) — explicitly deferred:**
-- **Centralized authorization** — roles, groups, and permissions stay inside each app for now. envocc-sso answers *who you are*, not *what you may do*. (Strong candidate for a later phase.)
-- Wiring OIDC into all 10–15 apps — each app's owner does their own integration; this project delivers the IdP and the guide.
+- **Centralized authorization** — roles, groups, and permissions stay inside each app for now. envocc-sso answers *who you are*, not *what you may do*.
+- Wiring all 10–15 apps — each app's owner does their own integration; this project delivers the IdP and the guide.
 - External / public / partner users — internal staff only.
 - Social login, federation with external IdPs, SCIM provisioning, passwordless/WebAuthn — future vision, not v1.
 
@@ -65,39 +67,39 @@ The interface is built **English-first** during development, designed for locali
 
 - **Staff (~100–150 employees)** — primary, non-technical end users. Success = one login, no password sprawl, quick self-service recovery.
 - **HR administrators** — operate the admin console; own the joiner/mover/leaver lifecycle. Success = provision and de-provision a person in one place, with confidence it takes effect everywhere.
-- **App owners** — integrate their apps as OIDC clients. Success = a clear guide and a stable IdP they can trust and adopt without deep auth expertise.
+- **App owners** — integrate their apps as clients. Success = a clear guide and a stable IdP they can adopt without deep auth expertise.
 
 ## What Makes This Different
 
-This is **not** a market-differentiation play — Keycloak and Authentik do this well, and a custom theme on Keycloak could deliver the branded login alone. The justification for building it is **fit and mandate, not a technical moat**:
+This is **not** a market-differentiation play. The justification is **fit and mandate**:
 
-- **In-house mandate** — the organization requires the code to be owned and run internally; that requirement is the load-bearing reason and is taken as given.
-- **Full ownership** — complete control of the codebase, data, and user experience, with no third-party software in the trust path.
+- **In-house mandate** — the organization requires the system to be **self-hosted, fully owned, and inspectable**: no foreign SaaS, no data leaving the ministry, complete control of code, data, and user experience. This **sovereignty and control** requirement is the load-bearing reason and is taken as given.
+- **Full ownership** — no third-party software in the trust path that the organization cannot host and inspect.
+- **Full control of the user experience** — the branded login (a trust / anti-phishing signal for non-technical staff) and the HR admin console must be **owned and shaped by EnvOcc**, not constrained to a vendor's stock screens. *This UX-ownership requirement holds regardless of the implementation approach chosen — a ground-up build provides it inherently; a self-hosted engine (Keycloak / Authentik) provides it through full custom theming.*
 - **Right-sized** — purpose-built for one organization's exact needs (auth-only, ~150 users), without the surface area of a general-purpose platform.
 
-This brief deliberately records that an off-the-shelf option exists, so the decision is documented and honest.
+> The product requirement is a **single sign-on / central identity system**. The **implementation approach** that satisfies the sovereignty constraint is an **architecture decision, deliberately left open here** — the candidates are **(a) building the IdP ground-up**, **(b) self-hosting Keycloak**, or **(c) self-hosting Authentik** (or another inspectable, self-hostable open-source IdP). The brief fixes the *need*, not the *how*.
 
 ## Risk Accepted & Mitigation
 
-A custom IdP is among the most security-sensitive systems one can build: it guards every other app, stores credentials as the system of record, and is being built **solo**. The in-house mandate manages this risk rather than removing it. Accepted risk, with mitigations:
+Identity infrastructure is among the most security-sensitive systems one can run: it guards every other app, holds credentials as the system of record, and is operated **solo**. The mandate manages this risk rather than removing it. Accepted risk, with mitigations:
 
 - **Tight v1 surface** — authentication only; no authorization logic to get wrong.
-- **No fixed deadline** — readiness, not a date, gates release; time to do it carefully and get review.
+- **No fixed deadline** — readiness, not a date, gates release.
 - **Phased rollout** — prove the IdP in production with 1–2 apps before the rest depend on it.
-- **Stand on vetted foundations** — use established, audited OIDC and cryptography libraries; do not hand-roll crypto or token logic. (Detailed choices belong to the architecture phase.)
+- **Stand on vetted, audited foundations** — never hand-roll cryptography, token, or session logic. (Detailed choices belong to the architecture phase.)
 - **MFA from v1** — limits damage from any single credential compromise.
 
-**Residual risk — no independent security review.** Review is solo (self-review), which is *not* independent assurance for security-critical auth: blind spots stay blind. This is an explicitly accepted limitation. Compensating controls to lean on instead:
-- Build only on audited OIDC/crypto libraries; treat any custom security code as a red flag.
+**Residual risk — no independent security review.** Solo self-review is *not* independent assurance for security-critical auth. This is an explicitly accepted limitation, with compensating controls:
+- Build only on audited, maintained components; treat any custom security code as a red flag.
 - Automated tooling in the pipeline — dependency/vulnerability scanning and SAST.
-- Work against a published checklist — OWASP ASVS and the OIDC/OAuth security best-practice guidance — rather than ad-hoc judgment.
-- Consider a one-time external penetration test before broad rollout, if budget ever allows.
+- Work against published checklists — OWASP ASVS and OIDC/OAuth security best-practice guidance.
+- Consider a one-time external penetration test before broad rollout, if budget allows.
 
 ## Success Criteria
 
-*(Proposed — confirm or adjust.)*
 - The pilot apps authenticate staff exclusively through envocc-sso, with zero separate logins for those apps.
-- A staff member can log in once and reach every integrated app without re-authenticating.
+- A staff member can sign in once and reach every integrated app without re-authenticating.
 - HR admins can fully onboard a new hire and fully disable a leaver from the admin console alone.
 - MFA is enforced and self-service password reset works end-to-end via email.
 - No security defect in the token-handling, session, or credential-storage class is outstanding when an app goes live.
@@ -110,7 +112,7 @@ If v1 proves out, envocc-sso becomes EnvOcc's identity backbone: all 10–15 app
 
 - Any regulatory/compliance regime that applies to a Thai public-health division's identity data (e.g. PDPA)?
 - Which specific apps are the pilot, and what are their stacks?
-- Build stack — frontend, backend, database (deferred to architecture).
+- **Implementation approach — undecided (deferred to architecture).** Which approach best satisfies the sovereignty constraint: **ground-up custom build**, **self-hosted Keycloak**, or **self-hosted Authentik** (or another self-hostable open-source IdP)? To be evaluated against security risk, solo-operator burden, and degree of control.
 - The canonical-identity key used to reconcile duplicate accounts into one person (e.g. a reliable org identifier).
 - Whether any external security assurance (one-time pen test) is achievable given the solo build.
 
@@ -118,4 +120,4 @@ If v1 proves out, envocc-sso becomes EnvOcc's identity backbone: all 10–15 app
 
 - **Organization:** Division of Occupational and Environmental Diseases.
 - **Localization:** English-first in development; Thai translation handled by the owner later.
-- **Security review:** solo / self-review (accepted, with the compensating controls in *Risk Accepted & Mitigation*).
+- **Security review:** solo / self-review (accepted, with the compensating controls above).
