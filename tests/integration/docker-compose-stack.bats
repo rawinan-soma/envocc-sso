@@ -52,20 +52,33 @@ assert_no_bare_privilege() {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: skip the calling test unless the postgres service is actually running.
-# The live-stack tests below query a running container; on a clean checkout / CI
-# (where the slow `up --wait` test is skipped) the stack is down and these tests
-# must SKIP rather than hard-fail with a misleading "service not running" error.
+# Helper: skip the calling test unless BOTH postgres AND keycloak services are
+# actually running. The live-stack tests below query a running container; on a
+# clean checkout / CI (where the slow `up --wait` test is skipped) the stack is
+# down and these tests must SKIP rather than hard-fail with a misleading error.
+#
+# Checking only postgres is insufficient: tests that hit Keycloak's health
+# endpoint will exhaust their retry budget (90 s) and hard-FAIL if keycloak is
+# still starting or crashed while postgres is already healthy.
 # ---------------------------------------------------------------------------
 require_running_stack() {
   command -v docker >/dev/null || skip "Docker not installed"
-  local cid
-  cid=$(docker compose ps -q postgres 2>/dev/null || true)
-  [ -n "$cid" ] || skip "stack not running — start it with: docker compose up --wait"
-  # Container exists; ensure it is actually up (not exited/created).
-  local state
-  state=$(docker inspect -f '{{.State.Running}}' "$cid" 2>/dev/null || echo false)
-  [ "$state" = "true" ] || skip "postgres container is not running (state=$state)"
+
+  # Check postgres
+  local pg_cid
+  pg_cid=$(docker compose ps -q postgres 2>/dev/null || true)
+  [ -n "$pg_cid" ] || skip "stack not running — start it with: docker compose up --wait"
+  local pg_state
+  pg_state=$(docker inspect -f '{{.State.Running}}' "$pg_cid" 2>/dev/null || echo false)
+  [ "$pg_state" = "true" ] || skip "postgres container is not running (state=$pg_state)"
+
+  # Check keycloak
+  local kc_cid
+  kc_cid=$(docker compose ps -q keycloak 2>/dev/null || true)
+  [ -n "$kc_cid" ] || skip "keycloak container is not running — start it with: docker compose up --wait"
+  local kc_state
+  kc_state=$(docker inspect -f '{{.State.Running}}' "$kc_cid" 2>/dev/null || echo false)
+  [ "$kc_state" = "true" ] || skip "keycloak container is not running (state=$kc_state)"
 }
 
 # ---------------------------------------------------------------------------
@@ -246,7 +259,9 @@ require_running_stack() {
 
 @test "[P0][AC2] both keycloak_db and admin databases exist after postgres init" {
   require_running_stack
-  run docker compose exec -T postgres psql -U postgres -tAc "SELECT datname FROM pg_database WHERE datname IN ('keycloak_db','admin') ORDER BY datname;" 2>&1
+  # Use ${POSTGRES_USER} (sourced from .env.example in setup()) rather than the
+  # hardcoded literal 'postgres' so the test works when POSTGRES_USER is customised.
+  run docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -tAc "SELECT datname FROM pg_database WHERE datname IN ('keycloak_db','admin') ORDER BY datname;" 2>&1
   echo "Output: $output"
   [[ "$output" == *"admin"* ]]
   [[ "$output" == *"keycloak_db"* ]]
@@ -254,7 +269,7 @@ require_running_stack() {
 
 @test "[P0][AC2] keycloak_user role exists and has NO superuser privileges" {
   require_running_stack
-  run docker compose exec -T postgres psql -U postgres -tAc "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname='keycloak_user';" 2>&1
+  run docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -tAc "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname='keycloak_user';" 2>&1
   echo "Output: $output"
   [[ "$output" == *"keycloak_user"* ]]
   # rolsuper, rolcreatedb, rolcreaterole must all be 'f' (false)
@@ -263,7 +278,7 @@ require_running_stack() {
 
 @test "[P0][AC2] admin_user role exists and has NO superuser privileges" {
   require_running_stack
-  run docker compose exec -T postgres psql -U postgres -tAc "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname='admin_user';" 2>&1
+  run docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -tAc "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname='admin_user';" 2>&1
   echo "Output: $output"
   [[ "$output" == *"admin_user"* ]]
   [[ "$output" == *"f|f|f"* ]]

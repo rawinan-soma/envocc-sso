@@ -23,18 +23,17 @@ set -euo pipefail
 # Validate required env vars are present before proceeding.
 # (Using explicit checks rather than :? expansion to avoid false-positive pattern matches
 # in secret-scanning tools.)
-if [ -z "${POSTGRES_USER:-}" ]; then
-  echo "ERROR: POSTGRES_USER environment variable is required but not set" >&2
-  exit 1
-fi
-if [ -z "${KC_DB_PASSWORD:-}" ]; then
-  echo "ERROR: KC_DB_PASSWORD environment variable is required but not set" >&2
-  exit 1
-fi
-if [ -z "${ADMIN_DB_PASSWORD:-}" ]; then
-  echo "ERROR: ADMIN_DB_PASSWORD environment variable is required but not set" >&2
-  exit 1
-fi
+require_env() {
+  local var="$1"
+  if [ -z "${!var:-}" ]; then
+    echo "ERROR: ${var} environment variable is required but not set" >&2
+    exit 1
+  fi
+}
+
+require_env POSTGRES_USER
+require_env KC_DB_PASSWORD
+require_env ADMIN_DB_PASSWORD
 
 echo "==> [01-init-dbs] Creating databases and least-privilege roles..."
 
@@ -101,16 +100,17 @@ EOSQL
 # their own tables). Without FOR ROLE, default privileges would only cover objects
 # created by the connected superuser — inert for the app's own tables.
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname keycloak_db <<-EOSQL
-  GRANT ALL PRIVILEGES ON SCHEMA public TO keycloak_user;
-  ALTER DEFAULT PRIVILEGES FOR ROLE keycloak_user IN SCHEMA public GRANT ALL ON TABLES TO keycloak_user;
-  ALTER DEFAULT PRIVILEGES FOR ROLE keycloak_user IN SCHEMA public GRANT ALL ON SEQUENCES TO keycloak_user;
+grant_schema_privs() {
+  local db="$1"
+  local role="$2"
+  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$db" <<-EOSQL
+    GRANT ALL PRIVILEGES ON SCHEMA public TO ${role};
+    ALTER DEFAULT PRIVILEGES FOR ROLE ${role} IN SCHEMA public GRANT ALL ON TABLES TO ${role};
+    ALTER DEFAULT PRIVILEGES FOR ROLE ${role} IN SCHEMA public GRANT ALL ON SEQUENCES TO ${role};
 EOSQL
+}
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname admin <<-EOSQL
-  GRANT ALL PRIVILEGES ON SCHEMA public TO admin_user;
-  ALTER DEFAULT PRIVILEGES FOR ROLE admin_user IN SCHEMA public GRANT ALL ON TABLES TO admin_user;
-  ALTER DEFAULT PRIVILEGES FOR ROLE admin_user IN SCHEMA public GRANT ALL ON SEQUENCES TO admin_user;
-EOSQL
+grant_schema_privs keycloak_db keycloak_user
+grant_schema_privs admin admin_user
 
 echo "==> [01-init-dbs] Done. Databases: keycloak_db, admin. Roles: keycloak_user, admin_user."
