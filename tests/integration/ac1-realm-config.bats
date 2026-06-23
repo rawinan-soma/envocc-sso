@@ -82,7 +82,8 @@
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-07] realm-export.json has accessTokenLifespan=900" {
   [ -f "keycloak/realm-export.json" ]
-  grep -q '"accessTokenLifespan":900' keycloak/realm-export.json
+  # Anchor the value with a trailing delimiter so 9000 (10x too long) cannot pass.
+  grep -qE '"accessTokenLifespan":900([,}]|$)' keycloak/realm-export.json
 }
 
 # ---------------------------------------------------------------------------
@@ -90,8 +91,9 @@
 # ---------------------------------------------------------------------------
 @test "[P0][AC1-RC-08] realm-export.json has correct SSO session timeouts" {
   [ -f "keycloak/realm-export.json" ]
-  grep -q '"ssoSessionIdleTimeout":1800' keycloak/realm-export.json
-  grep -q '"ssoSessionMaxLifespan":28800' keycloak/realm-export.json
+  # Anchor values so e.g. 18000 / 288000 cannot satisfy a prefix match.
+  grep -qE '"ssoSessionIdleTimeout":1800([,}]|$)' keycloak/realm-export.json
+  grep -qE '"ssoSessionMaxLifespan":28800([,}]|$)' keycloak/realm-export.json
 }
 
 # ---------------------------------------------------------------------------

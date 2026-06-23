@@ -56,13 +56,16 @@ check() {
 check "bruteForceProtected=true (FR19)" \
   "$(jq -r '.bruteForceProtected == true' "$REALM_FILE")"
 
-# 2. Access token lifespan must be at most 900 seconds (NFR2a: ≤15 min)
+# 2. Access token lifespan must be present, numeric, and at most 900 seconds.
+#    (jq treats `null <= 900` as true, so a MISSING key would silently pass —
+#     require an explicit number to fail loudly on an omitted/typed key.)
 check "accessTokenLifespan<=900 (NFR2a — 15 min ceiling)" \
-  "$(jq -r '.accessTokenLifespan <= 900' "$REALM_FILE")"
+  "$(jq -r '(.accessTokenLifespan | type) == "number" and .accessTokenLifespan <= 900' "$REALM_FILE")"
 
-# 3. SSL must not be none (never disable TLS requirement)
-check "sslRequired!=\"none\" (must be external or all)" \
-  "$(jq -r '.sslRequired != "none"' "$REALM_FILE")"
+# 3. SSL must be required. Assert positive membership rather than just !=none,
+#    so a missing/empty/typo'd value fails instead of slipping through.
+check "sslRequired in {external, all} (TLS required)" \
+  "$(jq -r '.sslRequired == "external" or .sslRequired == "all"' "$REALM_FILE")"
 
 # 4. Self-registration must be disabled
 check "registrationAllowed=false" \
@@ -71,16 +74,24 @@ check "registrationAllowed=false" \
 # 5. KeyProvider components must be entirely absent (not blanked)
 #    Omitting the group lets Keycloak auto-generate fresh keys.
 #    Blanking privateKey:[""] causes InvalidKeySpecException on import.
-check "KeyProvider components absent (org.keycloak.keys.KeyProvider omitted)" \
+#    Catch ALL generated key providers (rsa, rsa-enc, hmac, aes) — every one
+#    of these carries secret key material. Handle both the object-of-groups
+#    shape (export form) and the array shape (Admin REST API form); any other
+#    non-null shape that we can't reason about is treated as a violation.
+check "KeyProvider components absent (no *-generated key providers)" \
   "$(jq -r '
+    def providers:
+      if (.components | type) == "object" then
+        (.components | to_entries
+         | map(.value | if type == "array" then .[] else . end))
+      elif (.components | type) == "array" then .components
+      else null end;
+    def generated: ["rsa-generated", "rsa-enc-generated", "hmac-generated", "aes-generated"];
     if .components == null then true
-    elif (.components | type) == "object" then
-      (.components | to_entries |
-       map(.value | if type == "array" then .[] else . end) |
-       map(select(.providerId != null)) |
-       map(.providerId) |
-       contains(["rsa-generated"]) | not)
-    else true
+    elif (providers) == null then false
+    else
+      (providers | map(select(.providerId != null) | .providerId)
+       | any(. as $p | generated | index($p) != null) | not)
     end
   ' "$REALM_FILE")"
 

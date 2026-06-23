@@ -26,7 +26,17 @@ pre-commit:
         NEVER commit real secrets — use .env (gitignored) for real credentials.
 
     keycloak-realm-lint:
-      run: bash keycloak/lint-realm.sh keycloak/realm-export.json
+      # Lint the STAGED content (what will actually be committed), not the
+      # working-tree file — matching the gitleaks `--staged` semantics above.
+      # Otherwise a clean staged file + dirty working copy (or vice versa) would
+      # be linted against the wrong bytes, giving false PASS/FAIL results.
+      run: |
+        tmp="$(mktemp)"
+        git show ":keycloak/realm-export.json" > "$tmp"
+        bash keycloak/lint-realm.sh "$tmp"
+        status=$?
+        rm -f "$tmp"
+        exit $status
       glob: "keycloak/realm-export.json"
       fail_text: |
         keycloak/realm-export.json failed security lint checks!

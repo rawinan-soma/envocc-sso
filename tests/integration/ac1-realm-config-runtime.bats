@@ -105,7 +105,9 @@ _realm_json() {
 @test "[P0][AC1-RC-20] Live envocc realm: accessTokenLifespan=900" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
   [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached in setup_file"
-  _realm_json | grep -q '"accessTokenLifespan":900'
+  # Exact numeric equality via jq — resilient to compact/pretty output and to
+  # prefix-match false negatives (e.g. 9000 must NOT satisfy a 900 check).
+  [ "$(_realm_json | jq -r '.accessTokenLifespan')" = "900" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -124,8 +126,9 @@ _realm_json() {
 @test "[P0][AC1-RC-22] Live envocc realm: correct SSO session timeouts (idle=1800, max=28800)" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
   [ -f "${BATS_FILE_TMPDIR}/realm.json" ] || skip "Realm JSON not cached in setup_file"
-  _realm_json | grep -q '"ssoSessionIdleTimeout":1800'
-  _realm_json | grep -q '"ssoSessionMaxLifespan":28800'
+  # Exact numeric equality via jq (see AC1-RC-20 rationale).
+  [ "$(_realm_json | jq -r '.ssoSessionIdleTimeout')" = "1800" ]
+  [ "$(_realm_json | jq -r '.ssoSessionMaxLifespan')" = "28800" ]
 }
 
 # ---------------------------------------------------------------------------

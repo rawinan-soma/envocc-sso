@@ -1,6 +1,8 @@
-# Keycloak Quarkus distribution — pinned to exact patch version
-# See keycloak/PINNED-VERSION.md for upgrade instructions and digest record.
-FROM quay.io/keycloak/keycloak:26.6.3
+# Keycloak Quarkus distribution — pinned to an immutable digest (not just the
+# mutable tag) so the build is reproducible and supply-chain-verifiable. The tag
+# is kept in the reference for human readability; the @sha256 is what's enforced.
+# See keycloak/PINNED-VERSION.md for the digest record and upgrade instructions.
+FROM quay.io/keycloak/keycloak:26.6.3@sha256:5fdbf2dbb5897cc34e82de49d13e23db011f9925089dbc555fc095f2c8bc1dac
 
 # Copy the secrets-stripped baseline realm export into the import directory.
 # Keycloak scans /opt/keycloak/data/import/ on startup when --import-realm is passed.

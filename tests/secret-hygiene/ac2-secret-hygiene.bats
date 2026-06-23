@@ -68,11 +68,28 @@ teardown_file() {
   fi
 
   # secret field on a client must be absent or empty string
-  # (Key-provider HMAC/AES use the array form "secret":["..."] — covered by AC2-01)
   if grep -o '"secret":"[^"]*"' keycloak/realm-export.json \
       | grep -v '"secret":""'; then
     echo "FAIL: realm-export.json contains non-empty client secret values"
     return 1
+  fi
+
+  # Defense in depth (independent of gitleaks, which may be skipped if absent):
+  # walk EVERY "secret"/"clientSecret" anywhere in the tree with jq and assert it
+  # is empty — this also catches the array form "secret":["<material>"] that
+  # Keycloak HMAC/AES key providers emit and that the grep checks above miss.
+  if command -v jq >/dev/null 2>&1; then
+    local nonempty
+    nonempty=$(jq -r '
+      [ .. | objects | (.secret?, .clientSecret?)
+        | select(. != null)
+        | if type == "array" then .[] else . end
+        | select(. != "" and . != null) ] | length
+    ' keycloak/realm-export.json)
+    if [ "${nonempty:-0}" -ne 0 ]; then
+      echo "FAIL: realm-export.json contains ${nonempty} non-empty secret value(s) (string or array form)"
+      return 1
+    fi
   fi
 }
 

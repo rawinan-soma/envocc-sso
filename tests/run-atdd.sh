@@ -63,9 +63,25 @@ case "$FILTER" in
     echo "NOTE: runtime tests self-skip if the stack is not running."
     echo "      Run 'docker compose up -d' first to exercise them."
     echo "=========================================="
-    bats tests/secret-hygiene/ac2-secret-hygiene.bats
-    bats tests/integration/ac1-docker-compose-smoke.bats
-    bats tests/integration/ac1-realm-config.bats
-    bats tests/integration/ac1-realm-config-runtime.bats
+    # Run EVERY suite even if an earlier one fails, then aggregate the result.
+    # Without this, `set -e` would abort on the first failing suite and hide
+    # the status of the remaining suites.
+    overall=0
+    for suite in \
+      tests/secret-hygiene/ac2-secret-hygiene.bats \
+      tests/integration/ac1-docker-compose-smoke.bats \
+      tests/integration/ac1-realm-config.bats \
+      tests/integration/ac1-realm-config-runtime.bats; do
+      if ! bats "$suite"; then
+        overall=1
+      fi
+    done
+    echo "=========================================="
+    if [ "$overall" -eq 0 ]; then
+      echo "All suites passed."
+    else
+      echo "One or more suites FAILED — see output above."
+    fi
+    exit "$overall"
     ;;
 esac

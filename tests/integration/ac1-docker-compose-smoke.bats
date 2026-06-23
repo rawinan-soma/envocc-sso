@@ -124,6 +124,9 @@ kc_running() {
   # Must FROM a pinned quay.io/keycloak/keycloak image (exact tag, not 'latest')
   grep -qE "^FROM quay\.io/keycloak/keycloak:[0-9]" keycloak/Dockerfile
 
+  # Must pin the immutable digest, not just the mutable tag (supply-chain integrity).
+  grep -qE "^FROM quay\.io/keycloak/keycloak:[0-9.]+@sha256:[0-9a-f]{64}" keycloak/Dockerfile
+
   # Must COPY realm-export.json into the import path
   grep -q "realm-export.json" keycloak/Dockerfile
 
@@ -139,10 +142,14 @@ kc_running() {
   # RED: will fail until compose.yaml is created
   [ -f "compose.yaml" ]
 
-  # Credential lines must reference ${VAR}, not literal values
-  if grep -E "(PASSWORD|SECRET|ADMIN_PASS)[[:space:]]*:[[:space:]]*['\"]?[a-zA-Z0-9]{8,}" \
-      compose.yaml | grep -v '\$\{'; then
-    echo "FAIL: compose.yaml contains hardcoded credential values"
+  # Every credential key's VALUE must be a ${VAR} reference (optionally with a
+  # :-default), never a literal. We match credential keys and inspect only the
+  # value to the right of the colon, so a same-line comment containing ${...}
+  # cannot mask a hardcoded literal (the old `grep -v '${'` over-filtered).
+  if grep -nE "^[[:space:]]*[A-Z_]*(PASSWORD|SECRET|ADMIN_PASS)[A-Z_]*[[:space:]]*:[[:space:]]*[^[:space:]#]" \
+      compose.yaml \
+      | grep -vE ":[[:space:]]*[\"']?\\\$\{" ; then
+    echo "FAIL: compose.yaml contains a credential value that is not a \${VAR} reference"
     return 1
   fi
 }

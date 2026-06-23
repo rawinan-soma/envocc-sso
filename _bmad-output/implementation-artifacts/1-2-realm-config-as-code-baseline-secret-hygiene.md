@@ -4,7 +4,7 @@ baseline_commit: cec0e7b7a548c32d4dfaaed019fef5816855ef1c
 
 # Story 1.2: Realm config-as-code baseline & secret hygiene
 
-Status: review
+Status: done
 
 ## Story
 
@@ -380,3 +380,36 @@ claude-sonnet-4-6
 ## Change Log
 
 - 2026-06-23: Story 1.2 implemented from scratch — Keycloak 26.6.3, realm-export.json hardened with all AC1 security settings, secrets stripped (AC2), lint-realm.sh created with 8 checks, lefthook.yml pre-commit hooks wired, compose.yaml and postgres/init.sh re-created, BATS test suite green (52 tests, 14 runtime self-skip). Status: review.
+- 2026-06-23: Code review (bmad-code-review, 3 adversarial layers) — 9 patches applied, 4 deferred, 8 dismissed as noise/false-positives. All offline BATS suites green (39 pass / 13 runtime self-skip / 0 fail); lint-realm.sh PASS; gitleaks clean. Status: done.
+
+## Review Findings
+
+Code review run 2026-06-23 (Blind Hunter + Edge Case Hunter + Acceptance Auditor). Auto-accepted; patches applied to the working tree.
+
+### Patches (applied)
+
+- [x] [Review][Patch] Unanchored numeric grep let 10x-too-long lifespans pass — anchored AC1-RC-07/08 with trailing delimiter; switched runtime AC1-RC-20/22 to exact `jq` equality. NFR2a (≤15 min) is now actually enforced. [tests/integration/ac1-realm-config.bats:85,93-94; tests/integration/ac1-realm-config-runtime.bats:108,127-128]
+- [x] [Review][Patch] lint-realm.sh KeyProvider check only caught `rsa-generated` — now catches all `*-generated` providers (rsa, rsa-enc, hmac, aes) and the array-shape `components` form. [keycloak/lint-realm.sh:71-90]
+- [x] [Review][Patch] lint-realm.sh numeric/ssl checks passed on missing keys (`null<=900`, `null!="none"` are jq-true) — accessTokenLifespan now requires a number; sslRequired now asserts positive membership in {external, all}. [keycloak/lint-realm.sh:59-65]
+- [x] [Review][Patch] Healthcheck grep `'"status":"UP"'` would never match Keycloak's spaced `"status": "UP"` → container stuck unhealthy. Made the pattern whitespace-tolerant. [compose.yaml:88-90]
+- [x] [Review][Patch] `run-atdd.sh all` aborted on first failing suite (set -e), hiding the rest — now runs every suite and aggregates the exit status. [tests/run-atdd.sh:60-]
+- [x] [Review][Patch] Digest pin was documentation-only (Dockerfile used the mutable tag) — pinned `FROM ...@sha256:...` so the build is reproducible/supply-chain-verifiable. [keycloak/Dockerfile:5]
+- [x] [Review][Patch] AC1-SMOKE-07 now also asserts the `@sha256` digest pin, so a regression to tag-only is caught. [tests/integration/ac1-docker-compose-smoke.bats:120-]
+- [x] [Review][Patch] AC1-SMOKE-08 hardcoded-credential check over-filtered (`grep -v '${'` dropped any line containing `${`) — rewritten to inspect the value side and detect literals even with a same-line `${...}` comment. [tests/integration/ac1-docker-compose-smoke.bats:138-]
+- [x] [Review][Patch] AC2-02 client-secret check missed the array form `"secret":["..."]` and relied on gitleaks (which skips if absent) — added a gitleaks-independent `jq` walk over all `secret`/`clientSecret` values (string or array). [tests/secret-hygiene/ac2-secret-hygiene.bats:60-]
+- [x] [Review][Patch] lefthook realm-lint linted the working tree, not the staged content (gitleaks uses `--staged`) — now lints the staged blob, eliminating false PASS/FAIL on a staged/working mismatch. [lefthook.yml:28-]
+
+### Deferred (out of scope / not exercisable here)
+
+- [x] [Review][Defer] SMTP empty (`smtpServer:{}`) while `resetPasswordAllowed:true` → forgot-password is inert. SMTP config is not in this story's ACs and would hardcode an env-specific host into shared config-as-code; defer to the auth/email story. [keycloak/realm-export.json — smtpServer]
+- [x] [Review][Defer] `--import-realm` silently skips on an existing Postgres volume → realm-export.json edits are ignored on subsequent `up` with no warning. Operational footgun; covered narratively in REALM-EXPORT-NOTES.md but worth a CI/runbook guard later. [compose.yaml / keycloak/Dockerfile]
+- [x] [Review][Defer] Runtime BATS suite silently SKIPs all live assertions when the admin token can't be obtained (unset `KEYCLOAK_ADMIN_PASSWORD`) — live config could drift undetected. Test-harness integrity improvement spanning the runtime suite; defer. [tests/integration/ac1-realm-config-runtime.bats]
+- [x] [Review][Defer] AC3 destructive re-import (`docker compose down -v && up`) is claimed complete but has no automated coverage and wasn't exercised this run (no Docker). Add re-import smoke coverage when CI gains Docker. [AC3 / Task 4.2]
+- [x] [Review][Defer] `actionTokenGeneratedByAdminLifespan=43200` (12 h) is a Keycloak default that is loose relative to the realm's tight token posture — confirm intentional or tighten in a later hardening pass. [keycloak/realm-export.json:26]
+
+### Dismissed (false positives / noise)
+
+- psql `:'var'` + `format(%L)` "double-quotes the password" — false positive; `:'var'` substitutes a value, `%L` quotes it once. Idiom is correct. [postgres/init.sh:52,66]
+- `\gexec CREATE DATABASE` "inside a transaction" — false positive; psql runs autocommit by default. [postgres/init.sh:59-60,73-74]
+- bearerOnly clients with `standardFlowEnabled:true`, `webOrigins:["+"]`, management-port-binding speculation — Keycloak stock defaults, bounded, not introduced here.
+- init.sh whitespace-only password passing `-z`, AC2-16 staged-sentinel cleanup on SIGKILL — negligible operator-error / crash-only edges.
