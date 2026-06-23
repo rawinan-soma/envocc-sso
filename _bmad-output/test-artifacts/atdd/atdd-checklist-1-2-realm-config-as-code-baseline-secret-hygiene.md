@@ -1,6 +1,6 @@
 ---
-stepsCompleted: ['step-01-preflight-and-context', 'step-02-generation-mode', 'step-03-test-strategy', 'step-04-generate-tests', 'step-04c-aggregate']
-lastStep: 'step-04c-aggregate'
+stepsCompleted: ['step-01-preflight-and-context', 'step-02-generation-mode', 'step-03-test-strategy', 'step-04-generate-tests', 'step-04c-aggregate', 'test-review-complete']
+lastStep: 'test-review-complete'
 lastSaved: '2026-06-23'
 storyId: '1.2'
 storyKey: '1-2-realm-config-as-code-baseline-secret-hygiene'
@@ -10,7 +10,9 @@ generatedTestFiles:
   - tests/run-atdd.sh
   - tests/integration/ac1-docker-compose-smoke.bats
   - tests/integration/ac1-realm-config.bats
+  - tests/integration/ac1-realm-config-runtime.bats
   - tests/secret-hygiene/ac2-secret-hygiene.bats
+testReviewFile: _bmad-output/test-artifacts/test-reviews/test-review-story-1-2-realm-config.md
 inputDocuments:
   - _bmad-output/implementation-artifacts/1-2-realm-config-as-code-baseline-secret-hygiene.md
   - _bmad-output/test-artifacts/test-design/test-design-epic-1.md

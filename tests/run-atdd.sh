@@ -5,8 +5,15 @@
 # Usage:
 #   ./tests/run-atdd.sh               # run all tests
 #   ./tests/run-atdd.sh secrets       # run only AC2 secret-hygiene tests
-#   ./tests/run-atdd.sh integration   # run only AC1 realm-config tests
+#   ./tests/run-atdd.sh integration   # run only AC1 realm-config static tests
+#   ./tests/run-atdd.sh runtime       # run only AC1 live/runtime tests (stack required)
 #   ./tests/run-atdd.sh smoke         # run only AC1 docker-compose smoke tests
+#
+# Test file layout:
+#   tests/secret-hygiene/ac2-secret-hygiene.bats    — AC2: gitleaks + secret hygiene (offline)
+#   tests/integration/ac1-docker-compose-smoke.bats  — AC1: compose/Dockerfile checks + runtime smoke
+#   tests/integration/ac1-realm-config.bats          — AC1: realm-export.json static assertions (offline)
+#   tests/integration/ac1-realm-config-runtime.bats  — AC1: live Admin REST API assertions (stack needed)
 #
 # Dependencies:
 #   brew install bats-core gitleaks
@@ -39,8 +46,12 @@ case "$FILTER" in
     bats tests/secret-hygiene/ac2-secret-hygiene.bats
     ;;
   integration)
-    echo "Running AC1 Realm Config tests..."
+    echo "Running AC1 Realm Config static tests..."
     bats tests/integration/ac1-realm-config.bats
+    ;;
+  runtime)
+    echo "Running AC1 Realm Config runtime tests (stack must be running)..."
+    bats tests/integration/ac1-realm-config-runtime.bats
     ;;
   smoke)
     echo "Running AC1 Docker Compose smoke tests..."
@@ -55,5 +66,6 @@ case "$FILTER" in
     bats tests/secret-hygiene/ac2-secret-hygiene.bats
     bats tests/integration/ac1-docker-compose-smoke.bats
     bats tests/integration/ac1-realm-config.bats
+    bats tests/integration/ac1-realm-config-runtime.bats
     ;;
 esac

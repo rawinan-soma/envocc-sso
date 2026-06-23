@@ -12,7 +12,24 @@
 # Run:  bats tests/secret-hygiene/ac2-secret-hygiene.bats
 # Deps: gitleaks (brew install gitleaks), git, python3, bats-core
 # Note: Static/offline — no Docker stack required.
+#
+# Isolation note (AC2-16):
+#   AC2-16 stages a temp file in the repo to test gitleaks protect --staged.
+#   teardown_file guarantees cleanup of the sentinel file if the test is
+#   interrupted (e.g., SIGTERM). The in-test cleanup still runs normally.
 # =============================================================================
+
+# Guarantee removal of any staged sentinel file from AC2-16 on suite exit.
+# This is a safety net — AC2-16 already cleans up inline before asserting.
+teardown_file() {
+  local repo_root
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  local sentinel="${repo_root}/test-fake-secret-staged.txt"
+  if [ -f "$sentinel" ]; then
+    git -C "$repo_root" reset -q HEAD "test-fake-secret-staged.txt" 2>/dev/null || true
+    rm -f "$sentinel"
+  fi
+}
 
 # ---------------------------------------------------------------------------
 # [P0] AC2-01 — gitleaks detects zero findings on realm-export.json
