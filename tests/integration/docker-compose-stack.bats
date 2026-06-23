@@ -26,8 +26,29 @@ setup() {
 
 teardown() {
   # Do not tear down between individual tests to keep suite fast.
-  # Full stack teardown is done in the LAST test (AC1 validation).
+  # Full stack teardown is done in the LAST test ([P1][AC1] docker compose down -v).
+  # NOTE: If a test fails before that last test runs, the Docker stack will remain
+  # up. Run `docker compose down -v` manually in that case.
   true
+}
+
+# ---------------------------------------------------------------------------
+# Helper: assert that a PostgreSQL privilege keyword does not appear as a bare
+# grant in the init script.  NOSUPERUSER / NOCREATEDB / NOCREATEROLE are the
+# expected denial keywords and are explicitly excluded from matching.
+#
+# Usage: assert_no_bare_privilege KEYWORD NO_KEYWORD
+# Example: assert_no_bare_privilege SUPERUSER NOSUPERUSER
+# ---------------------------------------------------------------------------
+assert_no_bare_privilege() {
+  local keyword="$1"
+  local negated="$2"
+  local script="postgres/init/01-init-dbs.sh"
+  [ -f "$script" ]
+  local count
+  count=$(grep -iE "(^|[^A-Za-z])${keyword}([^A-Za-z]|$)" "$script" \
+    | grep -v -i "$negated" | grep -vE "^\s*(#|--)" | grep -c . || true)
+  [ "$count" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -131,30 +152,19 @@ teardown() {
 }
 
 @test "[P1][AC2] init script does NOT grant SUPERUSER to any role" {
-  [ -f "postgres/init/01-init-dbs.sh" ]
   # NOSUPERUSER is the correct PostgreSQL keyword to DENY superuser (expected and allowed).
-  # This test guards against a bare 'SUPERUSER' grant (without the 'NO' prefix).
-  # Strip comment lines and NOSUPERUSER lines, then assert no bare SUPERUSER remains.
-  # Use grep -c to count matching lines; || true prevents pipeline failure on no match.
-  count=$(grep -iE "(^|[^A-Za-z])SUPERUSER([^A-Za-z]|$)" postgres/init/01-init-dbs.sh \
-    | grep -v -i "NOSUPERUSER" | grep -vE "^\s*(#|--)" | grep -c . || true)
-  [ "$count" -eq 0 ]
+  # Guard against a bare 'SUPERUSER' grant (without the 'NO' prefix).
+  assert_no_bare_privilege SUPERUSER NOSUPERUSER
 }
 
 @test "[P1][AC2] init script does NOT grant CREATEDB to any role" {
-  [ -f "postgres/init/01-init-dbs.sh" ]
-  # NOCREATEDB is the correct PostgreSQL keyword to DENY createdb (expected and allowed).
-  count=$(grep -iE "(^|[^A-Za-z])CREATEDB([^A-Za-z]|$)" postgres/init/01-init-dbs.sh \
-    | grep -v -i "NOCREATEDB" | grep -vE "^\s*(#|--)" | grep -c . || true)
-  [ "$count" -eq 0 ]
+  # NOCREATEDB is the correct keyword; guard against bare CREATEDB grant.
+  assert_no_bare_privilege CREATEDB NOCREATEDB
 }
 
 @test "[P1][AC2] init script does NOT grant CREATEROLE to any role" {
-  [ -f "postgres/init/01-init-dbs.sh" ]
-  # NOCREATEROLE is the correct PostgreSQL keyword to DENY createrole (expected and allowed).
-  count=$(grep -iE "(^|[^A-Za-z])CREATEROLE([^A-Za-z]|$)" postgres/init/01-init-dbs.sh \
-    | grep -v -i "NOCREATEROLE" | grep -vE "^\s*(#|--)" | grep -c . || true)
-  [ "$count" -eq 0 ]
+  # NOCREATEROLE is the correct keyword; guard against bare CREATEROLE grant.
+  assert_no_bare_privilege CREATEROLE NOCREATEROLE
 }
 
 # ---------------------------------------------------------------------------
@@ -183,12 +193,16 @@ teardown() {
   # Keycloak 26 with KC_HEALTH_ENABLED=true exposes health on port 9000 (management interface).
   # Port 8080 does NOT serve /health/ready — only the management port does.
   # Wait up to 90s for the stack to be fully healthy before hitting the endpoint.
+  command -v docker >/dev/null || skip "Docker not installed"
+  command -v curl   >/dev/null || skip "curl not installed"
   KC_HEALTH_PORT="${KC_HEALTH_PORT:-9000}"
-  for i in $(seq 1 18); do
+  local max_retries=18
+  local retry_interval=5
+  for i in $(seq 1 "$max_retries"); do
     if curl --silent --fail --max-time 5 "http://localhost:${KC_HEALTH_PORT}/health/ready" >/dev/null 2>&1; then
       break
     fi
-    sleep 5
+    sleep "$retry_interval"
   done
   run curl --silent --fail --max-time 10 "http://localhost:${KC_HEALTH_PORT}/health/ready"
   [ "$status" -eq 0 ]
