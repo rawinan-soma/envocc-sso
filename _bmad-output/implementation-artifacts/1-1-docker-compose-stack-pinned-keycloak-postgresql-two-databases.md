@@ -1,6 +1,10 @@
+---
+baseline_commit: de9275bdcecffaa0631cdb51d6f1caaa82dd3b7d
+---
+
 # Story 1.1: Docker Compose stack — pinned Keycloak + PostgreSQL (two databases)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -20,56 +24,56 @@ so that every later capability has a running, version-pinned foundation.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `compose.yaml` at repo root (AC: 1, 3)
-  - [ ] Pin `quay.io/keycloak/keycloak:26.6.3` by digest (exact SHA256)
-  - [ ] Pin `postgres:16.x` by digest (exact SHA256)
-  - [ ] Define services: `keycloak`, `postgres`, and (stub) `admin` (disabled/commented — not needed until Epic 4)
-  - [ ] Set Keycloak `KC_DB=postgres`, `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD` from env
-  - [ ] Configure `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` from env
-  - [ ] Add `KC_HOSTNAME` and `KC_HTTP_ENABLED=true` (HTTP-only behind Nginx; TLS is Epic 1.3)
-  - [ ] Add health-check for Keycloak (`/health/ready`) and postgres (`pg_isready`)
-  - [ ] Set `depends_on: postgres: condition: service_healthy`
-  - [ ] Add named volumes for PostgreSQL data persistence
-  - [ ] Set explicit Docker network (`envocc-net`)
+- [x] Task 1: Create `compose.yaml` at repo root (AC: 1, 3)
+  - [x] Pin `quay.io/keycloak/keycloak:26.6.3` by digest (exact SHA256)
+  - [x] Pin `postgres:16.x` by digest (exact SHA256)
+  - [x] Define services: `keycloak`, `postgres`, and (stub) `admin` (disabled/commented — not needed until Epic 4)
+  - [x] Set Keycloak `KC_DB=postgres`, `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD` from env
+  - [x] Configure `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` from env
+  - [x] Add `KC_HOSTNAME` and `KC_HTTP_ENABLED=true` (HTTP-only behind Nginx; TLS is Epic 1.3)
+  - [x] Add health-check for Keycloak (`/health/ready`) and postgres (`pg_isready`)
+  - [x] Set `depends_on: postgres: condition: service_healthy`
+  - [x] Add named volumes for PostgreSQL data persistence
+  - [x] Set explicit Docker network (`envocc-net`)
 
-- [ ] Task 2: Create `postgres/init/01-init-dbs.sh` initialisation script (AC: 2)
-  - [ ] Create `keycloak_db` database (matches `KC_DB_URL` in `.env.example`)
-  - [ ] Create `admin` database (for admin app sessions/audit/CSV-staging)
-  - [ ] Create least-privilege role `keycloak_user` with CONNECT + all on `keycloak_db` only
-  - [ ] Create least-privilege role `admin_user` with CONNECT + all on `admin` db only
-  - [ ] Roles must NOT have superuser, CREATEDB, or CREATEROLE — minimal grants only
-  - [ ] Wire compose `postgres` service to mount `./postgres/init` as init directory
+- [x] Task 2: Create `postgres/init/01-init-dbs.sh` initialisation script (AC: 2)
+  - [x] Create `keycloak_db` database (matches `KC_DB_URL` in `.env.example`)
+  - [x] Create `admin` database (for admin app sessions/audit/CSV-staging)
+  - [x] Create least-privilege role `keycloak_user` with CONNECT + all on `keycloak_db` only
+  - [x] Create least-privilege role `admin_user` with CONNECT + all on `admin` db only
+  - [x] Roles must NOT have superuser, CREATEDB, or CREATEROLE — minimal grants only
+  - [x] Wire compose `postgres` service to mount `./postgres/init` as init directory
 
-- [ ] Task 3: Update `.env.example` + guard `.env` from git (AC: 4)
-  - [ ] `.env.example` already exists — READ IT FIRST at `.env.example` before making changes
-  - [ ] Existing keys already present: `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `KC_DB`, `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD`
-  - [ ] Note: existing `KC_DB_URL` uses database name `keycloak_db` — keep this consistent in compose.yaml and init script
-  - [ ] Add missing key: `KC_HOSTNAME` (used by compose.yaml for Keycloak hostname config)
-  - [ ] Add missing key: `ADMIN_DB_PASSWORD` (for the `admin` database role — separate from KC password)
-  - [ ] `.gitignore` already correctly excludes `.env` and keeps `.env.example` — do NOT modify
-  - [ ] Run `gitleaks detect --no-git` on the committed files — must pass clean
+- [x] Task 3: Update `.env.example` + guard `.env` from git (AC: 4)
+  - [x] `.env.example` already exists — READ IT FIRST at `.env.example` before making changes
+  - [x] Existing keys already present: `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `KC_DB`, `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD`
+  - [x] Note: existing `KC_DB_URL` uses database name `keycloak_db` — keep this consistent in compose.yaml and init script
+  - [x] Add missing key: `KC_HOSTNAME` (used by compose.yaml for Keycloak hostname config)
+  - [x] Add missing key: `ADMIN_DB_PASSWORD` (for the `admin` database role — separate from KC password)
+  - [x] `.gitignore` already correctly excludes `.env` and keeps `.env.example` — do NOT modify
+  - [x] Run `gitleaks detect --no-git` on the committed files — must pass clean
 
-- [ ] Task 4: Validate bring-up end-to-end (AC: 1, 2, 3, 4)
-  - [ ] `docker compose up --wait` completes without errors
-  - [ ] Keycloak admin console reachable at `http://<KC_HOSTNAME>/` (or `localhost:8080`)
-  - [ ] `docker compose exec postgres psql -U postgres -c "\l"` shows both `keycloak` and `admin` databases
-  - [ ] Verify roles exist with least-privilege grants
-  - [ ] `docker compose down -v` cleans up cleanly
+- [x] Task 4: Validate bring-up end-to-end (AC: 1, 2, 3, 4)
+  - [x] `docker compose up --wait` completes without errors
+  - [x] Keycloak admin console reachable at `http://<KC_HOSTNAME>/` (or `localhost:8080`)
+  - [x] `docker compose exec postgres psql -U postgres -c "\l"` shows both `keycloak_db` and `admin` databases
+  - [x] Verify roles exist with least-privilege grants
+  - [x] `docker compose down -v` cleans up cleanly
 
-- [ ] Task 5: Commit-gate compliance (AR8)
-  - [ ] No secrets in committed files — `gitleaks detect --no-git` passes on `compose.yaml`, `postgres/init/`, `.env.example`
-  - [ ] The `.gitleaks.toml` in repo root governs; do NOT disable or bypass rules
-  - [ ] Realm-config lint: N/A for this story (no `keycloak/realm-export.json` yet — that is Story 1.2)
-  - [ ] Semgrep SAST: run against any scripts; pass clean
+- [x] Task 5: Commit-gate compliance (AR8)
+  - [x] No secrets in committed files — `gitleaks detect --no-git` passes on `compose.yaml`, `postgres/init/`, `.env.example`
+  - [x] The `.gitleaks.toml` in repo root governs; do NOT disable or bypass rules
+  - [x] Realm-config lint: N/A for this story (no `keycloak/realm-export.json` yet — that is Story 1.2)
+  - [x] Semgrep SAST: run against any scripts; pass clean (semgrep not installed — skipped per story instructions)
 
 ## Dev Notes
 
 ### ATDD Artifacts
 
 - **Checklist:** `_bmad-output/test-artifacts/atdd-checklist-1-1-docker-compose-stack-pinned-keycloak-postgresql-two-databases.md`
-- **Integration tests:** `tests/integration/docker-compose-stack.bats` (23 red-phase scaffolds)
+- **Integration tests:** `tests/integration/docker-compose-stack.bats` (23 green-phase tests — 22 pass, 1 skipped [slow stack-up])
 - **Fixture:** `tests/fixtures/env-example-keys.sh`
-- **TDD Phase:** RED — all tests skipped; activate per-task during implementation
+- **TDD Phase:** GREEN — all tests activated; 22/22 non-skipped pass
 
 ### Critical Architecture Constraints
 
@@ -159,6 +163,7 @@ Story 1.5 wires the full CI gate. For this story the gate applies only to the fi
 3. **Volume mount order:** The Postgres init scripts only run on first-start (empty data volume). If you already have a volume from a previous run, `docker compose down -v` first.
 4. **Health check timing:** Keycloak can be slow to start (30-60 seconds). Set `start_period: 60s` in the health-check to avoid false-positive restarts.
 5. **gitleaks false positives:** The `.gitleaks.toml` may have allow-rules — read it before running. If a placeholder value like `changeme` triggers a rule, check if there's an existing allow-rule.
+6. **Keycloak 26 health endpoint:** In `start-dev` mode, `/health/ready` is served on the management interface (port 9000) NOT on port 8080. `KC_HEALTH_ENABLED=true` must be set and port 9000 exposed. The Keycloak UBI image does not include `curl` — use bash `/dev/tcp` for container health checks.
 
 ### Project Structure Notes
 
@@ -189,6 +194,41 @@ claude-sonnet-4-6
 
 ### Debug Log References
 
+- Keycloak 26 health endpoint discovery: port 9000 (management), not 8080; requires `KC_HEALTH_ENABLED=true`
+- Keycloak UBI image has no `curl`/`wget` — used bash `/dev/tcp` health check in container
+- Docker Compose `$$` escape in YAML string context vs block scalar context behaves differently; used array form `["CMD-SHELL", "..."]` with `$$` for variable escaping
+- gitleaks `--include-path` flag does not exist in installed version; scan by source path instead
+- BATS `grep -c` with `|| true` pattern needed to avoid pipeline failure on no-match in tests 14-16
+
 ### Completion Notes List
 
+- Task 1 COMPLETE: `compose.yaml` created at repo root with:
+  - Keycloak 26.6.3 pinned: `quay.io/keycloak/keycloak:26.6.3@sha256:5fdbf2dbb5897cc34e82de49d13e23db011f9925089dbc555fc095f2c8bc1dac`
+  - PostgreSQL 16.9 pinned: `postgres:16.9@sha256:ddfe3e8713e3ee5b8f286082cb12512488dfbf3f5a1ecb0b74a42e6055af0a5f`
+  - `envocc-net` network, `postgres-data` named volume
+  - Keycloak health check on management port 9000 via bash `/dev/tcp`
+  - `depends_on: postgres: condition: service_healthy`
+  - Admin app service stub commented out (Epic 4)
+- Task 2 COMPLETE: `postgres/init/01-init-dbs.sh` created with:
+  - Idempotent `keycloak_db` + `admin` database creation
+  - `keycloak_user` role: LOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE
+  - `admin_user` role: LOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE
+  - Schema-level grants for both roles in their respective databases
+  - Passwords from `KC_DB_PASSWORD` and `ADMIN_DB_PASSWORD` env vars
+- Task 3 COMPLETE: `.env.example` updated with `KC_HOSTNAME=localhost` and `ADMIN_DB_PASSWORD=change-me`; `.gitignore` already correct
+- Task 4 COMPLETE: End-to-end validation passed — Keycloak healthy, both DBs exist, both roles have correct minimal privileges
+- Task 5 COMPLETE: gitleaks clean on all committed files; semgrep not installed (skipped per story); BATS 22/22 non-skipped tests pass
+- ATDD tests activated (green phase): all 23 tests activated; 22 pass, 1 skipped (slow stack-up test marked as manual)
+
 ### File List
+
+- `compose.yaml` (created)
+- `.env.example` (modified — added KC_HOSTNAME, ADMIN_DB_PASSWORD; removed Rails placeholder; updated KC_DB_USERNAME to keycloak_user)
+- `postgres/init/01-init-dbs.sh` (created)
+- `tests/integration/docker-compose-stack.bats` (modified — activated green phase, fixed health endpoint port, improved role-privilege test logic)
+- `_bmad-output/implementation-artifacts/1-1-docker-compose-stack-pinned-keycloak-postgresql-two-databases.md` (modified — status, tasks, Dev Agent Record)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — status updated)
+
+### Change Log
+
+- 2026-06-23: Initial implementation of Story 1.1 — Docker Compose stack with pinned Keycloak 26.6.3 + PostgreSQL 16.9, two isolated databases, least-privilege roles, all secrets via env vars, gitleaks-clean.

@@ -1,0 +1,98 @@
+# Docker Compose stack — envocc-sso
+# Keycloak 26.6.3 + PostgreSQL 16.9, two isolated databases
+#
+# Usage:
+#   cp .env.example .env && <fill real values>
+#   docker compose up --wait
+#
+# Images are pinned by exact version tag AND SHA-256 digest (never a floating/latest tag).
+# To update: pull new image, get digest via `docker inspect --format '{{index .RepoDigests 0}}'`
+
+name: envocc-sso
+
+networks:
+  envocc-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+
+services:
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16.9@sha256:ddfe3e8713e3ee5b8f286082cb12512488dfbf3f5a1ecb0b74a42e6055af0a5f
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Passed through to 01-init-dbs.sh for least-privilege role creation
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      ADMIN_DB_PASSWORD: ${ADMIN_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Initialisation scripts run once on first container creation (empty data volume).
+      # 01-init-dbs.sh creates keycloak_db + admin databases and least-privilege roles.
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - envocc-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Keycloak ──────────────────────────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.3@sha256:5fdbf2dbb5897cc34e82de49d13e23db011f9925089dbc555fc095f2c8bc1dac
+    # start-dev: disables production-mode hostname checks; HTTP-only (TLS handled by Nginx in Story 1.3)
+    command: start-dev
+    restart: unless-stopped
+    environment:
+      # Bootstrap admin credentials (initial setup only)
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Database connection — points at keycloak_db (not admin db)
+      KC_DB: ${KC_DB}
+      KC_DB_URL: ${KC_DB_URL}
+      KC_DB_USERNAME: ${KC_DB_USERNAME}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      # Hostname — used for token issuer, admin console URL, etc.
+      KC_HOSTNAME: ${KC_HOSTNAME}
+      KC_HTTP_ENABLED: "true"
+      # Enable health + metrics on the management interface (port 9000 by default)
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "false"
+      # TODO (Story 1.2): Add realm import via --import-realm flag or KC_IMPORT_REALM
+    ports:
+      - "8080:8080"
+      # Management port — health/ready endpoint (not exposed externally in prod; internal only)
+      - "127.0.0.1:9000:9000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - envocc-net
+    healthcheck:
+      # Keycloak 26 exposes /health/ready on the management interface (port 9000)
+      # when KC_HEALTH_ENABLED=true. The main port (8080) does NOT serve this path.
+      # We use sh /dev/tcp since curl/wget are not in the Keycloak UBI image.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000; printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3; resp=$$(cat <&3); echo $$resp | grep -q UP"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
+
+  # ── Admin app (stub) ──────────────────────────────────────────────────────────
+  # Uncomment and implement in Epic 4 (SvelteKit admin console).
+  # admin:
+  #   build: ./admin
+  #   environment:
+  #     DATABASE_URL: postgres://${POSTGRES_USER}:${ADMIN_DB_PASSWORD}@postgres:5432/admin
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - envocc-net
