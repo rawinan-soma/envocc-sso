@@ -52,6 +52,23 @@ assert_no_bare_privilege() {
 }
 
 # ---------------------------------------------------------------------------
+# Helper: skip the calling test unless the postgres service is actually running.
+# The live-stack tests below query a running container; on a clean checkout / CI
+# (where the slow `up --wait` test is skipped) the stack is down and these tests
+# must SKIP rather than hard-fail with a misleading "service not running" error.
+# ---------------------------------------------------------------------------
+require_running_stack() {
+  command -v docker >/dev/null || skip "Docker not installed"
+  local cid
+  cid=$(docker compose ps -q postgres 2>/dev/null || true)
+  [ -n "$cid" ] || skip "stack not running — start it with: docker compose up --wait"
+  # Container exists; ensure it is actually up (not exited/created).
+  local state
+  state=$(docker inspect -f '{{.State.Running}}' "$cid" 2>/dev/null || echo false)
+  [ "$state" = "true" ] || skip "postgres container is not running (state=$state)"
+}
+
+# ---------------------------------------------------------------------------
 # [AC3] Image pinning — compose.yaml must not use :latest or floating tags
 # ---------------------------------------------------------------------------
 
@@ -138,7 +155,10 @@ assert_no_bare_privilege() {
 
 @test "[P0][AC2] init script creates admin database" {
   [ -f "postgres/init/01-init-dbs.sh" ]
-  grep -qE "\badmin\b" postgres/init/01-init-dbs.sh
+  # Pin the actual DB-creation statement, not just any mention of "admin"
+  # (a bare \badmin\b match also hits admin_user and comments — it would pass
+  # even if the CREATE DATABASE line were deleted).
+  grep -qE "CREATE DATABASE admin\b" postgres/init/01-init-dbs.sh
 }
 
 @test "[P0][AC2] init script creates keycloak_user role with least-privilege" {
@@ -149,6 +169,15 @@ assert_no_bare_privilege() {
 @test "[P0][AC2] init script creates admin_user role with least-privilege" {
   [ -f "postgres/init/01-init-dbs.sh" ]
   grep -q "admin_user" postgres/init/01-init-dbs.sh
+}
+
+@test "[P1][AC2] init script revokes default PUBLIC CONNECT to isolate the two databases" {
+  # PostgreSQL grants CONNECT to PUBLIC by default; without revoking it, keycloak_user
+  # could connect to the admin DB (and vice-versa), breaking the "isolated databases"
+  # boundary in AC2. Assert both databases revoke CONNECT from PUBLIC.
+  [ -f "postgres/init/01-init-dbs.sh" ]
+  grep -qE "REVOKE CONNECT ON DATABASE keycloak_db FROM PUBLIC" postgres/init/01-init-dbs.sh
+  grep -qE "REVOKE CONNECT ON DATABASE admin FROM PUBLIC" postgres/init/01-init-dbs.sh
 }
 
 @test "[P1][AC2] init script does NOT grant SUPERUSER to any role" {
@@ -175,8 +204,15 @@ assert_no_bare_privilege() {
 @test "[P0][AC1] docker compose config validates without errors" {
   command -v docker >/dev/null || skip "Docker not installed"
   [ -f "compose.yaml" ]
-  [ -f ".env" ] || cp .env.example .env  # use placeholder .env for config validation only
-  run docker compose config --quiet 2>&1
+  # Validate using an explicit env file so we never write a stray .env into the
+  # worktree (which would persist as a side effect and change later test behavior).
+  # Prefer the real .env if the operator created one; otherwise fall back to the
+  # committed .env.example placeholders via --env-file.
+  if [ -f ".env" ]; then
+    run docker compose config --quiet 2>&1
+  else
+    run docker compose --env-file .env.example config --quiet 2>&1
+  fi
   [ "$status" -eq 0 ]
 }
 
@@ -193,7 +229,7 @@ assert_no_bare_privilege() {
   # Keycloak 26 with KC_HEALTH_ENABLED=true exposes health on port 9000 (management interface).
   # Port 8080 does NOT serve /health/ready — only the management port does.
   # Wait up to 90s for the stack to be fully healthy before hitting the endpoint.
-  command -v docker >/dev/null || skip "Docker not installed"
+  require_running_stack
   command -v curl   >/dev/null || skip "curl not installed"
   KC_HEALTH_PORT="${KC_HEALTH_PORT:-9000}"
   local max_retries=18
@@ -209,7 +245,7 @@ assert_no_bare_privilege() {
 }
 
 @test "[P0][AC2] both keycloak_db and admin databases exist after postgres init" {
-  command -v docker >/dev/null || skip "Docker not installed"
+  require_running_stack
   run docker compose exec -T postgres psql -U postgres -tAc "SELECT datname FROM pg_database WHERE datname IN ('keycloak_db','admin') ORDER BY datname;" 2>&1
   echo "Output: $output"
   [[ "$output" == *"admin"* ]]
@@ -217,7 +253,7 @@ assert_no_bare_privilege() {
 }
 
 @test "[P0][AC2] keycloak_user role exists and has NO superuser privileges" {
-  command -v docker >/dev/null || skip "Docker not installed"
+  require_running_stack
   run docker compose exec -T postgres psql -U postgres -tAc "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname='keycloak_user';" 2>&1
   echo "Output: $output"
   [[ "$output" == *"keycloak_user"* ]]
@@ -226,7 +262,7 @@ assert_no_bare_privilege() {
 }
 
 @test "[P0][AC2] admin_user role exists and has NO superuser privileges" {
-  command -v docker >/dev/null || skip "Docker not installed"
+  require_running_stack
   run docker compose exec -T postgres psql -U postgres -tAc "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname='admin_user';" 2>&1
   echo "Output: $output"
   [[ "$output" == *"admin_user"* ]]

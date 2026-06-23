@@ -68,7 +68,9 @@ services:
       # TODO (Story 1.2): Add realm import via --import-realm flag or KC_IMPORT_REALM
     ports:
       - "8080:8080"
-      # Management port — health/ready endpoint (not exposed externally in prod; internal only)
+      # Management port (health/ready, metrics). Published to the loopback host
+      # interface only (127.0.0.1) so it is reachable for local checks but not
+      # exposed on any external/LAN interface.
       - "127.0.0.1:9000:9000"
     depends_on:
       postgres:
@@ -78,7 +80,10 @@ services:
     healthcheck:
       # Keycloak 26 exposes /health/ready on the management interface (port 9000)
       # when KC_HEALTH_ENABLED=true. The main port (8080) does NOT serve this path.
-      # We use sh /dev/tcp since curl/wget are not in the Keycloak UBI image.
+      # curl/wget are absent from the Keycloak UBI image, so we use the bash
+      # /dev/tcp builtin. This relies on CMD-SHELL's /bin/sh being bash with
+      # /dev/tcp support — verified true for the digest-pinned image above, which
+      # cannot drift. The `timeout` below bounds the read if the socket stalls.
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000; printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3; resp=$$(cat <&3); echo $$resp | grep -q UP"]
       interval: 15s
       timeout: 10s

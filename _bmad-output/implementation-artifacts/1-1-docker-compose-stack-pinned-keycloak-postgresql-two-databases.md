@@ -4,7 +4,7 @@ baseline_commit: de9275bdcecffaa0631cdb51d6f1caaa82dd3b7d
 
 # Story 1.1: Docker Compose stack — pinned Keycloak + PostgreSQL (two databases)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -65,6 +65,24 @@ so that every later capability has a running, version-pinned foundation.
   - [x] The `.gitleaks.toml` in repo root governs; do NOT disable or bypass rules
   - [x] Realm-config lint: N/A for this story (no `keycloak/realm-export.json` yet — that is Story 1.2)
   - [x] Semgrep SAST: run against any scripts; pass clean (semgrep not installed — skipped per story instructions)
+
+### Review Findings
+
+Code review (2026-06-23) — 3 adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). All `patch` findings applied and verified end-to-end against the live pinned images.
+
+- [x] [Review][Patch] Password interpolated unescaped into single-quoted SQL — single quote in any password broke init (`ON_ERROR_STOP=1` abort) and allowed SQL injection as superuser. Now passed via psql `-v` variables and applied with `format(%L)`. [postgres/init/01-init-dbs.sh] — verified: password `kc'p@ss\w0rd` + injection payload `';DROP ROLE postgres;--` both handled safely; full stack reached healthy.
+- [x] [Review][Patch] Two databases were not isolated — default PostgreSQL PUBLIC CONNECT let `keycloak_user` connect to `admin` (and vice-versa), violating AC2's isolated-databases boundary. Added `REVOKE CONNECT ... FROM PUBLIC` for both DBs. [postgres/init/01-init-dbs.sh] — verified: cross-DB connects now "permission denied"; same-DB happy paths still work.
+- [x] [Review][Patch] Live-stack bats tests (DB/role/health) hard-failed when the stack was down instead of skipping. Added `require_running_stack` guard. [tests/integration/docker-compose-stack.bats] — verified: 4 tests now skip cleanly with stack down, run + pass with stack up.
+- [x] [Review][Patch] `docker compose config` test wrote a stray `.env` into the worktree with no cleanup (non-idempotent suite). Now validates via `--env-file .env.example`; no side effect. [tests/integration/docker-compose-stack.bats]
+- [x] [Review][Patch] Over-broad AC2 test `grep -qE "\badmin\b"` would pass even if the `admin` DB creation line were removed. Tightened to `CREATE DATABASE admin`. [tests/integration/docker-compose-stack.bats]
+- [x] [Review][Patch] Added regression test asserting the new PUBLIC-CONNECT revocation. [tests/integration/docker-compose-stack.bats]
+- [x] [Review][Patch] `POSTGRES_USER` was unvalidated while DB passwords were guarded. Added explicit presence check. [postgres/init/01-init-dbs.sh]
+- [x] [Review][Patch] `ALTER DEFAULT PRIVILEGES` ran as superuser → inert for app-created tables (misleading comment). Added `FOR ROLE <app_role>` and corrected the comment explaining the load-bearing `GRANT ... ON SCHEMA public` CREATE grant. [postgres/init/01-init-dbs.sh]
+- [x] [Review][Patch] Comment clarifications: management port 9000 is loopback-published (not "internal only"); healthcheck `/dev/tcp` bash dependency documented as satisfied by the digest-pinned image. [compose.yaml]
+- [x] [Review][Dismiss] `/dev/tcp` healthcheck "bash-only" risk — verified the pinned Keycloak image's `/bin/sh` is bash with `/dev/tcp` support; image is digest-pinned so cannot drift. Works in live bring-up.
+- [x] [Review][Dismiss] gitleaks `--no-git .` reported 3 "leaks" — false positives in the local git-ignored `.env`; committed files are clean (gitleaks "no leaks found" on `compose.yaml`, `postgres/`, `.env.example`).
+- [x] [Review][Dismiss] `KEYCLOAK_ADMIN`/`KEYCLOAK_ADMIN_PASSWORD` deprecated in KC26 — still functional and explicitly sanctioned by the spec (Keycloak Config Notes); out of scope.
+- [x] [Review][Defer] Init scripts only run on an empty volume — a `.env` password change after first boot silently no-ops (requires `down -v`). Already documented in the script header; operational footgun, not a code defect.
 
 ## Dev Notes
 
