@@ -100,6 +100,10 @@ EOSQL
 # their own tables). Without FOR ROLE, default privileges would only cover objects
 # created by the connected superuser — inert for the app's own tables.
 
+# grant_schema_privs <db> <role>
+# IMPORTANT: <role> is interpolated directly into SQL. Only call this function
+# with the hardcoded role names below (keycloak_user, admin_user) — never with
+# user-supplied input, to avoid SQL injection via the identifier.
 grant_schema_privs() {
   local db="$1"
   local role="$2"
