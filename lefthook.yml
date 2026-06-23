@@ -1,0 +1,34 @@
+# Lefthook pre-commit hooks for envocc-sso
+# https://github.com/evilmartians/lefthook
+#
+# Installation:
+#   gem install lefthook   (or: brew install lefthook)
+#   lefthook install
+#
+# The pre-commit hook runs gitleaks on staged files only (fast scan).
+# CI runs gitleaks on the full source tree (see .github/workflows/ci.yml).
+#
+# Prerequisites:
+#   gitleaks (brew install gitleaks)
+#   jq (brew install jq)  — required for keycloak-realm-lint
+
+pre-commit:
+  parallel: false
+  commands:
+    gitleaks:
+      run: gitleaks protect --staged --redact --config .gitleaks.toml
+      fail_text: |
+        gitleaks found a potential secret in staged files!
+        The commit has been blocked to protect credentials.
+
+        To investigate: gitleaks protect --staged --verbose --config .gitleaks.toml
+        To allow a false positive: add the pattern to [allowlist] in .gitleaks.toml
+        NEVER commit real secrets — use .env (gitignored) for real credentials.
+
+    keycloak-realm-lint:
+      run: bash keycloak/lint-realm.sh keycloak/realm-export.json
+      glob: "keycloak/realm-export.json"
+      fail_text: |
+        keycloak/realm-export.json failed security lint checks!
+        Run `bash keycloak/lint-realm.sh keycloak/realm-export.json` to see details.
+        Fix all FAIL items before committing realm config changes.
