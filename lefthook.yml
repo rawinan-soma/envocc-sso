@@ -32,11 +32,15 @@ pre-commit:
       # be linted against the wrong bytes, giving false PASS/FAIL results.
       run: |
         tmp="$(mktemp)"
+        trap 'rm -f "$tmp"' EXIT
+        # If the file is staged for deletion the index entry is gone; skip lint
+        # gracefully rather than passing an empty file and emitting cryptic jq errors.
+        if git diff --name-only --cached --diff-filter=D | grep -q "^keycloak/realm-export.json$"; then
+          echo "keycloak/realm-export.json is staged for deletion — skipping realm lint."
+          exit 0
+        fi
         git show ":keycloak/realm-export.json" > "$tmp"
         bash keycloak/lint-realm.sh "$tmp"
-        status=$?
-        rm -f "$tmp"
-        exit $status
       glob: "keycloak/realm-export.json"
       fail_text: |
         keycloak/realm-export.json failed security lint checks!

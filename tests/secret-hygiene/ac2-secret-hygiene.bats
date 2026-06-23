@@ -303,7 +303,10 @@ print('OK: KeyProvider group is absent')
   echo 'KEYCLOAK_ADMIN_PASSWORD=Xy9Zq2Lm8Bv4Nc7Rt1Wp' > "$staged"
   git -C "$repo_root" add -f "test-fake-secret-staged.txt"
 
-  # gitleaks protect --staged must exit non-zero (detects the secret)
+  # gitleaks protect --staged must exit 1 (secret detected).
+  # Exit 0 = clean, exit 1 = secrets found, exit 2+ = tool/config error.
+  # Asserting exactly 1 distinguishes a successful detection from a gitleaks
+  # crash or config parse failure (exit 2), which would give a false green.
   run gitleaks protect --staged --config "${repo_root}/.gitleaks.toml"
   local gitleaks_exit="$status"
 
@@ -311,8 +314,8 @@ print('OK: KeyProvider group is absent')
   git -C "$repo_root" reset -q HEAD "test-fake-secret-staged.txt" 2>/dev/null || true
   rm -f "$staged"
 
-  # Assert gitleaks found a secret (non-zero exit)
-  [ "$gitleaks_exit" -ne 0 ]
+  # Assert gitleaks detected a secret (exit 1), not a tool error (exit 2+)
+  [ "$gitleaks_exit" -eq 1 ]
 }
 
 # ---------------------------------------------------------------------------

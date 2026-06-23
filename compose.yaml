@@ -35,7 +35,8 @@ services:
       # you must `docker compose down -v` to wipe the volume and re-run it.
       - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     ports:
-      - "5432:5432"
+      # Bind to loopback only — prevents exposure on shared/office networks.
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
@@ -69,7 +70,8 @@ services:
       # Required for the healthcheck below — disabled by default in KC 26.
       KC_HEALTH_ENABLED: "true"
     ports:
-      - "8080:8080"
+      # Bind to loopback only — prevents unauthenticated start-dev exposure on shared networks.
+      - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,8 +102,8 @@ services:
     image: axllent/mailpit:v1.24.0
     restart: unless-stopped
     ports:
-      - "1025:1025"   # SMTP
-      - "8025:8025"   # Web UI
+      - "127.0.0.1:1025:1025"   # SMTP — loopback only
+      - "127.0.0.1:8025:8025"   # Web UI — loopback only
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"

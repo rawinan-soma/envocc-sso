@@ -14,12 +14,14 @@
 # Checks performed:
 #   1. bruteForceProtected == true
 #   2. accessTokenLifespan <= 900  (NFR2a: 15 min ceiling)
-#   3. sslRequired != "none"
+#   3. sslRequired in {external, all}  (never "none")
 #   4. registrationAllowed == false
-#   5. No KeyProvider component group present (must be omitted, not blanked)
+#   5. org.keycloak.keys.KeyProvider group entirely absent (not blanked)
 #   6. No client has implicitFlowEnabled == true  (FR3)
 #   7. No client (except admin-cli) has directAccessGrantsEnabled == true (FR3)
 #   8. eventsEnabled == true
+#   9. adminEventsEnabled == true  (AC1, task 2.7)
+#  10. adminEventsDetailsEnabled == true  (AC1, task 2.7)
 # =============================================================================
 
 set -euo pipefail
@@ -71,31 +73,21 @@ check "sslRequired in {external, all} (TLS required)" \
 check "registrationAllowed=false" \
   "$(jq -r '.registrationAllowed == false' "$REALM_FILE")"
 
-# 5. KeyProvider components must be entirely absent (not blanked)
+# 5. org.keycloak.keys.KeyProvider group must be entirely absent (not blanked).
 #    Omitting the group lets Keycloak auto-generate fresh keys.
 #    Blanking privateKey:[""] causes InvalidKeySpecException on import.
-#    Catch ALL generated key providers (rsa, rsa-enc, hmac, aes) — every one
-#    of these carries secret key material. Handle both the object-of-groups
-#    shape (export form) and the array shape (Admin REST API form); any other
-#    non-null shape that we can't reason about is treated as a violation.
-check "KeyProvider components absent (no *-generated key providers)" \
-  "$(jq -r '
-    def providers:
-      if (.components | type) == "object" then
-        (.components | to_entries
-         | map(.value | if type == "array" then .[] else . end))
-      elif (.components | type) == "array" then .components
-      else null end;
-    def generated: ["rsa-generated", "rsa-enc-generated", "hmac-generated", "aes-generated"];
-    if .components == null then true
-    elif (providers) == null then false
-    else
-      (providers | map(select(.providerId != null) | .providerId)
-       | any(. as $p | generated | index($p) != null) | not)
-    end
-  ' "$REALM_FILE")"
+#    We check group-key absence (matching AC2) rather than a denylist of
+#    specific providerIds — Keycloak 26 ships ecdsa-generated and ed25519-generated
+#    that a denylist approach would silently miss.
+check "KeyProvider group entirely absent (org.keycloak.keys.KeyProvider must not be present)" \
+  "$(jq -r '.components["org.keycloak.keys.KeyProvider"] == null' "$REALM_FILE")"
 
-# 6. No client may have implicitFlowEnabled=true (FR3)
+# 6. No client may have implicitFlowEnabled=true (FR3).
+#    Guard: if the 'clients' key is missing entirely, flag it explicitly — a
+#    clients-absent export means FR3 is completely unverified.
+check "clients array present (required for FR3 checks)" \
+  "$(jq -r '(.clients | type) == "array"' "$REALM_FILE")"
+
 check "No client has implicitFlowEnabled=true (FR3 — no Implicit grant)" \
   "$(jq -r '[.clients[]? | select(.implicitFlowEnabled == true)] | length == 0' "$REALM_FILE")"
 
@@ -111,6 +103,14 @@ check "No non-admin-cli client has directAccessGrantsEnabled=true (FR3 — no RO
 # 8. Login event capture must be enabled
 check "eventsEnabled=true (audit foundation)" \
   "$(jq -r '.eventsEnabled == true' "$REALM_FILE")"
+
+# 9. Admin event capture must be enabled (AC1, task 2.7)
+check "adminEventsEnabled=true (AC1 — admin audit)" \
+  "$(jq -r '.adminEventsEnabled == true' "$REALM_FILE")"
+
+# 10. Admin event details must be captured (AC1, task 2.7)
+check "adminEventsDetailsEnabled=true (AC1 — admin event details)" \
+  "$(jq -r '.adminEventsDetailsEnabled == true' "$REALM_FILE")"
 
 echo "--------------------------------------------"
 if [ "$ERRORS" -eq 0 ]; then

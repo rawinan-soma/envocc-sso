@@ -11,17 +11,10 @@
 # Env:  KC_PORT (default 8080), POSTGRES_PORT (default 5432)
 # =============================================================================
 
-KC_PORT="${KC_PORT:-8080}"
-REALM="envocc"
-DISCOVERY_URL="http://localhost:${KC_PORT}/realms/${REALM}/.well-known/openid-configuration"
+# Load shared helpers: kc_running(), _admin_token(), KC_PORT, REALM
+load "../test_helper"
 
-# Helper: skip if the Keycloak stack isn't up.
-# In Keycloak 26 the /health/ready endpoint is on the management port (9000),
-# which is NOT published to the host. Probe the realm endpoint instead.
-kc_running() {
-  curl -sf -o /dev/null -w "%{http_code}" \
-    "http://localhost:${KC_PORT}/realms/${REALM}" 2>/dev/null | grep -q "200"
-}
+DISCOVERY_URL="http://localhost:${KC_PORT}/realms/${REALM}/.well-known/openid-configuration"
 
 # ---------------------------------------------------------------------------
 # [P0] AC1-SMOKE-01 — compose.yaml exists and defines required services
@@ -78,20 +71,9 @@ kc_running() {
 @test "[P0][AC1-SMOKE-05] envocc realm is present in Keycloak after auto-import" {
   kc_running || skip "Keycloak not running — start with: docker compose up -d"
 
-  local admin_user="${KEYCLOAK_ADMIN:-admin}"
-  local admin_pass="${KEYCLOAK_ADMIN_PASSWORD:-change-me}"
-  local token_url="http://localhost:${KC_PORT}/realms/master/protocol/openid-connect/token"
-
   local token
-  token=$(curl -sf \
-    -d "client_id=admin-cli" \
-    -d "username=${admin_user}" \
-    -d "password=${admin_pass}" \
-    -d "grant_type=password" \
-    "${token_url}" \
-    | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
-
-  [ -n "$token" ] || { echo "Failed to obtain admin token"; return 1; }
+  token=$(_admin_token)
+  [ -n "$token" ] || { echo "Failed to obtain admin token — is KEYCLOAK_ADMIN_PASSWORD exported?"; return 1; }
 
   run curl -sf -H "Authorization: Bearer ${token}" \
     "http://localhost:${KC_PORT}/admin/realms/${REALM}"

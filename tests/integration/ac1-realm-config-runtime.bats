@@ -19,29 +19,8 @@
 # Note: Static/offline checks are in ac1-realm-config.bats
 # =============================================================================
 
-KC_PORT="${KC_PORT:-8080}"
-REALM="envocc"
-
-# Helper: get admin bearer token from master realm
-_admin_token() {
-  local admin_user="${KEYCLOAK_ADMIN:-admin}"
-  local admin_pass="${KEYCLOAK_ADMIN_PASSWORD:-change-me}"
-  curl -sf \
-    -d "client_id=admin-cli" \
-    -d "username=${admin_user}" \
-    -d "password=${admin_pass}" \
-    -d "grant_type=password" \
-    "http://localhost:${KC_PORT}/realms/master/protocol/openid-connect/token" \
-    | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4
-}
-
-# Helper: skip if Keycloak is not up.
-# In Keycloak 26 /health/ready is on the management port (9000) which is NOT
-# published to the host. Use the realm endpoint as the readiness probe.
-kc_running() {
-  curl -sf -o /dev/null -w "%{http_code}" \
-    "http://localhost:${KC_PORT}/realms/${REALM}" 2>/dev/null | grep -q "200"
-}
+# Load shared helpers: kc_running(), _admin_token(), KC_PORT, REALM
+load "../test_helper"
 
 # Fetch the live realm JSON once per file run and persist to $BATS_FILE_TMPDIR.
 # $BATS_FILE_TMPDIR is managed by BATS — it is unique per file run and shared
@@ -53,8 +32,14 @@ setup_file() {
   local token
   token=$(_admin_token)
   if [ -z "$token" ]; then
-    echo "setup_file: failed to obtain admin token; runtime tests will skip." >&2
-    return 0
+    # Stack is UP but auth failed — fail loudly so the misconfiguration is visible.
+    # Silently skipping all tests when the stack is running hides real auth problems.
+    # Check KEYCLOAK_ADMIN_PASSWORD is exported to this shell (not just in .env).
+    echo "ERROR: Keycloak is running but admin token could not be obtained." >&2
+    echo "       Make sure KEYCLOAK_ADMIN_PASSWORD is exported in your shell" >&2
+    echo "       (e.g. export KEYCLOAK_ADMIN_PASSWORD=... or source .env first)." >&2
+    echo "       Current fallback value used: '${KEYCLOAK_ADMIN_PASSWORD:-change-me}'" >&2
+    return 1
   fi
   curl -sf -H "Authorization: Bearer ${token}" \
     "http://localhost:${KC_PORT}/admin/realms/${REALM}" \

@@ -57,7 +57,7 @@ case "$FILTER" in
     echo "Running AC1 Docker Compose smoke tests..."
     bats tests/integration/ac1-docker-compose-smoke.bats
     ;;
-  all|*)
+  all)
     echo "Running all Story 1.2 ATDD acceptance tests..."
     echo "=========================================="
     echo "NOTE: runtime tests self-skip if the stack is not running."
@@ -83,5 +83,13 @@ case "$FILTER" in
       echo "One or more suites FAILED — see output above."
     fi
     exit "$overall"
+    ;;
+  *)
+    echo "ERROR: Unknown filter '${FILTER}'"
+    echo ""
+    echo "Usage: $0 [filter]"
+    echo "  Filters: all | secrets | integration | runtime | smoke"
+    echo "  Default: all"
+    exit 1
     ;;
 esac
