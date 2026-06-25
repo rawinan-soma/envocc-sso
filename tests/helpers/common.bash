@@ -54,10 +54,22 @@ compose_down_volumes() {
 #   local token
 #   token=$(get_admin_token) || fail "Could not obtain admin token"
 # ---------------------------------------------------------------------------
+# Read one KEY=value from .env, normalising the way Docker Compose does:
+#   - last assignment wins (tail -n 1)
+#   - a trailing CR (CRLF checkouts) is removed
+#   - a single pair of surrounding quotes (" or ') is stripped
+_env_value() {
+  local key="${1}"
+  sed -n "s/^${key}=//p" "${PROJECT_ROOT}/.env" \
+    | tail -n 1 \
+    | tr -d '\r' \
+    | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+}
+
 get_admin_token() {
   local admin_user admin_pass
-  admin_user=$(sed -n 's/^KC_BOOTSTRAP_ADMIN_USERNAME=//p' "${PROJECT_ROOT}/.env" | tail -n 1)
-  admin_pass=$(sed -n 's/^KC_BOOTSTRAP_ADMIN_PASSWORD=//p' "${PROJECT_ROOT}/.env" | tail -n 1)
+  admin_user=$(_env_value "KC_BOOTSTRAP_ADMIN_USERNAME")
+  admin_pass=$(_env_value "KC_BOOTSTRAP_ADMIN_PASSWORD")
 
   curl -sf --max-time 15 \
     -d "client_id=admin-cli" \

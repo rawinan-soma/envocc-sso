@@ -277,42 +277,48 @@ env_refs_in_file() {
 @test "[P0][TS-104-realm-c] realm-export.json contains no populated privateKey or certificate fields" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  # "privateKey":"<64+ chars>" or "certificate":"<64+ chars>" must not appear
-  run bash -c "python3 -c \"
-import json, sys
-with open('${PROJECT_ROOT}/keycloak/realm-export.json') as f:
+  # Matches BOTH the string form  "privateKey":"<64+>"  AND the realm-export
+  # array form  "privateKey":["<64+>"]  that Keycloak actually emits for
+  # KeyProvider components. The optional \[? mirrors the gitleaks
+  # `keycloak-private-key` rule so the two layers agree (no array-form gap).
+  run python3 - "${PROJECT_ROOT}/keycloak/realm-export.json" <<'PYEOF'
+import re, sys
+
+with open(sys.argv[1]) as f:
     content = f.read()
-import re
-# Match privateKey or certificate with value >= 64 chars
-pattern = r'\\\"(privateKey|certificate)\\\"\\s*:\\s*\\\"[^\\\"]{64,}\\\"'
+
+# String form and array form: "privateKey":"<64+>" or "privateKey":["<64+>"]
+pattern = r'"(privateKey|certificate)"\s*:\s*\[?\s*"[^"]{64,}"'
 matches = re.findall(pattern, content)
 if matches:
     print('FOUND populated key fields: ' + str(matches))
     sys.exit(1)
 sys.exit(0)
-\""
+PYEOF
   assert_success
 }
 
 # ---------------------------------------------------------------------------
-# TS-104-realm-d [P0] — No populated clientSecret or secret fields >= 8 chars (AC2)
+# TS-104-realm-d [P0] — No populated clientSecret or secret string value >= 8 chars (AC2)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-104-realm-d] realm-export.json contains no populated clientSecret or secret string values >= 8 chars" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  run bash -c "python3 -c \"
-import json, sys
-with open('${PROJECT_ROOT}/keycloak/realm-export.json') as f:
+  run python3 - "${PROJECT_ROOT}/keycloak/realm-export.json" <<'PYEOF'
+import re, sys
+
+with open(sys.argv[1]) as f:
     content = f.read()
-import re
-# Match clientSecret or secret string values >= 8 chars
-pattern = r'\\\"(clientSecret|secret)\\\"\\s*:\\s*\\\"[^\\\"]{8,}\\\"'
+
+# String form: "clientSecret":"<8+>" or "secret":"<8+>"
+# (array form is covered separately by TS-104-realm-e)
+pattern = r'"(clientSecret|secret)"\s*:\s*"[^"]{8,}"'
 matches = re.findall(pattern, content)
 if matches:
     print('FOUND populated secret fields: ' + str(matches))
     sys.exit(1)
 sys.exit(0)
-\""
+PYEOF
   assert_success
 }
 
@@ -322,15 +328,29 @@ sys.exit(0)
 @test "[P0][TS-104-realm-e] realm-export.json contains no populated HMAC array secret >= 16 chars" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  # Use grep -P to detect array form: "secret":["<16+ chars>"]
-  # gitleaks keycloak-hmac-secret rule: "secret"\s*:\s*\[\s*"[^"]{16,}"\s*\]
-  # If grep finds a match, the file has a populated HMAC secret — FAIL.
+  # Detect the array form Keycloak emits for HMAC/AES KeyProvider components:
+  #   "secret":["<16+ chars>"]
+  # This mirrors the gitleaks `keycloak-hmac-secret` rule.
   #
-  # NOTE: -P (Perl-compatible regex) requires GNU grep (Linux/CI) or ugrep (macOS).
-  # BSD grep (bare macOS /usr/bin/grep) does not support -P; ensure GNU grep or ugrep
-  # is on PATH before running locally (CI always uses ubuntu-latest with GNU grep).
-  run grep -Pzo '"secret"\s*:\s*\[\s*"[^"]{16,}"' "${PROJECT_ROOT}/keycloak/realm-export.json"
-  assert_failure
+  # Implemented in python3 (re.DOTALL) rather than `grep -Pzo` for portability:
+  # BSD grep (bare macOS) does NOT support -P and exits 2, which a bare
+  # `assert_failure` would treat as a PASS — masking a real leak. python3 is
+  # present on every supported dev and CI host, so the check always runs.
+  run python3 - "${PROJECT_ROOT}/keycloak/realm-export.json" <<'PYEOF'
+import re, sys
+
+with open(sys.argv[1]) as f:
+    content = f.read()
+
+# Array form across newlines: "secret":[ "<16+>" ]
+pattern = r'"secret"\s*:\s*\[\s*"[^"]{16,}"\s*\]'
+matches = re.findall(pattern, content, re.DOTALL)
+if matches:
+    print('FOUND populated HMAC array secret: ' + str(matches))
+    sys.exit(1)
+sys.exit(0)
+PYEOF
+  assert_success
 }
 
 # ---------------------------------------------------------------------------

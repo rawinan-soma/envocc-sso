@@ -24,10 +24,21 @@ started with `--import-realm` (currently in the Dockerfile CMD).
 | Fresh stack (`docker compose down -v && docker compose up --build`) | Realm is created from `realm-export.json`. |
 | Existing stack restart (volumes retained) | Import file is **silently skipped** — the existing realm in the DB is unchanged. |
 
-For strict config-as-code where the file always wins, append
-`--import-strategy=OVERWRITE_EXISTING` to the `CMD` in `keycloak/Dockerfile`. Note: this
-will overwrite live realm state (including manual Admin UI changes not yet exported) on
-every container restart. The baseline story uses `IGNORE_EXISTING` — safer for dev stacks.
+For strict config-as-code where the file always wins, set the import strategy to
+`OVERWRITE_EXISTING`. Keycloak 26 reads this from the `KC_IMPORT_STRATEGY` environment
+variable (or `--override true` on the dedicated `kc.sh import` subcommand) — it is **not**
+a bare flag you can append to the `start` command, so add it as an env var on the
+keycloak service in `compose.yaml` rather than editing the `CMD`:
+
+```yaml
+environment:
+  KC_IMPORT_STRATEGY: OVERWRITE_EXISTING
+```
+
+Note: this overwrites live realm state (including manual Admin UI changes not yet
+exported) on every container restart. Verify the flag/env behaviour against your exact
+Keycloak version before relying on it. The baseline story uses the default
+`IGNORE_EXISTING` — safer for dev stacks.
 
 ---
 
