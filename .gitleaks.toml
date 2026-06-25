@@ -48,7 +48,14 @@ regex       = '''(?i)(KEYCLOAK_DB_PASSWORD|KC_DB_PASSWORD)\s*[:=]\s*["']?[^\s"'$
 tags        = ["keycloak", "database", "password"]
 [rules.allowlist]
 regexTarget = "match"
-regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only|your[-_.]password)($|[-_=:"'\s])''']
+regexes     = [
+  # Placeholder/dev-default values
+  '''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only|your[-_.]password)($|[-_=:"'\s])''',
+  # Bash parameter-expansion guards: ${VAR:?error message} — the `:?` operator
+  # causes a false positive because `:` matches `[:=]` and `?VAR_NAME` satisfies
+  # `[^\s"'$]{8,}`.  This pattern detects the bash expansion colon-question mark.
+  '''(?i)(KEYCLOAK_DB_PASSWORD|KC_DB_PASSWORD):[?]''',
+]
 
 [[rules]]
 id          = "rails-db-password"
@@ -140,6 +147,9 @@ paths = [
   '''keycloak/REALM-EXPORT-NOTES\.md''',
   '''keycloak/PINNED-VERSION\.md''',
   '''README\.md''',
+  # .gitleaksignore — stores fingerprint IDs of known false positives.
+  # Excluding it prevents gitleaks from matching its own fingerprint content.
+  '''\.gitleaksignore''',
   # BMad / Claude Code tooling directories — vendored framework files and
   # documentation that contain illustrative example API keys (not real
   # project secrets). Out of scope for this repo's secret hygiene.
