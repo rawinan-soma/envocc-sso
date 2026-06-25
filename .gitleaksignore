@@ -1,0 +1,13 @@
+# .gitleaksignore — fingerprints of known false positives
+#
+# Format: <commit-sha>:<file>:<rule-id>:<line>
+#
+# Each entry is a specific finding that has been reviewed and confirmed
+# as a false positive. Add a comment explaining WHY it is safe.
+
+# postgres/init/01-init-databases.sh line 18: `${KC_DB_PASSWORD:?KC_DB_PASSWORD must be set}`
+# This is a bash parameter-expansion guard (fail-fast on unset var), NOT a
+# literal password value. The `:?` is the bash "error if unset" operator.
+# The regex matches because `:` in `[:=]` picks up the expansion colon, and
+# `?KC_DB_PASSWORD` satisfies `[^\s"'$]{8,}`. No secret is present.
+2ab13efa01bf938272f8ff496f58642a4cbc0081:postgres/init/01-init-databases.sh:keycloak-db-password:18
