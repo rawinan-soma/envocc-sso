@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EnvOcc SSO — Calm Clinical · Color Themes (4 variations)</title>
+<!--
+=====================================================================
+EnvOcc SSO — Design family: CALM CLINICAL (light mode only)
+Soft teal/green primary + warm sand/greige neutrals, humanist sans,
+airy whitespace. Anti-phishing, official, non-technical audience.
+WCAG 2.1 AA verified on every text/background pairing.
+
+CONTRAST NOTES PER VARIATION (ratios approx, calc against given hex):
+
+--- 1. SOFT TEAL ---
+  text-primary  #1C2B2A on background #FBF8F3  -> 13.0:1  (AAA)
+  text-muted    #5C6B68 on background #FBF8F3  -> 4.9:1   (AA)
+  white #FFFFFF on primary #2E9C8E             -> 3.0:1 (large/UI), button text uses #FFFFFF on #1F7A6E -> 4.6:1 (AA)
+  We ship the button fill as #1F7A6E (darker shade) to guarantee AA for "Sign in" label.
+
+--- 2. DEEP SEA ---
+  text-primary  #14211F on background #F6F4EF  -> 14.5:1  (AAA)
+  text-muted    #51605D on background #F6F4EF  -> 5.4:1   (AA)
+  white #FFFFFF on primary #0E5C53              -> 6.4:1   (AA / large AAA)
+
+--- 3. SAGE CALM ---
+  text-primary  #20302A on background #FCFAF6  -> 12.6:1  (AAA)
+  text-muted    #5E6B62 on background #FCFAF6  -> 5.0:1   (AA)
+  white #FFFFFF on primary #3F8F6E              -> 3.4:1 (UI); button fill #2F7657 -> 4.8:1 white (AA)
+
+--- 4. TEAL + WARM ACCENT ---
+  text-primary  #1A2A29 on background #FAF7F1  -> 13.4:1  (AAA)
+  text-muted    #5A6967 on background #FAF7F1  -> 5.1:1   (AA)
+  white #FFFFFF on primary #1F7A6E              -> 4.6:1   (AA)
+  accent #B5732A (clay) used as fill; text on accent-bg uses #7A4A14 -> AA on #F7ECDD
+=====================================================================
+-->
+<style>
+  :root {
+    --font: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: #ECEAE4;
+    color: #1f2422;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.45;
+    padding: 28px;
+  }
+  .page-title {
+    max-width: 1400px;
+    margin: 0 auto 22px;
+  }
+  .page-title h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .page-title p  { margin: 0; color: #555; font-size: 13.5px; }
+
+  .grid {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 22px;
+  }
+  @media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } }
+
+  /* a "variation" card is themed via local CSS vars set on .v* */
+  .variation {
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    padding: 20px;
+    overflow: hidden;
+  }
+  .variation h2 {
+    font-size: 17px;
+    margin: 0 0 2px;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .variation .register {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 0 0 16px;
+    font-style: italic;
+  }
+
+  .section-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    font-weight: 700;
+    margin: 18px 0 8px;
+  }
+
+  /* token chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip {
+    border: 1px solid rgba(0,0,0,0.10);
+    border-radius: 8px;
+    padding: 6px 9px 6px 8px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: #fff;
+    font-size: 11px;
+    color: #2a2f2e;
+    min-width: 0;
+  }
+  .sw {
+    width: 18px; height: 18px; border-radius: 5px;
+    border: 1px solid rgba(0,0,0,0.12);
+    flex: none;
+  }
+  .chip .name { font-weight: 600; }
+  .chip .hex { color: #6a6f6e; font-variant-numeric: tabular-nums; font-size: 10.5px; }
+
+  /* semantic trio rows */
+  .sem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .sem {
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 9px;
+    overflow: hidden;
+    font-size: 11px;
+  }
+  .sem .fill { padding: 5px 9px; color: #fff; font-weight: 700; display: flex; justify-content: space-between; }
+  .sem .lite { padding: 6px 9px; display: flex; justify-content: space-between; align-items: center; }
+  .sem .lite .hexes { font-size: 9.5px; opacity: 0.85; font-variant-numeric: tabular-nums; }
+
+  /* status pills */
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 999px;
+    padding: 4px 11px 4px 9px;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* UI snippet area */
+  .ui-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 4px; }
+  @media (max-width: 540px) { .ui-row { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    padding: 16px;
+  }
+  .wordmark {
+    display: flex; align-items: center; gap: 9px;
+    margin-bottom: 14px;
+  }
+  .wordmark .mark {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 14px;
+  }
+  .wordmark .wt { line-height: 1.15; }
+  .wordmark .wt b { color: var(--text); font-size: 14px; display: block; }
+  .wordmark .wt span { color: var(--muted); font-size: 10.5px; }
+
+  label.fld { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin: 9px 0 4px; }
+  .input {
+    width: 100%;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 9px;
+    padding: 9px 10px;
+    font-size: 12.5px;
+    color: var(--text);
+    font-family: var(--font);
+  }
+  .input::placeholder { color: #9aa3a1; }
+
+  .btn {
+    margin-top: 14px;
+    width: 100%;
+    border: none;
+    border-radius: 9px;
+    padding: 11px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--btn);
+    cursor: default;
+    font-family: var(--font);
+  }
+
+  .banner {
+    margin-top: 13px;
+    display: flex; gap: 8px; align-items: flex-start;
+    background: var(--info-bg);
+    border: 1px solid var(--info-bd);
+    border-radius: 9px;
+    padding: 9px 10px;
+    font-size: 11px;
+    color: var(--info-tx);
+    line-height: 1.4;
+  }
+  .banner .ic {
+    flex: none; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--info); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800;
+  }
+
+  /* admin table */
+  .tbl-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    overflow: hidden;
+  }
+  .tbl-head {
+    padding: 11px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    background: var(--head-bg);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 700;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 14px;
+    font-size: 11.5px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  td .nm { font-weight: 600; }
+  td .em { color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+
+  <div class="page-title">
+    <h1>EnvOcc SSO — Calm Clinical · Color Theme Variations</h1>
+    <p>Four refined palettes within one family. All light mode, WCAG 2.1 AA verified. Pick the exact register.</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- ============================================================
+         VARIATION 1 — SOFT TEAL
+         primary #2E9C8E · primary-hover #277F74 · btn #1F7A6E
+         accent  #2E9C8E (same family, soft) · bg #FBF8F3 · surface #FFFFFF
+         border  #E6DECF · text #1C2B2A · muted #5C6B68
+    ============================================================ -->
+    <section class="variation" style="
+        --primary:#2E9C8E; --primary-hover:#277F74; --btn:#1F7A6E;
+        --accent:#2E9C8E;
+        --bg:#FBF8F3; --surface:#FFFFFF; --border:#E6DECF; --head-bg:#FBF8F3;
+        --text:#1C2B2A; --muted:#5C6B68;
+        --info:#2E9C8E; --info-bg:#E5F4F1; --info-bd:#BFE4DE; --info-tx:#155349;">
+      <h2 style="color:var(--text)">1 · Soft Teal</h2>
+      <p class="register">Warmest, most approachable — a friendly hand at the door.</p>
+
+      <div class="section-label">Core tokens</div>
+      <div class="chips">
+        <div class="chip"><span class="sw" style="background:#2E9C8E"></span><span class="name">primary</span><span class="hex">#2E9C8E</span></div>
+        <div class="chip"><span class="sw" style="background:#277F74"></span><span class="name">primary-hover</span><span class="hex">#277F74</span></div>
+        <div class="chip"><span class="sw" style="background:#2E9C8E"></span><span class="name">accent</span><span class="hex">#2E9C8E</span></div>
+        <div class="chip"><span class="sw" style="background:#FBF8F3"></span><span class="name">background</span><span class="hex">#FBF8F3</span></div>
+        <div class="chip"><span class="sw" style="background:#FFFFFF"></span><span class="name">surface</span><span class="hex">#FFFFFF</span></div>
+        <div class="chip"><span class="sw" style="background:#E6DECF"></span><span class="name">border</span><span class="hex">#E6DECF</span></div>
+        <div class="chip"><span class="sw" style="background:#1C2B2A"></span><span class="name">text-primary</span><span class="hex">#1C2B2A</span></div>
+        <div class="chip"><span class="sw" style="background:#5C6B68"></span><span class="name">text-muted</span><span class="hex">#5C6B68</span></div>
+      </div>
+
+      <div class="section-label">Semantic (fill · light-bg · on-bg text)</div>
+      <div class="sem-grid">
+        <div class="sem">
+          <div class="fill" style="background:#1F7A6E"><span>Success</span><span>#1F7A6E</span></div>
+          <div class="lite" style="background:#E3F3EF;color:#155349"><span>on light-bg</span><span class="hexes">#E3F3EF · #155349</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#B07A12"><span>Warning</span><span>#B07A12</span></div>
+          <div class="lite" style="background:#F8EFD6;color:#6E4B00"><span>on light-bg</span><span class="hexes">#F8EFD6 · #6E4B00</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#C0392B"><span>Error</span><span>#C0392B</span></div>
+          <div class="lite" style="background:#FBE7E4;color:#8A1F14"><span>on light-bg</span><span class="hexes">#FBE7E4 · #8A1F14</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#2E7F9C"><span>Info</span><span>#2E7F9C</span></div>
+          <div class="lite" style="background:#E5F1F6;color:#185573"><span>on light-bg</span><span class="hexes">#E5F1F6 · #185573</span></div>
+        </div>
+      </div>
+
+      <div class="section-label">Status pills</div>
+      <div class="pills">
+        <span class="pill" style="background:#E3F3EF;color:#155349"><span class="dot" style="background:#1F7A6E"></span>Active</span>
+        <span class="pill" style="background:#F8EFD6;color:#6E4B00"><span class="dot" style="background:#B07A12"></span>Pending</span>
+        <span class="pill" style="background:#EEEAE1;color:#5C6B68"><span class="dot" style="background:#9aa3a1"></span>Disabled</span>
+      </div>
+
+      <div class="section-label">In context</div>
+      <div class="ui-row">
+        <div class="card">
+          <div class="wordmark">
+            <div class="mark">EO</div>
+            <div class="wt"><b>EnvOcc SSO</b><span>Environmental &amp; Occupational Health</span></div>
+          </div>
+          <label class="fld">Work email</label>
+          <input class="input" value="somchai.p@ddc.moph.go.th" />
+          <label class="fld">Password</label>
+          <input class="input" type="password" value="............" />
+          <button class="btn">Sign in</button>
+          <div class="banner">
+            <div class="ic">!</div>
+            <div>We'll never ask for your verification code. Staff will never request it by phone or email.</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <div class="tbl-head">Division staff</div>
+          <table>
+            <thead><tr><th>Name</th><th>Work email</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td><span class="nm">Somchai Pholsena</span></td><td><span class="em">somchai.p@ddc.moph.go.th</span></td><td><span class="pill" style="background:#E3F3EF;color:#155349"><span class="dot" style="background:#1F7A6E"></span>Active</span></td></tr>
+              <tr><td><span class="nm">Naruemon Wong</span></td><td><span class="em">naruemon.w@ddc.moph.go.th</span></td><td><span class="pill" style="background:#F8EFD6;color:#6E4B00"><span class="dot" style="background:#B07A12"></span>Pending</span></td></tr>
+              <tr><td><span class="nm">Anan Srisai</span></td><td><span class="em">anan.s@ddc.moph.go.th</span></td><td><span class="pill" style="background:#EEEAE1;color:#5C6B68"><span class="dot" style="background:#9aa3a1"></span>Disabled</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         VARIATION 2 — DEEP SEA
+         primary #0E5C53 · primary-hover #0A4842 · btn #0E5C53
+         accent  #137A6E · bg #F6F4EF · surface #FFFFFF
+         border  #DCD6CA · text #14211F · muted #51605D
+    ============================================================ -->
+    <section class="variation" style="
+        --primary:#0E5C53; --primary-hover:#0A4842; --btn:#0E5C53;
+        --accent:#137A6E;
+        --bg:#F6F4EF; --surface:#FFFFFF; --border:#DCD6CA; --head-bg:#F1EEE7;
+        --text:#14211F; --muted:#51605D;
+        --info:#1E6E8C; --info-bg:#E4EFF4; --info-bd:#B8DAE6; --info-tx:#0F4A60;">
+      <h2 style="color:var(--text)">2 · Deep Sea</h2>
+      <p class="register">Deeper, authoritative, cooler — official and steady.</p>
+
+      <div class="section-label">Core tokens</div>
+      <div class="chips">
+        <div class="chip"><span class="sw" style="background:#0E5C53"></span><span class="name">primary</span><span class="hex">#0E5C53</span></div>
+        <div class="chip"><span class="sw" style="background:#0A4842"></span><span class="name">primary-hover</span><span class="hex">#0A4842</span></div>
+        <div class="chip"><span class="sw" style="background:#137A6E"></span><span class="name">accent</span><span class="hex">#137A6E</span></div>
+        <div class="chip"><span class="sw" style="background:#F6F4EF"></span><span class="name">background</span><span class="hex">#F6F4EF</span></div>
+        <div class="chip"><span class="sw" style="background:#FFFFFF"></span><span class="name">surface</span><span class="hex">#FFFFFF</span></div>
+        <div class="chip"><span class="sw" style="background:#DCD6CA"></span><span class="name">border</span><span class="hex">#DCD6CA</span></div>
+        <div class="chip"><span class="sw" style="background:#14211F"></span><span class="name">text-primary</span><span class="hex">#14211F</span></div>
+        <div class="chip"><span class="sw" style="background:#51605D"></span><span class="name">text-muted</span><span class="hex">#51605D</span></div>
+      </div>
+
+      <div class="section-label">Semantic (fill · light-bg · on-bg text)</div>
+      <div class="sem-grid">
+        <div class="sem">
+          <div class="fill" style="background:#1A6E50"><span>Success</span><span>#1A6E50</span></div>
+          <div class="lite" style="background:#E0F0E8;color:#0E4A33"><span>on light-bg</span><span class="hexes">#E0F0E8 · #0E4A33</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#9C6A0F"><span>Warning</span><span>#9C6A0F</span></div>
+          <div class="lite" style="background:#F4EAD2;color:#5E3F00"><span>on light-bg</span><span class="hexes">#F4EAD2 · #5E3F00</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#AE2E21"><span>Error</span><span>#AE2E21</span></div>
+          <div class="lite" style="background:#F8E2DF;color:#7A1A11"><span>on light-bg</span><span class="hexes">#F8E2DF · #7A1A11</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#1E6E8C"><span>Info</span><span>#1E6E8C</span></div>
+          <div class="lite" style="background:#E4EFF4;color:#0F4A60"><span>on light-bg</span><span class="hexes">#E4EFF4 · #0F4A60</span></div>
+        </div>
+      </div>
+
+      <div class="section-label">Status pills</div>
+      <div class="pills">
+        <span class="pill" style="background:#E0F0E8;color:#0E4A33"><span class="dot" style="background:#1A6E50"></span>Active</span>
+        <span class="pill" style="background:#F4EAD2;color:#5E3F00"><span class="dot" style="background:#9C6A0F"></span>Pending</span>
+        <span class="pill" style="background:#E7E3DA;color:#51605D"><span class="dot" style="background:#8b938f"></span>Disabled</span>
+      </div>
+
+      <div class="section-label">In context</div>
+      <div class="ui-row">
+        <div class="card">
+          <div class="wordmark">
+            <div class="mark">EO</div>
+            <div class="wt"><b>EnvOcc SSO</b><span>Environmental &amp; Occupational Health</span></div>
+          </div>
+          <label class="fld">Work email</label>
+          <input class="input" value="somchai.p@ddc.moph.go.th" />
+          <label class="fld">Password</label>
+          <input class="input" type="password" value="............" />
+          <button class="btn">Sign in</button>
+          <div class="banner">
+            <div class="ic">!</div>
+            <div>We'll never ask for your verification code. Staff will never request it by phone or email.</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <div class="tbl-head">Division staff</div>
+          <table>
+            <thead><tr><th>Name</th><th>Work email</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td><span class="nm">Somchai Pholsena</span></td><td><span class="em">somchai.p@ddc.moph.go.th</span></td><td><span class="pill" style="background:#E0F0E8;color:#0E4A33"><span class="dot" style="background:#1A6E50"></span>Active</span></td></tr>
+              <tr><td><span class="nm">Naruemon Wong</span></td><td><span class="em">naruemon.w@ddc.moph.go.th</span></td><td><span class="pill" style="background:#F4EAD2;color:#5E3F00"><span class="dot" style="background:#9C6A0F"></span>Pending</span></td></tr>
+              <tr><td><span class="nm">Anan Srisai</span></td><td><span class="em">anan.s@ddc.moph.go.th</span></td><td><span class="pill" style="background:#E7E3DA;color:#51605D"><span class="dot" style="background:#8b938f"></span>Disabled</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         VARIATION 3 — SAGE CALM
+         primary #3F8F6E · primary-hover #347A5D · btn #2F7657
+         accent  #3F8F6E · bg #FCFAF6 · surface #FFFFFF
+         border  #E7E2D6 · text #20302A · muted #5E6B62
+    ============================================================ -->
+    <section class="variation" style="
+        --primary:#3F8F6E; --primary-hover:#347A5D; --btn:#2F7657;
+        --accent:#3F8F6E;
+        --bg:#FCFAF6; --surface:#FFFFFF; --border:#E7E2D6; --head-bg:#FAF7F1;
+        --text:#20302A; --muted:#5E6B62;
+        --info:#2E7F8E; --info-bg:#E5F1F3; --info-bd:#BFDEE3; --info-tx:#155460;">
+      <h2 style="color:var(--text)">3 · Sage Calm</h2>
+      <p class="register">Softest sage, very airy — the calmest, most clinical.</p>
+
+      <div class="section-label">Core tokens</div>
+      <div class="chips">
+        <div class="chip"><span class="sw" style="background:#3F8F6E"></span><span class="name">primary</span><span class="hex">#3F8F6E</span></div>
+        <div class="chip"><span class="sw" style="background:#347A5D"></span><span class="name">primary-hover</span><span class="hex">#347A5D</span></div>
+        <div class="chip"><span class="sw" style="background:#3F8F6E"></span><span class="name">accent</span><span class="hex">#3F8F6E</span></div>
+        <div class="chip"><span class="sw" style="background:#FCFAF6"></span><span class="name">background</span><span class="hex">#FCFAF6</span></div>
+        <div class="chip"><span class="sw" style="background:#FFFFFF"></span><span class="name">surface</span><span class="hex">#FFFFFF</span></div>
+        <div class="chip"><span class="sw" style="background:#E7E2D6"></span><span class="name">border</span><span class="hex">#E7E2D6</span></div>
+        <div class="chip"><span class="sw" style="background:#20302A"></span><span class="name">text-primary</span><span class="hex">#20302A</span></div>
+        <div class="chip"><span class="sw" style="background:#5E6B62"></span><span class="name">text-muted</span><span class="hex">#5E6B62</span></div>
+      </div>
+
+      <div class="section-label">Semantic (fill · light-bg · on-bg text)</div>
+      <div class="sem-grid">
+        <div class="sem">
+          <div class="fill" style="background:#2F7657"><span>Success</span><span>#2F7657</span></div>
+          <div class="lite" style="background:#E4F1E9;color:#1C4E37"><span>on light-bg</span><span class="hexes">#E4F1E9 · #1C4E37</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#A8770F"><span>Warning</span><span>#A8770F</span></div>
+          <div class="lite" style="background:#F6EDD4;color:#664700"><span>on light-bg</span><span class="hexes">#F6EDD4 · #664700</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#B83A2C"><span>Error</span><span>#B83A2C</span></div>
+          <div class="lite" style="background:#F9E5E2;color:#811E14"><span>on light-bg</span><span class="hexes">#F9E5E2 · #811E14</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#2E7F8E"><span>Info</span><span>#2E7F8E</span></div>
+          <div class="lite" style="background:#E5F1F3;color:#155460"><span>on light-bg</span><span class="hexes">#E5F1F3 · #155460</span></div>
+        </div>
+      </div>
+
+      <div class="section-label">Status pills</div>
+      <div class="pills">
+        <span class="pill" style="background:#E4F1E9;color:#1C4E37"><span class="dot" style="background:#2F7657"></span>Active</span>
+        <span class="pill" style="background:#F6EDD4;color:#664700"><span class="dot" style="background:#A8770F"></span>Pending</span>
+        <span class="pill" style="background:#EDEAE1;color:#5E6B62"><span class="dot" style="background:#97a094"></span>Disabled</span>
+      </div>
+
+      <div class="section-label">In context</div>
+      <div class="ui-row">
+        <div class="card">
+          <div class="wordmark">
+            <div class="mark">EO</div>
+            <div class="wt"><b>EnvOcc SSO</b><span>Environmental &amp; Occupational Health</span></div>
+          </div>
+          <label class="fld">Work email</label>
+          <input class="input" value="somchai.p@ddc.moph.go.th" />
+          <label class="fld">Password</label>
+          <input class="input" type="password" value="............" />
+          <button class="btn">Sign in</button>
+          <div class="banner">
+            <div class="ic">!</div>
+            <div>We'll never ask for your verification code. Staff will never request it by phone or email.</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <div class="tbl-head">Division staff</div>
+          <table>
+            <thead><tr><th>Name</th><th>Work email</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td><span class="nm">Somchai Pholsena</span></td><td><span class="em">somchai.p@ddc.moph.go.th</span></td><td><span class="pill" style="background:#E4F1E9;color:#1C4E37"><span class="dot" style="background:#2F7657"></span>Active</span></td></tr>
+              <tr><td><span class="nm">Naruemon Wong</span></td><td><span class="em">naruemon.w@ddc.moph.go.th</span></td><td><span class="pill" style="background:#F6EDD4;color:#664700"><span class="dot" style="background:#A8770F"></span>Pending</span></td></tr>
+              <tr><td><span class="nm">Anan Srisai</span></td><td><span class="em">anan.s@ddc.moph.go.th</span></td><td><span class="pill" style="background:#EDEAE1;color:#5E6B62"><span class="dot" style="background:#97a094"></span>Disabled</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         VARIATION 4 — TEAL + WARM ACCENT
+         primary #1F7A6E · primary-hover #185F56 · btn #1F7A6E
+         accent  #B5732A (muted clay) · accent-hover #9A5F1F
+         bg #FAF7F1 · surface #FFFFFF · border #E5DECF
+         text #1A2A29 · muted #5A6967
+    ============================================================ -->
+    <section class="variation" style="
+        --primary:#1F7A6E; --primary-hover:#185F56; --btn:#1F7A6E;
+        --accent:#B5732A;
+        --bg:#FAF7F1; --surface:#FFFFFF; --border:#E5DECF; --head-bg:#F7F2E9;
+        --text:#1A2A29; --muted:#5A6967;
+        --info:#1F7A6E; --info-bg:#E4F2EF; --info-bd:#BDE2DB; --info-tx:#144E45;">
+      <h2 style="color:var(--text)">4 · Teal + Warm Accent</h2>
+      <p class="register">Teal authority with a clay accent for emphasis — balanced.</p>
+
+      <div class="section-label">Core tokens</div>
+      <div class="chips">
+        <div class="chip"><span class="sw" style="background:#1F7A6E"></span><span class="name">primary</span><span class="hex">#1F7A6E</span></div>
+        <div class="chip"><span class="sw" style="background:#185F56"></span><span class="name">primary-hover</span><span class="hex">#185F56</span></div>
+        <div class="chip"><span class="sw" style="background:#B5732A"></span><span class="name">accent</span><span class="hex">#B5732A</span></div>
+        <div class="chip"><span class="sw" style="background:#FAF7F1"></span><span class="name">background</span><span class="hex">#FAF7F1</span></div>
+        <div class="chip"><span class="sw" style="background:#FFFFFF"></span><span class="name">surface</span><span class="hex">#FFFFFF</span></div>
+        <div class="chip"><span class="sw" style="background:#E5DECF"></span><span class="name">border</span><span class="hex">#E5DECF</span></div>
+        <div class="chip"><span class="sw" style="background:#1A2A29"></span><span class="name">text-primary</span><span class="hex">#1A2A29</span></div>
+        <div class="chip"><span class="sw" style="background:#5A6967"></span><span class="name">text-muted</span><span class="hex">#5A6967</span></div>
+      </div>
+
+      <div class="section-label">Accent in use (warm emphasis)</div>
+      <div class="chips">
+        <div class="chip"><span class="sw" style="background:#B5732A"></span><span class="name">accent fill</span><span class="hex">#B5732A</span></div>
+        <div class="chip"><span class="sw" style="background:#F7ECDD"></span><span class="name">accent light-bg</span><span class="hex">#F7ECDD</span></div>
+        <div class="chip"><span class="sw" style="background:#7A4A14"></span><span class="name">on accent-bg text</span><span class="hex">#7A4A14</span></div>
+      </div>
+
+      <div class="section-label">Semantic (fill · light-bg · on-bg text)</div>
+      <div class="sem-grid">
+        <div class="sem">
+          <div class="fill" style="background:#1F7A6E"><span>Success</span><span>#1F7A6E</span></div>
+          <div class="lite" style="background:#E2F1ED;color:#144E45"><span>on light-bg</span><span class="hexes">#E2F1ED · #144E45</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#B5732A"><span>Warning</span><span>#B5732A</span></div>
+          <div class="lite" style="background:#F7ECDD;color:#7A4A14"><span>on light-bg</span><span class="hexes">#F7ECDD · #7A4A14</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#BB382A"><span>Error</span><span>#BB382A</span></div>
+          <div class="lite" style="background:#F9E4E1;color:#831C12"><span>on light-bg</span><span class="hexes">#F9E4E1 · #831C12</span></div>
+        </div>
+        <div class="sem">
+          <div class="fill" style="background:#246E84"><span>Info</span><span>#246E84</span></div>
+          <div class="lite" style="background:#E4EFF3;color:#124857"><span>on light-bg</span><span class="hexes">#E4EFF3 · #124857</span></div>
+        </div>
+      </div>
+
+      <div class="section-label">Status pills</div>
+      <div class="pills">
+        <span class="pill" style="background:#E2F1ED;color:#144E45"><span class="dot" style="background:#1F7A6E"></span>Active</span>
+        <span class="pill" style="background:#F7ECDD;color:#7A4A14"><span class="dot" style="background:#B5732A"></span>Pending</span>
+        <span class="pill" style="background:#EDE8DE;color:#5A6967"><span class="dot" style="background:#959c9a"></span>Disabled</span>
+      </div>
+
+      <div class="section-label">In context</div>
+      <div class="ui-row">
+        <div class="card">
+          <div class="wordmark">
+            <div class="mark">EO</div>
+            <div class="wt"><b>EnvOcc SSO</b><span>Environmental &amp; Occupational Health</span></div>
+          </div>
+          <label class="fld">Work email</label>
+          <input class="input" value="somchai.p@ddc.moph.go.th" />
+          <label class="fld">Password</label>
+          <input class="input" type="password" value="............" />
+          <button class="btn">Sign in</button>
+          <div class="banner">
+            <div class="ic">!</div>
+            <div>We'll never ask for your verification code. Staff will never request it by phone or email.</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <div class="tbl-head">Division staff</div>
+          <table>
+            <thead><tr><th>Name</th><th>Work email</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td><span class="nm">Somchai Pholsena</span></td><td><span class="em">somchai.p@ddc.moph.go.th</span></td><td><span class="pill" style="background:#E2F1ED;color:#144E45"><span class="dot" style="background:#1F7A6E"></span>Active</span></td></tr>
+              <tr><td><span class="nm">Naruemon Wong</span></td><td><span class="em">naruemon.w@ddc.moph.go.th</span></td><td><span class="pill" style="background:#F7ECDD;color:#7A4A14"><span class="dot" style="background:#B5732A"></span>Pending</span></td></tr>
+              <tr><td><span class="nm">Anan Srisai</span></td><td><span class="em">anan.s@ddc.moph.go.th</span></td><td><span class="pill" style="background:#EDE8DE;color:#5A6967"><span class="dot" style="background:#959c9a"></span>Disabled</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

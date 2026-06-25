@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EnvOcc SSO — Design Directions</title>
+<style>
+/* =====================================================================
+   GLOBAL SHELL (neutral chrome — NOT part of any direction's palette)
+   ===================================================================== */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #eceef1;            /* page chrome only */
+    color: #1f2733;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+  .page-head {
+    text-align: center;
+    padding: 28px 16px 8px;
+  }
+  .page-head h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: .2px; color: #15233a; }
+  .page-head p  { margin: 0; font-size: 13px; color: #5a6573; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    max-width: 1500px;
+    margin: 20px auto 60px;
+    padding: 0 24px;
+  }
+  @media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } }
+
+  /* Browser frame wrapper (shared, neutral) */
+  .frame {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 6px 28px rgba(15, 24, 40, .14);
+    border: 1px solid #d3d8df;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+  }
+  .frame__bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px;
+    background: #e7eaee;
+    border-bottom: 1px solid #d3d8df;
+  }
+  .frame__dots { display: flex; gap: 6px; }
+  .frame__dots span { width: 11px; height: 11px; border-radius: 50%; background: #c2c8d0; }
+  .frame__url {
+    flex: 1;
+    font-size: 11px;
+    background: #fff;
+    border: 1px solid #d3d8df;
+    border-radius: 6px;
+    padding: 4px 10px;
+    color: #44505f;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: .2px;
+  }
+  .frame__url b { color: #1f8a4c; }  /* the secure-lock host emphasis */
+  .frame__body { flex: 1; }
+
+  .label {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: #5a6573;
+    margin: 0 0 8px;
+  }
+
+  /* Rationale block (shared neutral typography) */
+  .rationale {
+    background: #fff;
+    border: 1px solid #d8dde3;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 14px;
+    font-size: 13px;
+    color: #3a4452;
+    line-height: 1.55;
+  }
+  .rationale strong { color: #15233a; }
+
+  .cell { display: flex; flex-direction: column; }
+
+  /* Shared structural pieces inside each mock (palette comes from .dir-*) */
+  .screen { padding: 26px 24px 22px; min-height: 100%; }
+  .card {
+    margin: 0 auto;
+    max-width: 340px;
+    border-radius: 12px;
+  }
+  .seal { width: 52px; height: 52px; border-radius: 50%; position: relative; flex: 0 0 auto; }
+  .field { display: block; margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+  .field input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 7px;
+    font-size: 14px;
+    outline: none;
+  }
+  .btn {
+    width: 100%;
+    padding: 11px 14px;
+    border: none;
+    border-radius: 7px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: .2px;
+  }
+  .banner {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.45;
+    margin-top: 16px;
+  }
+  .banner .lock { flex: 0 0 auto; font-weight: 700; }
+
+  /* Admin mini-table (structure shared; colors per direction) */
+  .admin { margin-top: 22px; border-radius: 10px; overflow: hidden; }
+  .admin__head { padding: 9px 14px; font-size: 12px; font-weight: 700; letter-spacing: .4px; }
+  table.users { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.users th, table.users td { text-align: left; padding: 8px 14px; }
+  table.users th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+
+/* =====================================================================
+   DIRECTION 1 — "FORMAL INSTITUTIONAL"
+   Deep navy authority + single restrained gold/bronze accent, serif heads.
+   PALETTE (lift these):
+     --navy-900   #0e1f3d   page/seal field      (on #fff = 14.8:1  AAA)
+     --navy-700   #15315c   headings/text        (on #fbfcfe = 11.6:1 AAA)
+     --navy-ink   #233047   body text            (on #fff = 11.3:1  AAA)
+     --gold-600   #9a7320   accent text/border   (on #fff = 4.9:1   AA)
+     --gold-500   #b8902f   button bg            (#0e1f3d text on it = 7.1:1 AAA)
+     --paper      #fbfcfe   card surface
+     --line       #d6dceb   hairlines
+   Status pills: Active #1d6b3f/#e4f3ea (5.9:1), Pending #8a5d00/#fbeecf (4.7:1),
+                 Disabled #5a6473/#e7eaef (4.6:1)
+   ===================================================================== */
+  .dir-formal { background: linear-gradient(170deg,#f3f5fa 0%, #eaeef6 100%); }
+  .dir-formal .card {
+    background: #fbfcfe;
+    border: 1px solid #d6dceb;
+    border-top: 4px solid #b8902f;            /* gold letterhead rule */
+    box-shadow: 0 10px 30px rgba(14,31,61,.12);
+    padding: 26px 26px 24px;
+  }
+  .dir-formal .brandrow { display: flex; align-items: center; gap: 13px; margin-bottom: 4px; }
+  .dir-formal .seal {
+    background: radial-gradient(circle at 50% 42%, #1c3a6b 0%, #0e1f3d 70%);
+    border: 2px solid #b8902f;
+    box-shadow: inset 0 0 0 4px rgba(184,144,47,.22);
+  }
+  .dir-formal .seal::before {            /* inner ring */
+    content:""; position:absolute; inset:8px; border-radius:50%;
+    border: 1.5px solid rgba(184,144,47,.6);
+  }
+  .dir-formal .seal::after {             /* central motif */
+    content:"⚕"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#d8b556; font-size:22px;
+  }
+  .dir-formal .wordmark { font-family: Georgia,"Times New Roman",serif; }
+  .dir-formal .wordmark b { display:block; font-size:18px; color:#0e1f3d; letter-spacing:.3px; }
+  .dir-formal .wordmark span { font-size:11px; color:#9a7320; letter-spacing:1.4px; text-transform:uppercase; }
+  .dir-formal h2 {
+    font-family: Georgia,"Times New Roman",serif;
+    font-size:19px; color:#15315c; margin:20px 0 4px; font-weight:700;
+  }
+  .dir-formal .sub { font-size:12.5px; color:#46556e; margin:0 0 18px; }
+  .dir-formal .field label { color:#233047; }
+  .dir-formal .field input { border:1px solid #c3cce0; background:#fff; color:#0e1f3d; }
+  .dir-formal .field input:focus { border-color:#b8902f; box-shadow:0 0 0 3px rgba(184,144,47,.18); }
+  .dir-formal .btn { background:#b8902f; color:#0e1f3d; }       /* navy text on gold 7.1:1 */
+  .dir-formal .forgot { display:block; text-align:right; font-size:11.5px; color:#15315c; margin:-4px 0 14px; text-decoration:none; }
+  .dir-formal .banner { background:#0e1f3d; color:#eaf0fb; border:1px solid #1c3a6b; }   /* white-ish on navy 13:1 */
+  .dir-formal .banner .lock { color:#d8b556; }
+  .dir-formal .admin { border:1px solid #d6dceb; }
+  .dir-formal .admin__head { background:#0e1f3d; color:#f4e7c4; }
+  .dir-formal table.users { background:#fbfcfe; }
+  .dir-formal table.users th { color:#46556e; border-bottom:2px solid #b8902f; background:#f3f1e9; }
+  .dir-formal table.users td { color:#233047; border-bottom:1px solid #e7ebf3; }
+  .dir-formal .p-active   { background:#e4f3ea; color:#1d6b3f; }
+  .dir-formal .p-pending  { background:#fbeecf; color:#8a5d00; }
+  .dir-formal .p-disabled { background:#e7eaef; color:#5a6473; }
+
+/* =====================================================================
+   DIRECTION 2 — "CALM CLINICAL"
+   Soft teal/green + warm neutrals, humanist sans, generous whitespace.
+   PALETTE:
+     --teal-700  #0f6b66   headings/buttons    (on #fff = 5.2:1  AA)
+     --teal-800  #0a544f   strong text         (on #fff = 6.9:1  AA)
+     --ink       #2b3a3a   body                (on #fbfdfc = 11.9:1 AAA)
+     --teal-50   #e8f4f2   tint surfaces
+     --sand      #f7f4ee   warm neutral page
+     --line      #d7e4e1
+   Status: Active #0f6b66/#e0f1ef (5.0:1), Pending #8a5300/#fbeed2 (4.9:1),
+           Disabled #5d6b6a/#e9edec (4.7:1)
+   ===================================================================== */
+  .dir-clinical { background: #f7f4ee; }
+  .dir-clinical .screen { padding: 30px 26px 26px; }
+  .dir-clinical .card {
+    background:#fbfdfc;
+    border:1px solid #d7e4e1;
+    border-radius:16px;
+    box-shadow:0 8px 26px rgba(15,107,102,.10);
+    padding:30px 28px 26px;
+    max-width:350px;
+  }
+  .dir-clinical .brandrow { display:flex; flex-direction:column; align-items:center; gap:12px; text-align:center; margin-bottom:6px; }
+  .dir-clinical .seal {
+    width:58px; height:58px;
+    background:#e8f4f2;
+    border:2px solid #0f6b66;
+  }
+  .dir-clinical .seal::before {
+    content:""; position:absolute; inset:11px; border-radius:50%;
+    background:#0f6b66;
+    -webkit-mask: radial-gradient(circle at 50% 50%, transparent 0 36%, #000 37%) ;
+  }
+  .dir-clinical .seal::after {
+    content:"+"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#0f6b66; font-size:30px; font-weight:700; line-height:1;
+  }
+  .dir-clinical .wordmark b { display:block; font-size:19px; color:#0a544f; letter-spacing:.2px; }
+  .dir-clinical .wordmark span { font-size:11px; color:#3f6b67; letter-spacing:.8px; }
+  .dir-clinical h2 { font-size:18px; color:#0a544f; margin:22px 0 4px; font-weight:700; text-align:center; }
+  .dir-clinical .sub { font-size:13px; color:#43585a; margin:0 0 20px; text-align:center; }
+  .dir-clinical .field label { color:#2b3a3a; }
+  .dir-clinical .field input { border:1.5px solid #cfe0dd; background:#fff; color:#0a544f; border-radius:9px; padding:11px 13px; }
+  .dir-clinical .field input:focus { border-color:#0f6b66; box-shadow:0 0 0 3px rgba(15,107,102,.15); }
+  .dir-clinical .btn { background:#0f6b66; color:#fff; border-radius:9px; }   /* white on teal 5.2:1 */
+  .dir-clinical .forgot { display:block; text-align:center; font-size:12px; color:#0f6b66; margin:14px 0 2px; text-decoration:none; }
+  .dir-clinical .banner { background:#e8f4f2; color:#0a544f; border:1px solid #b9d8d3; border-radius:11px; }   /* 6.9:1 */
+  .dir-clinical .banner .lock { color:#0f6b66; }
+  .dir-clinical .admin { border:1px solid #d7e4e1; border-radius:14px; }
+  .dir-clinical .admin__head { background:#e8f4f2; color:#0a544f; }
+  .dir-clinical table.users { background:#fbfdfc; }
+  .dir-clinical table.users th { color:#43585a; border-bottom:1px solid #d7e4e1; }
+  .dir-clinical table.users td { color:#2b3a3a; border-bottom:1px solid #eef3f1; }
+  .dir-clinical .p-active   { background:#e0f1ef; color:#0f6b66; }
+  .dir-clinical .p-pending  { background:#fbeed2; color:#8a5300; }
+  .dir-clinical .p-disabled { background:#e9edec; color:#5d6b6a; }
+
+/* =====================================================================
+   DIRECTION 3 — "MODERN MINIMAL"
+   Near-monochrome slate/grey + one confident blue accent, geometric sans.
+   PALETTE:
+     --slate-900 #0f172a   headings            (on #fff = 16.7:1 AAA)
+     --slate-700 #334155   body                (on #fff = 9.0:1  AAA)
+     --slate-500 #64748b   muted               (on #fff = 4.8:1  AA)
+     --blue-600  #1d4ed8   accent/button       (white on it = 7.0:1 AAA)
+     --blue-700  #1e40af   accent text         (on #fff = 8.6:1  AAA)
+     --surface   #ffffff   --page #f4f5f7  --line #e2e6eb
+   Status: Active #15803d/#e9f6ed (4.6:1), Pending #b45309/#fdf0dd (4.5:1),
+           Disabled #475569/#eef0f3 (6.9:1)
+   ===================================================================== */
+  .dir-minimal { background:#f4f5f7; }
+  .dir-minimal .screen { padding:32px 26px 26px; }
+  .dir-minimal .card {
+    background:#fff;
+    border:1px solid #e2e6eb;
+    border-radius:14px;
+    box-shadow:0 4px 20px rgba(15,23,42,.07);
+    padding:30px 28px 26px;
+    max-width:344px;
+  }
+  .dir-minimal .brandrow { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+  .dir-minimal .seal {
+    width:46px; height:46px; border-radius:11px;
+    background:#0f172a;
+  }
+  .dir-minimal .seal::before {
+    content:""; position:absolute; inset:13px; border-radius:3px;
+    border:2.5px solid #fff; border-right-color:#1d4ed8; border-bottom-color:#1d4ed8;
+    transform:rotate(45deg);
+  }
+  .dir-minimal .wordmark b { display:block; font-size:17px; color:#0f172a; letter-spacing:-.3px; font-weight:800; }
+  .dir-minimal .wordmark span { font-size:10.5px; color:#64748b; letter-spacing:.4px; text-transform:uppercase; }
+  .dir-minimal h2 { font-size:20px; color:#0f172a; margin:22px 0 5px; font-weight:800; letter-spacing:-.4px; }
+  .dir-minimal .sub { font-size:13px; color:#64748b; margin:0 0 20px; }
+  .dir-minimal .field label { color:#334155; font-weight:600; }
+  .dir-minimal .field input { border:1px solid #cfd6df; background:#fff; color:#0f172a; border-radius:8px; }
+  .dir-minimal .field input:focus { border-color:#1d4ed8; box-shadow:0 0 0 3px rgba(29,78,216,.16); }
+  .dir-minimal .btn { background:#1d4ed8; color:#fff; border-radius:8px; }    /* white on blue 7.0:1 */
+  .dir-minimal .forgot { display:block; text-align:right; font-size:12px; color:#1e40af; margin:-2px 0 14px; text-decoration:none; font-weight:600; }
+  .dir-minimal .banner { background:#f1f5fb; color:#334155; border:1px solid #d6e0f0; border-radius:9px; }   /* 9.0:1 */
+  .dir-minimal .banner .lock { color:#1d4ed8; }
+  .dir-minimal .admin { border:1px solid #e2e6eb; border-radius:11px; }
+  .dir-minimal .admin__head { background:#f8fafc; color:#0f172a; border-bottom:1px solid #e2e6eb; }
+  .dir-minimal table.users { background:#fff; }
+  .dir-minimal table.users th { color:#64748b; border-bottom:1px solid #e2e6eb; }
+  .dir-minimal table.users td { color:#334155; border-bottom:1px solid #f1f3f6; }
+  .dir-minimal .p-active   { background:#e9f6ed; color:#15803d; }
+  .dir-minimal .p-pending  { background:#fdf0dd; color:#b45309; }
+  .dir-minimal .p-disabled { background:#eef0f3; color:#475569; }
+
+/* =====================================================================
+   DIRECTION 4 — "CLASSIC CIVIC"
+   Warm institutional: deep maroon + cream/parchment, traditional, stately.
+   PALETTE:
+     --maroon-800 #6e1f24   seal/heads           (on #fffdf7 = 8.2:1  AAA)
+     --maroon-700 #842027   buttons              (#fffaf0 text on it = 7.0:1 AAA)
+     --ink        #36281f   body text            (on #fcf7ec = 10.7:1 AAA)
+     --gold-700   #8a6a16   small accent text    (on #fffdf7 = 4.9:1  AA)
+     --cream      #fcf7ec   --parchment #f3ead6  --line #ddcfb2
+   Status: Active #1f6a3a/#e3efe1 (5.4:1), Pending #8a5a00/#f6e8c8 (4.7:1),
+           Disabled #5e5040/#ece3d2 (4.8:1)
+   ===================================================================== */
+  .dir-civic { background:#f3ead6; }
+  .dir-civic .screen { padding:28px 24px 24px; }
+  .dir-civic .card {
+    background:#fffdf7;
+    border:1px solid #ddcfb2;
+    border-radius:6px;
+    box-shadow:0 8px 26px rgba(110,31,36,.13);
+    padding:28px 28px 24px;
+    max-width:346px;
+    position:relative;
+  }
+  .dir-civic .card::before {           /* double-rule frame, formal certificate feel */
+    content:""; position:absolute; inset:7px; border:1px solid #c9b98f; border-radius:3px; pointer-events:none;
+  }
+  .dir-civic .brandrow { display:flex; flex-direction:column; align-items:center; gap:11px; text-align:center; margin-bottom:4px; }
+  .dir-civic .seal {
+    width:60px; height:60px;
+    background:radial-gradient(circle at 50% 45%, #8a2a31 0%, #6e1f24 72%);
+    border:3px double #c79a3e;
+  }
+  .dir-civic .seal::before {
+    content:""; position:absolute; inset:7px; border-radius:50%; border:1px solid rgba(199,154,62,.7);
+  }
+  .dir-civic .seal::after {
+    content:"★"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#e6c878; font-size:24px;
+  }
+  .dir-civic .wordmark b { font-family:Georgia,"Palatino Linotype","Times New Roman",serif; display:block; font-size:19px; color:#6e1f24; letter-spacing:.4px; }
+  .dir-civic .wordmark span { font-size:10.5px; color:#8a6a16; letter-spacing:1.6px; text-transform:uppercase; }
+  .dir-civic h2 { font-family:Georgia,"Palatino Linotype",serif; font-size:18px; color:#36281f; margin:20px 0 4px; font-weight:700; text-align:center; }
+  .dir-civic .sub { font-size:12.5px; color:#5e5040; margin:0 0 18px; text-align:center; }
+  .dir-civic .field label { color:#36281f; }
+  .dir-civic .field input { border:1px solid #d3c19b; background:#fffdf7; color:#36281f; border-radius:4px; }
+  .dir-civic .field input:focus { border-color:#842027; box-shadow:0 0 0 3px rgba(132,32,39,.15); }
+  .dir-civic .btn { background:#842027; color:#fffaf0; border-radius:4px; }   /* cream on maroon 7.0:1 */
+  .dir-civic .forgot { display:block; text-align:center; font-size:11.5px; color:#842027; margin:14px 0 2px; text-decoration:underline; }
+  .dir-civic .banner { background:#f6efde; color:#5a3d1a; border:1px solid #ddcaa0; border-radius:4px; }   /* 6.6:1 */
+  .dir-civic .banner .lock { color:#842027; }
+  .dir-civic .admin { border:1px solid #ddcfb2; border-radius:4px; }
+  .dir-civic .admin__head { background:#6e1f24; color:#f4e3c4; }
+  .dir-civic table.users { background:#fffdf7; }
+  .dir-civic table.users th { color:#5e5040; border-bottom:2px solid #c79a3e; background:#f3ead6; }
+  .dir-civic table.users td { color:#36281f; border-bottom:1px solid #ece0c6; }
+  .dir-civic .p-active   { background:#e3efe1; color:#1f6a3a; }
+  .dir-civic .p-pending  { background:#f6e8c8; color:#8a5a00; }
+  .dir-civic .p-disabled { background:#ece3d2; color:#5e5040; }
+</style>
+</head>
+<body>
+
+  <div class="page-head">
+    <h1>EnvOcc SSO — 4 Design Directions</h1>
+    <p>Single sign-on for the Division of Occupational and Environmental Diseases · Ministry of Public Health · pick one to develop further</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- ============================== DIRECTION 1 ============================== -->
+    <div class="cell">
+      <p class="label">Direction 1 — Formal Institutional</p>
+      <div class="frame">
+        <div class="frame__bar">
+          <div class="frame__dots"><span></span><span></span><span></span></div>
+          <div class="frame__url">🔒 https://<b>sso.envocc.go.th</b>/sign-in</div>
+        </div>
+        <div class="frame__body dir-formal">
+          <div class="screen">
+            <div class="card">
+              <div class="brandrow">
+                <div class="seal"></div>
+                <div class="wordmark">
+                  <b>EnvOcc SSO</b>
+                  <span>Official Sign-In</span>
+                </div>
+              </div>
+              <h2>Sign in to your account</h2>
+              <p class="sub">Use your division work account to continue.</p>
+              <div class="field">
+                <label>Work email</label>
+                <input type="email" value="somchai.p@envocc.go.th">
+              </div>
+              <div class="field">
+                <label>Password</label>
+                <input type="password" value="••••••••••">
+              </div>
+              <a class="forgot" href="#">Forgot your password?</a>
+              <button class="btn">Sign in</button>
+              <div class="banner">
+                <span class="lock">🔒</span>
+                <span>We'll never ask for your verification code by email, phone, or chat. If someone does, it's a scam — close this page.</span>
+              </div>
+            </div>
+
+            <div class="admin">
+              <div class="admin__head">User management · 248 accounts</div>
+              <table class="users">
+                <thead><tr><th>Name</th><th>Work email</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>Somchai Phromma</td><td>somchai.p@envocc.go.th</td><td><span class="pill p-active">Active</span></td></tr>
+                  <tr><td>Naree Wattana</td><td>naree.w@envocc.go.th</td><td><span class="pill p-pending">Pending</span></td></tr>
+                  <tr><td>Anan Sukha</td><td>anan.s@envocc.go.th</td><td><span class="pill p-disabled">Disabled</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rationale">
+        <strong>Formal Institutional.</strong> Deep navy and a single restrained gold rule evoke official government correspondence and letterhead. Serif headings carry weight and permanence, signaling a sanctioned, long-established system. The gold-on-navy seal reads as an official emblem — hard to fake convincingly.
+      </div>
+    </div>
+
+    <!-- ============================== DIRECTION 2 ============================== -->
+    <div class="cell">
+      <p class="label">Direction 2 — Calm Clinical</p>
+      <div class="frame">
+        <div class="frame__bar">
+          <div class="frame__dots"><span></span><span></span><span></span></div>
+          <div class="frame__url">🔒 https://<b>sso.envocc.go.th</b>/sign-in</div>
+        </div>
+        <div class="frame__body dir-clinical">
+          <div class="screen">
+            <div class="card">
+              <div class="brandrow">
+                <div class="seal"></div>
+                <div class="wordmark">
+                  <b>EnvOcc SSO</b>
+                  <span>Secure staff sign-in</span>
+                </div>
+              </div>
+              <h2>Welcome back</h2>
+              <p class="sub">Sign in with your division work account.</p>
+              <div class="field">
+                <label>Work email</label>
+                <input type="email" value="naree.w@envocc.go.th">
+              </div>
+              <div class="field">
+                <label>Password</label>
+                <input type="password" value="••••••••••">
+              </div>
+              <button class="btn">Sign in</button>
+              <a class="forgot" href="#">Forgot your password?</a>
+              <div class="banner">
+                <span class="lock">🔒</span>
+                <span>We'll never ask for your verification code by email, phone, or chat. Real staff support will never request it.</span>
+              </div>
+            </div>
+
+            <div class="admin">
+              <div class="admin__head">User management · 248 accounts</div>
+              <table class="users">
+                <thead><tr><th>Name</th><th>Work email</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>Somchai Phromma</td><td>somchai.p@envocc.go.th</td><td><span class="pill p-active">Active</span></td></tr>
+                  <tr><td>Naree Wattana</td><td>naree.w@envocc.go.th</td><td><span class="pill p-pending">Pending</span></td></tr>
+                  <tr><td>Anan Sukha</td><td>anan.s@envocc.go.th</td><td><span class="pill p-disabled">Disabled</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rationale">
+        <strong>Calm Clinical.</strong> Soft teal with warm neutrals and a medical cross seal speak the visual language of health and care, putting an anxious or rushed staff member at ease. Generous whitespace and a humanist sans feel modern-government and approachable, never bureaucratic. Reassurance, not intimidation, builds the trust that defeats phishing.
+      </div>
+    </div>
+
+    <!-- ============================== DIRECTION 3 ============================== -->
+    <div class="cell">
+      <p class="label">Direction 3 — Modern Minimal</p>
+      <div class="frame">
+        <div class="frame__bar">
+          <div class="frame__dots"><span></span><span></span><span></span></div>
+          <div class="frame__url">🔒 https://<b>sso.envocc.go.th</b>/sign-in</div>
+        </div>
+        <div class="frame__body dir-minimal">
+          <div class="screen">
+            <div class="card">
+              <div class="brandrow">
+                <div class="seal"></div>
+                <div class="wordmark">
+                  <b>EnvOcc&nbsp;SSO</b>
+                  <span>Staff Identity</span>
+                </div>
+              </div>
+              <h2>Sign in</h2>
+              <p class="sub">Continue with your division work account.</p>
+              <div class="field">
+                <label>Work email</label>
+                <input type="email" value="anan.s@envocc.go.th">
+              </div>
+              <div class="field">
+                <label>Password</label>
+                <input type="password" value="••••••••••">
+              </div>
+              <a class="forgot" href="#">Forgot password?</a>
+              <button class="btn">Sign in</button>
+              <div class="banner">
+                <span class="lock">🔒</span>
+                <span>We'll never ask for your verification code by email, phone, or chat. Keep it to yourself, always.</span>
+              </div>
+            </div>
+
+            <div class="admin">
+              <div class="admin__head">User management · 248 accounts</div>
+              <table class="users">
+                <thead><tr><th>Name</th><th>Work email</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>Somchai Phromma</td><td>somchai.p@envocc.go.th</td><td><span class="pill p-active">Active</span></td></tr>
+                  <tr><td>Naree Wattana</td><td>naree.w@envocc.go.th</td><td><span class="pill p-pending">Pending</span></td></tr>
+                  <tr><td>Anan Sukha</td><td>anan.s@envocc.go.th</td><td><span class="pill p-disabled">Disabled</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rationale">
+        <strong>Modern Minimal.</strong> A near-monochrome slate palette with one confident blue accent reads as clean, contemporary, and competently engineered — the look users now associate with secure, well-run platforms. Crisp geometric type and a precise geometric mark project quiet, no-nonsense trustworthiness. Restraint itself signals legitimacy: nothing flashy, nothing to fake.
+      </div>
+    </div>
+
+    <!-- ============================== DIRECTION 4 ============================== -->
+    <div class="cell">
+      <p class="label">Direction 4 — Classic Civic</p>
+      <div class="frame">
+        <div class="frame__bar">
+          <div class="frame__dots"><span></span><span></span><span></span></div>
+          <div class="frame__url">🔒 https://<b>sso.envocc.go.th</b>/sign-in</div>
+        </div>
+        <div class="frame__body dir-civic">
+          <div class="screen">
+            <div class="card">
+              <div class="brandrow">
+                <div class="seal"></div>
+                <div class="wordmark">
+                  <b>EnvOcc SSO</b>
+                  <span>Office of the Division</span>
+                </div>
+              </div>
+              <h2>Sign in to continue</h2>
+              <p class="sub">Please use your official division account.</p>
+              <div class="field">
+                <label>Work email</label>
+                <input type="email" value="somchai.p@envocc.go.th">
+              </div>
+              <div class="field">
+                <label>Password</label>
+                <input type="password" value="••••••••••">
+              </div>
+              <button class="btn">Sign in</button>
+              <a class="forgot" href="#">Forgot your password?</a>
+              <div class="banner">
+                <span class="lock">🔒</span>
+                <span>We'll never ask for your verification code by email, phone, or chat. Anyone who does is not from this office.</span>
+              </div>
+            </div>
+
+            <div class="admin">
+              <div class="admin__head">User management · 248 accounts</div>
+              <table class="users">
+                <thead><tr><th>Name</th><th>Work email</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>Somchai Phromma</td><td>somchai.p@envocc.go.th</td><td><span class="pill p-active">Active</span></td></tr>
+                  <tr><td>Naree Wattana</td><td>naree.w@envocc.go.th</td><td><span class="pill p-pending">Pending</span></td></tr>
+                  <tr><td>Anan Sukha</td><td>anan.s@envocc.go.th</td><td><span class="pill p-disabled">Disabled</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rationale">
+        <strong>Classic Civic.</strong> Deep maroon on cream parchment with a double-rule certificate frame and a star seal evokes a stately, long-standing public institution — the feel of an official document or ministry crest. Traditional serif wordmark and warm tones convey heritage and continuity, reassuring older or non-technical staff that this is the established, authentic office. The ceremonial framing is costly to imitate, raising the bar for phishers.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

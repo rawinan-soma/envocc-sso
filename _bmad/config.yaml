@@ -1,3 +1,5 @@
+document_output_language: English
+output_folder: '{project-root}/_bmad-output'
 bad:
   name: BMad Autonomous Development
   description: Orchestrates parallel BMad story implementation pipelines — automatically
