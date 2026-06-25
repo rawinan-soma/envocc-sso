@@ -174,13 +174,12 @@ Prerequisites:
 ```bash
 # Install bats and support libraries (once)
 brew install bats-core
-git clone https://github.com/bats-core/bats-support.git /usr/local/lib/bats-support
-git clone https://github.com/bats-core/bats-assert.git /usr/local/lib/bats-assert
+# bats-support and bats-assert are vendored in tests/lib/ — no system install needed
 ```
 
 Run all unit tests (no stack required):
 ```bash
-bats tests/unit/nginx-config.bats
+BATS_LIB_PATH="$(pwd)/tests/lib" bats tests/unit/nginx-config.bats
 ```
 
 Run integration tests (requires live stack):
@@ -188,12 +187,12 @@ Run integration tests (requires live stack):
 # First bring up the stack
 docker compose up --build -d
 # Wait for nginx to be healthy, then:
-bats tests/integration/nginx-edge.bats
+BATS_LIB_PATH="$(pwd)/tests/lib" bats tests/integration/nginx-edge.bats
 ```
 
 Run all tests together:
 ```bash
-bats tests/unit/ tests/integration/
+BATS_LIB_PATH="$(pwd)/tests/lib" bats tests/unit/ tests/integration/
 ```
 
 Quick header verification (after Task 2+3):

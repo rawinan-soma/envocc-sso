@@ -183,11 +183,10 @@ load '../helpers/common'
 @test "[P1][TS-137h] nginx/nginx.conf applies limit_req directive to auth locations" {
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
-  # limit_req usage (not just declaration) must be present in a location block
-  run bash -c "grep -c 'limit_req zone=' '${PROJECT_ROOT}/nginx/nginx.conf'"
-  # At least one limit_req application must exist
-  local count="${output}"
-  [ "${count}" -gt 0 ] || fail "No limit_req zone= directive found — rate-limiting not applied to any location"
+  # limit_req usage (not just declaration) must be present in a location block.
+  # grep exits 0 when it finds a match, 1 when not — assert_success directly validates this.
+  run grep "limit_req zone=" "${PROJECT_ROOT}/nginx/nginx.conf"
+  assert_success
 }
 
 # ---------------------------------------------------------------------------
