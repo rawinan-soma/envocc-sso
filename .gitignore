@@ -103,5 +103,5 @@ ehthumbs.db
 
 # ─── Claude Code internal ─────────────────────────────────────────────────────
 # (keep .claude/ tracked — it holds project settings, not secrets)
-# .worktree/ holds per-story git worktrees (ephemeral, branched from dev)
-.worktree/
+# .worktrees is ephemeral scratch space
+.worktrees/
