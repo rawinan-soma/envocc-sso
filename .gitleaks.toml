@@ -78,6 +78,17 @@ regexTarget = "match"
 regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only|your[-_.]password)($|[-_=:"'\s])''']
 
 [[rules]]
+id          = "adminapp-db-password"
+description = "Admin app DB password with a real value"
+# Character class excludes $, {, ? to avoid false-positives on Bash parameter
+# expansion syntax such as ${VAR:?VAR must be set}.
+regex       = '''(?i)ADMINAPP_DB_PASSWORD\s*[:=]\s*["']?[^\s"'${}?]{8,}'''
+tags        = ["adminapp", "database", "password"]
+[rules.allowlist]
+regexTarget = "match"
+regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only|your[-_.]password)($|[-_=:"'\s])''']
+
+[[rules]]
 id          = "keycloak-client-secret"
 description = "Keycloak client secret with a real value (non-empty)"
 # Matches the realm-export "secret":"<value>" and "clientSecret":"<value>" forms.
