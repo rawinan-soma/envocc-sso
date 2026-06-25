@@ -1,20 +1,24 @@
 /**
- * ATDD Red-Phase Scaffold — Story 1.4: Shared Deep Sea Design-Token Stylesheet
- *
- * TDD RED PHASE: All tests are skipped until design-tokens/deep-sea.css is implemented.
+ * ATDD Scaffold — Story 1.4: Shared Deep Sea Design-Token Stylesheet
  *
  * AC Coverage:
  *   AC1 — File exists at canonical path (design-tokens/deep-sea.css)
  *   AC2 — Complete token coverage (all colors, typography, spacing, radius on :root)
  *   AC3 — WCAG AA comment block present and covers all documented pairings
- *   AC4 — Plain CSS only — no Sass/Less/PostCSS syntax
+ *   AC4 — Plain CSS only — no Sass/Less/PostCSS syntax, no external @import
  *   AC5 — Import path math: ../../design-tokens/deep-sea.css resolves from admin/src/app.css
  *   AC6 — Variable naming convention documented in file header
  *
  * Run:  node --test tests/design-tokens/deep-sea-token-coverage.test.mjs
+ *
+ * Review notes (2026-06-25):
+ *   - CSS is read once at module level; per-test reads removed (perf / maintainability)
+ *   - Added AC2 typography value spot-checks (was missing — presence only was checked)
+ *   - Added AC4 no-external-@import check (AC4 says "no @import of external resources")
+ *   - Added AC3 WCAG-block-before-:root ordering check
  */
 
-import { describe, it } from 'node:test';
+import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,8 +29,12 @@ const MONOREPO_ROOT = path.resolve(__dirname, '..', '..');
 const CSS_FILE = path.join(MONOREPO_ROOT, 'design-tokens', 'deep-sea.css');
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Read the CSS file once at module level — avoids ~100 redundant file reads.
+// Individual tests that need the file reference this module-level constant.
 // ---------------------------------------------------------------------------
+
+let CSS = '';
+let ROOT_PROPS = new Set();
 
 /**
  * Parse all CSS custom property names declared on :root from a CSS string.
@@ -45,6 +53,12 @@ function extractRootCustomProperties(css) {
   }
   return props;
 }
+
+// Load once before any test runs (node:test guarantees before() runs first).
+before(() => {
+  CSS = fs.readFileSync(CSS_FILE, 'utf-8');
+  ROOT_PROPS = extractRootCustomProperties(CSS);
+});
 
 // ---------------------------------------------------------------------------
 // AC1: File exists at canonical path
@@ -110,9 +124,7 @@ describe('AC2 — Color tokens declared on :root', () => {
 
   for (const token of REQUIRED_COLOR_TOKENS) {
     it(`${token} is declared on :root`, () => {
-      const css = fs.readFileSync(CSS_FILE, 'utf-8');
-      const props = extractRootCustomProperties(css);
-      assert.ok(props.has(token), `Expected ${token} to be declared on :root`);
+      assert.ok(ROOT_PROPS.has(token), `Expected ${token} to be declared on :root`);
     });
   }
 });
@@ -159,9 +171,7 @@ describe('AC2 — Typography tokens declared on :root', () => {
 
   for (const token of REQUIRED_TYPOGRAPHY_TOKENS) {
     it(`${token} is declared on :root`, () => {
-      const css = fs.readFileSync(CSS_FILE, 'utf-8');
-      const props = extractRootCustomProperties(css);
-      assert.ok(props.has(token), `Expected ${token} to be declared on :root`);
+      assert.ok(ROOT_PROPS.has(token), `Expected ${token} to be declared on :root`);
     });
   }
 });
@@ -185,9 +195,7 @@ describe('AC2 — Spacing tokens declared on :root', () => {
 
   for (const token of REQUIRED_SPACING_TOKENS) {
     it(`${token} is declared on :root`, () => {
-      const css = fs.readFileSync(CSS_FILE, 'utf-8');
-      const props = extractRootCustomProperties(css);
-      assert.ok(props.has(token), `Expected ${token} to be declared on :root`);
+      assert.ok(ROOT_PROPS.has(token), `Expected ${token} to be declared on :root`);
     });
   }
 });
@@ -206,9 +214,7 @@ describe('AC2 — Border-radius tokens declared on :root', () => {
 
   for (const token of REQUIRED_RADIUS_TOKENS) {
     it(`${token} is declared on :root`, () => {
-      const css = fs.readFileSync(CSS_FILE, 'utf-8');
-      const props = extractRootCustomProperties(css);
-      assert.ok(props.has(token), `Expected ${token} to be declared on :root`);
+      assert.ok(ROOT_PROPS.has(token), `Expected ${token} to be declared on :root`);
     });
   }
 });
@@ -250,16 +256,78 @@ describe('AC2 — Key hex values match DESIGN.md exactly', () => {
 
   for (const { token, expected } of VALUE_SPOT_CHECKS) {
     it(`${token} has value ${expected}`, () => {
-      const css = fs.readFileSync(CSS_FILE, 'utf-8');
       // Match: --color-primary: #0E5C53  (with optional semicolon, whitespace)
       const re = new RegExp(`${token.replace('--', '--')}\\s*:\\s*(${expected})`, 'i');
       assert.match(
-        css,
+        CSS,
         re,
         `Expected ${token} to have value ${expected} in design-tokens/deep-sea.css`,
       );
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// AC2: Typography value spot-checks (values from DESIGN.md)
+// Previously missing — only token presence was verified; values were unchecked.
+// ---------------------------------------------------------------------------
+
+describe('AC2 — Typography values match DESIGN.md', () => {
+  const TYPOGRAPHY_VALUE_CHECKS = [
+    // Wordmark
+    { token: '--font-wordmark-weight', expected: '700' },
+    { token: '--font-wordmark-size', expected: '19px' },
+    { token: '--font-wordmark-letter-spacing', expected: '0.2px' },
+    // H1
+    { token: '--font-h1-size', expected: '22px' },
+    { token: '--font-h1-weight', expected: '700' },
+    { token: '--font-h1-line-height', expected: '1.35' },
+    { token: '--font-h1-letter-spacing', expected: '-0.01em' },
+    // H2
+    { token: '--font-h2-size', expected: '18px' },
+    { token: '--font-h2-weight', expected: '700' },
+    { token: '--font-h2-line-height', expected: '1.4' },
+    // Body
+    { token: '--font-body-size', expected: '14px' },
+    { token: '--font-body-weight', expected: '400' },
+    { token: '--font-body-line-height', expected: '1.6' },
+    // Label
+    { token: '--font-label-size', expected: '12px' },
+    { token: '--font-label-weight', expected: '600' },
+    { token: '--font-label-line-height', expected: '1.5' },
+    // Caption
+    { token: '--font-caption-size', expected: '11px' },
+    { token: '--font-caption-weight', expected: '400' },
+    { token: '--font-caption-line-height', expected: '1.5' },
+    // Code
+    { token: '--font-code-size', expected: '24px' },
+    { token: '--font-code-weight', expected: '600' },
+    { token: '--font-code-letter-spacing', expected: '0.04em' },
+  ];
+
+  for (const { token, expected } of TYPOGRAPHY_VALUE_CHECKS) {
+    it(`${token} has value ${expected}`, () => {
+      // Escape special regex chars in expected (e.g. "-0.01em")
+      const escapedExpected = expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`${token}\\s*:\\s*${escapedExpected}`, 'i');
+      assert.match(CSS, re, `Expected ${token} to equal ${expected}`);
+    });
+  }
+
+  it('--font-family contains Noto Sans and Noto Sans Thai', () => {
+    const re = /--font-family\s*:.*Noto Sans.*Noto Sans Thai/;
+    assert.match(CSS, re, 'Expected --font-family to contain "Noto Sans" and "Noto Sans Thai"');
+  });
+
+  it('--font-family-mono contains Noto Sans Mono', () => {
+    const re = /--font-family-mono\s*:.*Noto Sans Mono/;
+    assert.match(CSS, re, 'Expected --font-family-mono to contain "Noto Sans Mono"');
+  });
+
+  it('--font-code-family contains Noto Sans Mono', () => {
+    const re = /--font-code-family\s*:.*Noto Sans Mono/;
+    assert.match(CSS, re, 'Expected --font-code-family to contain "Noto Sans Mono"');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -281,9 +349,8 @@ describe('AC2 — Spacing values match 4-based scale', () => {
 
   for (const { token, expected } of SPACING_VALUE_CHECKS) {
     it(`${token} has value ${expected}`, () => {
-      const css = fs.readFileSync(CSS_FILE, 'utf-8');
       const re = new RegExp(`${token}\\s*:\\s*${expected.replace('px', 'px')}`, 'i');
-      assert.match(css, re, `Expected ${token} to equal ${expected}`);
+      assert.match(CSS, re, `Expected ${token} to equal ${expected}`);
     });
   }
 });
@@ -302,9 +369,8 @@ describe('AC2 — Border-radius values', () => {
 
   for (const { token, expected } of RADIUS_VALUE_CHECKS) {
     it(`${token} has value ${expected}`, () => {
-      const css = fs.readFileSync(CSS_FILE, 'utf-8');
       const re = new RegExp(`${token}\\s*:\\s*${expected}`, 'i');
-      assert.match(css, re, `Expected ${token} to equal ${expected}`);
+      assert.match(CSS, re, `Expected ${token} to equal ${expected}`);
     });
   }
 });
@@ -315,9 +381,8 @@ describe('AC2 — Border-radius values', () => {
 
 describe('AC2 — Light-mode only (no dark-mode block)', () => {
   it('file contains no @media (prefers-color-scheme: dark) block', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.doesNotMatch(
-      css,
+      CSS,
       /prefers-color-scheme\s*:\s*dark/i,
       'Expected no dark-mode media query in design-tokens/deep-sea.css',
     );
@@ -330,42 +395,46 @@ describe('AC2 — Light-mode only (no dark-mode block)', () => {
 
 describe('AC3 — WCAG AA comment block in file header', () => {
   it('file header contains WCAG 2.1 AA mention', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
-    assert.match(css, /WCAG/i, 'Expected WCAG mention in file header comment');
+    assert.match(CSS, /WCAG/i, 'Expected WCAG mention in file header comment');
+  });
+
+  it('WCAG comment block appears before :root (it is in the file header, not inline)', () => {
+    const wcagIndex = CSS.search(/WCAG/i);
+    const rootIndex = CSS.search(/:root\s*\{/);
+    assert.ok(
+      wcagIndex !== -1 && rootIndex !== -1 && wcagIndex < rootIndex,
+      'Expected the WCAG comment block to appear before the :root rule (i.e. in the file header)',
+    );
   });
 
   it('comment block lists text-primary on background pairing with 14.5:1 ratio', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(
-      css,
+      CSS,
       /14\.5\s*:\s*1|14\.5:1/,
       'Expected contrast ratio 14.5:1 for text-primary on background',
     );
   });
 
   it('comment block lists text-muted on background pairing with 5.4:1 ratio', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(
-      css,
+      CSS,
       /5\.4\s*:\s*1|5\.4:1/,
       'Expected contrast ratio 5.4:1 for text-muted on background',
     );
   });
 
   it('comment block lists primary-foreground on primary pairing with 6.4:1 ratio', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(
-      css,
+      CSS,
       /6\.4\s*:\s*1|6\.4:1/,
       'Expected contrast ratio 6.4:1 for primary-foreground on primary',
     );
   });
 
   it('comment block mentions all semantic pairings (success, warning, error, info)', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
     for (const semantic of ['success', 'warning', 'error', 'info']) {
       assert.match(
-        css,
+        CSS,
         new RegExp(semantic, 'i'),
         `Expected semantic pairing "${semantic}" in WCAG comment block`,
       );
@@ -379,30 +448,38 @@ describe('AC3 — WCAG AA comment block in file header', () => {
 
 describe('AC4 — Plain CSS only (no preprocessor syntax)', () => {
   it('file contains no Sass variable syntax ($variable)', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.doesNotMatch(
-      css,
+      CSS,
       /\$[a-zA-Z_-]+\s*:/,
       'Expected no Sass $variable declarations in design-tokens/deep-sea.css',
     );
   });
 
   it('file contains no Less variable syntax (@variable)', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
     // Exclude valid CSS @rules like @media, @import, @charset, @layer, @keyframes
     const lessVarPattern = /@(?!media|import|charset|layer|keyframes|font-face|supports|namespace|page)[a-zA-Z_-]+\s*:/;
-    assert.doesNotMatch(css, lessVarPattern, 'Expected no Less @variable declarations');
+    assert.doesNotMatch(CSS, lessVarPattern, 'Expected no Less @variable declarations');
   });
 
   it('file contains no @use or @forward (Sass module syntax)', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
-    assert.doesNotMatch(css, /@use\s+|@forward\s+/, 'Expected no Sass @use/@forward syntax');
+    assert.doesNotMatch(CSS, /@use\s+|@forward\s+/, 'Expected no Sass @use/@forward syntax');
   });
 
   it('file contains no nesting operator (&) that requires a preprocessor', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
     // Simple check: & used as Sass/Less parent selector (inside a rule body followed by identifier)
-    assert.doesNotMatch(css, /&[.:#\w]/, 'Expected no preprocessor nesting (&.class) syntax');
+    assert.doesNotMatch(CSS, /&[.:#\w]/, 'Expected no preprocessor nesting (&.class) syntax');
+  });
+
+  it('file contains no @import of external resources (AC4: no external dependencies)', () => {
+    // AC4 requires no @import of external resources.
+    // Strip CSS comments first so the @import example in the header comment
+    // (documenting how *consumers* import this file) does not trigger a false positive.
+    const cssWithoutComments = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.doesNotMatch(
+      cssWithoutComments,
+      /@import\s/,
+      'Expected no @import in design-tokens/deep-sea.css outside of comments — file must be self-contained plain CSS',
+    );
   });
 });
 
@@ -439,27 +516,32 @@ describe('AC5 — Import path math from admin/src/app.css', () => {
 
 describe('AC6 — Naming convention documented in file header', () => {
   it('file header documents --color-* prefix convention', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
-    assert.match(css, /--color-\*/, 'Expected --color-* prefix documented in file header');
+    assert.match(CSS, /--color-\*/, 'Expected --color-* prefix documented in file header');
   });
 
   it('file header documents --font-* prefix convention', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
-    assert.match(css, /--font-\*/, 'Expected --font-* prefix documented in file header');
+    assert.match(CSS, /--font-\*/, 'Expected --font-* prefix documented in file header');
   });
 
   it('file header documents --spacing-* prefix convention', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
-    assert.match(css, /--spacing-\*/, 'Expected --spacing-* prefix documented in file header');
+    assert.match(CSS, /--spacing-\*/, 'Expected --spacing-* prefix documented in file header');
   });
 
   it('file header documents --radius-* prefix convention', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
-    assert.match(css, /--radius-\*/, 'Expected --radius-* prefix documented in file header');
+    assert.match(CSS, /--radius-\*/, 'Expected --radius-* prefix documented in file header');
   });
 
   it('file header references the source of truth (DESIGN.md)', () => {
-    const css = fs.readFileSync(CSS_FILE, 'utf-8');
-    assert.match(css, /DESIGN\.md/, 'Expected DESIGN.md source reference in file header');
+    assert.match(CSS, /DESIGN\.md/, 'Expected DESIGN.md source reference in file header');
+  });
+
+  it('file header documents the no-raw-hex rule for downstream consumers', () => {
+    // AC6 requires the naming convention to be documented so future stories follow it.
+    // The header must communicate that consumers use var(--...) not raw hex.
+    assert.match(
+      CSS,
+      /var\(--/,
+      'Expected file header to show var(--...) usage example for downstream consumers',
+    );
   });
 });
