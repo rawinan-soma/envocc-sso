@@ -44,6 +44,35 @@ compose_down_volumes() {
 }
 
 # ---------------------------------------------------------------------------
+# compose_service_field <service> <python_expr>
+#
+# Parse `docker compose config` output with python3 and evaluate <python_expr>
+# against the parsed YAML, printing the result to stdout.
+#
+# <python_expr> receives:
+#   svc  — the service dict for <service> (e.g. svc.get('environment', {}))
+#
+# Example:
+#   compose_service_field "nginx" "svc.get('healthcheck', {}).get('test', [])"
+#
+# Added in Story 1.3 review: the four TS-138x tests in nginx-config.bats each
+# ran a full `docker compose config | python3` pipeline independently (~300ms
+# each). Centralising here lets tests share the pattern and keeps the
+# extraction logic in one place.
+# ---------------------------------------------------------------------------
+compose_service_field() {
+  local service="${1}"
+  local py_expr="${2}"
+  docker compose -f "${PROJECT_ROOT}/compose.yaml" config 2>/dev/null \
+    | python3 -c "
+import sys, yaml
+cfg = yaml.safe_load(sys.stdin)
+svc = cfg.get('services', {}).get('${service}', {})
+print(${py_expr})
+"
+}
+
+# ---------------------------------------------------------------------------
 # env_setup
 # Copy .env.example -> .env if no real .env exists (CI / clean checkout).
 # ---------------------------------------------------------------------------

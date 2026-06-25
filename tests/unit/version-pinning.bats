@@ -84,6 +84,26 @@ load '../helpers/common'
 }
 
 # ---------------------------------------------------------------------------
+# TS-103d3 [P1] — nginx image version tag includes a version number (not floating)
+#
+# Added in Story 1.3 review: TS-137a only rejects ':latest'; a floating tag like
+# 'nginx:alpine' (no version) or 'nginx:1.28-alpine' (minor only, no patch) would
+# pass TS-137a but still drift across patch updates if the digest is not pinned.
+# This test ensures the nginx image tag contains at least a major.minor version
+# number — combined with TS-137b (@sha256: digest), this gives full pinning coverage.
+# ---------------------------------------------------------------------------
+@test "[P1][TS-103d3] compose.yaml nginx image tag includes a version number (not bare :alpine or :latest)" {
+  assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
+
+  # Must match: nginx:<MAJOR>.<MINOR>(optional: -<VARIANT>)@sha256:
+  # e.g. nginx:1.28-alpine@sha256:... — passes
+  #      nginx:alpine@sha256:...       — fails (no version number)
+  #      nginx:latest@sha256:...       — fails (caught by TS-103a too)
+  run grep -E "nginx:[0-9]+\.[0-9]+[^@]*@sha256:" "${PROJECT_ROOT}/compose.yaml"
+  assert_success
+}
+
+# ---------------------------------------------------------------------------
 # TS-103e [P2] — Runtime: pulled image digest matches compose pin
 #   (Requires stack to be running; skipped in offline/unit-only runs)
 # ---------------------------------------------------------------------------

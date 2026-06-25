@@ -218,18 +218,9 @@ load '../helpers/common'
 
   # After Story 1.3, Keycloak's port 8080 must NOT be published to the host.
   # External traffic routes through Nginx:443 only.
-  # A published port appears as "8080:8080" or "- 8080:8080" in the keycloak service's ports block.
-  #
-  # Parse compose config to check keycloak published ports:
-  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config 2>/dev/null \
-    | python3 -c \"
-import sys, yaml
-cfg = yaml.safe_load(sys.stdin)
-svc = cfg.get('services', {}).get('keycloak', {})
-ports = svc.get('ports', [])
-published = [str(p) for p in ports if '8080' in str(p)]
-print(len(published))
-\""
+  run bash -c "$(declare -f compose_service_field); \
+    PROJECT_ROOT='${PROJECT_ROOT}' compose_service_field keycloak \
+    \"len([str(p) for p in svc.get('ports', []) if '8080' in str(p)])\""
   # Keycloak must have zero published ports containing '8080'
   assert_output "0"
 }
@@ -241,15 +232,9 @@ print(len(published))
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # KC_PROXY_HEADERS must be set so Keycloak trusts X-Forwarded-* headers from Nginx
-  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config 2>/dev/null \
-    | python3 -c \"
-import sys, yaml
-cfg = yaml.safe_load(sys.stdin)
-svc = cfg.get('services', {}).get('keycloak', {})
-env = svc.get('environment', {})
-val = env.get('KC_PROXY_HEADERS', '')
-print(val)
-\""
+  run bash -c "$(declare -f compose_service_field); \
+    PROJECT_ROOT='${PROJECT_ROOT}' compose_service_field keycloak \
+    \"svc.get('environment', {}).get('KC_PROXY_HEADERS', '')\""
   assert_output "xforwarded"
 }
 
@@ -260,15 +245,9 @@ print(val)
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # Nginx service must have a healthcheck block (for depends_on: service_healthy in future services)
-  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config 2>/dev/null \
-    | python3 -c \"
-import sys, yaml
-cfg = yaml.safe_load(sys.stdin)
-svc = cfg.get('services', {}).get('nginx', {})
-hc = svc.get('healthcheck', {})
-test_cmd = hc.get('test', [])
-print('defined' if test_cmd else 'missing')
-\""
+  run bash -c "$(declare -f compose_service_field); \
+    PROJECT_ROOT='${PROJECT_ROOT}' compose_service_field nginx \
+    \"'defined' if svc.get('healthcheck', {}).get('test', []) else 'missing'\""
   assert_output "defined"
 }
 
@@ -279,15 +258,8 @@ print('defined' if test_cmd else 'missing')
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # Nginx must wait for Keycloak to be fully healthy before starting
-  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config 2>/dev/null \
-    | python3 -c \"
-import sys, yaml
-cfg = yaml.safe_load(sys.stdin)
-svc = cfg.get('services', {}).get('nginx', {})
-deps = svc.get('depends_on', {})
-kc = deps.get('keycloak', {}) if isinstance(deps, dict) else {}
-cond = kc.get('condition', '')
-print(cond)
-\""
+  run bash -c "$(declare -f compose_service_field); \
+    PROJECT_ROOT='${PROJECT_ROOT}' compose_service_field nginx \
+    \"(svc.get('depends_on', {}) if isinstance(svc.get('depends_on'), dict) else {}).get('keycloak', {}).get('condition', '')\""
   assert_output "service_healthy"
 }
