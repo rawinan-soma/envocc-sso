@@ -32,7 +32,9 @@ useDefault = true
 [[rules]]
 id          = "keycloak-admin-password"
 description = "Keycloak admin password with a real value"
-regex       = '''(?i)(KEYCLOAK_ADMIN_PASSWORD|KC_BOOTSTRAP_ADMIN_PASSWORD)\s*[:=]\s*["']?[^\s"'$]{8,}'''
+# Character class excludes $, {, ? to avoid false-positives on Bash parameter
+# expansion syntax such as ${VAR:?VAR must be set} or ${VAR:-default}.
+regex       = '''(?i)(KEYCLOAK_ADMIN_PASSWORD|KC_BOOTSTRAP_ADMIN_PASSWORD)\s*[:=]\s*["']?[^\s"'${}?]{8,}'''
 tags        = ["keycloak", "password"]
 [rules.allowlist]
 # regexTarget = "match" tests the regex against the full matched string
@@ -44,7 +46,10 @@ regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only
 [[rules]]
 id          = "keycloak-db-password"
 description = "Keycloak DB password with a real value"
-regex       = '''(?i)(KEYCLOAK_DB_PASSWORD|KC_DB_PASSWORD)\s*[:=]\s*["']?[^\s"'$]{8,}'''
+# Character class excludes $, {, ? to avoid false-positives on Bash parameter
+# expansion syntax such as ${VAR:?VAR must be set} (used in init scripts for
+# fail-fast required-env-var checks). These are env-var references, not secrets.
+regex       = '''(?i)(KEYCLOAK_DB_PASSWORD|KC_DB_PASSWORD)\s*[:=]\s*["']?[^\s"'${}?]{8,}'''
 tags        = ["keycloak", "database", "password"]
 [rules.allowlist]
 regexTarget = "match"
@@ -53,7 +58,9 @@ regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only
 [[rules]]
 id          = "rails-db-password"
 description = "Rails database password with a real value"
-regex       = '''(?i)RAILS_DB_PASSWORD\s*[:=]\s*["']?[^\s"'$]{8,}'''
+# Character class excludes $, {, ? to avoid false-positives on Bash parameter
+# expansion syntax such as ${VAR:?VAR must be set}.
+regex       = '''(?i)RAILS_DB_PASSWORD\s*[:=]\s*["']?[^\s"'${}?]{8,}'''
 tags        = ["rails", "database", "password"]
 [rules.allowlist]
 regexTarget = "match"
@@ -62,7 +69,9 @@ regexes     = ['''(?i)(^|[-_=:"'\s])(change[-_]me|changeit|placeholder|test-only
 [[rules]]
 id          = "postgres-password"
 description = "PostgreSQL password with a real value"
-regex       = '''(?i)POSTGRES_PASSWORD\s*[:=]\s*["']?[^\s"'$]{8,}'''
+# Character class excludes $, {, ? to avoid false-positives on Bash parameter
+# expansion syntax such as ${VAR:?VAR must be set}.
+regex       = '''(?i)POSTGRES_PASSWORD\s*[:=]\s*["']?[^\s"'${}?]{8,}'''
 tags        = ["postgres", "password"]
 [rules.allowlist]
 regexTarget = "match"
