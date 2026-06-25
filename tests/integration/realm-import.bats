@@ -178,7 +178,11 @@ PYEOF
     elapsed=$((elapsed + 2))
   done
 
-  assert_equal "${oidc_status}" "200" "OIDC discovery did not return 200 after 30 s post-healthy wait (got: ${oidc_status})"
+  # assert_equal only takes 2 args in this bats-assert version; emit a helpful
+  # message via fail so the diagnosis is clear on timeout.
+  if [[ "${oidc_status}" != "200" ]]; then
+    fail "OIDC discovery did not return 200 after 30 s post-healthy wait (got: ${oidc_status})"
+  fi
 }
 
 # ---------------------------------------------------------------------------
