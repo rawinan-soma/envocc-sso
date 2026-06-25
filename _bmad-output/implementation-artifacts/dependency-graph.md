@@ -1,15 +1,15 @@
 # Story Dependency Graph
-_Last updated: 2026-06-25T07:30:00Z_
+_Last updated: 2026-06-25T15:00:00Z_
 
 ## Stories
 
 | Story | Epic | Title | Sprint Status | Issue | PR | PR Status | Dependencies | Ready to Work |
 |-------|------|-------|--------------|-------|----|-----------|--------------|---------------|
-| 1.1 | 1 | Docker Compose stack — pinned Keycloak + PostgreSQL | backlog | #2 | #1 | merged (old branch), #41 closed | none | ✅ Yes |
-| 1.2 | 1 | Realm config-as-code baseline & secret hygiene | backlog | #3 | #42 | closed (not merged) | 1.1 | ❌ No (1.1 not merged/done) |
-| 1.3 | 1 | Nginx security edge | backlog | #4 | — | — | 1.1 | ❌ No (1.1 not merged/done) |
-| 1.4 | 1 | Shared Deep Sea design-token stylesheet | backlog | #5 | — | — | none | ✅ Yes |
-| 1.5 | 1 | Agentic-build / CI security gate | backlog | #6 | — | — | 1.2, 1.3, 1.4 | ❌ No (1.2, 1.3, 1.4 not done) |
+| 1.1 | 1 | Docker Compose stack — pinned Keycloak + PostgreSQL | done | #2 | #43 | merged | none | ✅ Yes (done) |
+| 1.2 | 1 | Realm config-as-code baseline & secret hygiene | backlog | #3 | — | — | 1.1 | ✅ Yes |
+| 1.3 | 1 | Nginx security edge | backlog | #4 | — | — | 1.1 | ✅ Yes |
+| 1.4 | 1 | Shared Deep Sea design-token stylesheet | done | #5 | #44 | merged | none | ✅ Yes (done) |
+| 1.5 | 1 | Agentic-build / CI security gate | backlog | #6 | — | — | 1.2, 1.3, 1.4 | ❌ No (1.2, 1.3 not done) |
 | 2.1 | 2 | Canonical identity model & lifecycle states | backlog | #7 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
 | 2.2 | 2 | OIDC Authorization Code + PKCE login | backlog | #8 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
 | 2.3 | 2 | Signed tokens, JWKS & OIDC discovery | backlog | #9 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
@@ -88,8 +88,9 @@ _Last updated: 2026-06-25T07:30:00Z_
 
 ## Notes
 
-- **Parallelism opportunities within Epic 1**: Stories 1.1 and 1.4 can be started in parallel (1.4 is pure CSS, no stack dependency). After 1.1 merges, 1.2 and 1.3 can run in parallel.
-- **PR State caveat**: PR #1 (story-1-1-keycloak-standup) was merged on 2026-06-20 but the repo was subsequently reset to planning baseline (`chore: reset to planning baseline`). PRs #41 and #42 (re-implementations of 1.1 and 1.2) were CLOSED without merging. Sprint status reflects the current clean-slate state — all stories are `backlog` with no merged deliverable code on `main`.
-- **Stories 1.1 and 1.4** are the only two stories that have no dependencies and are `Ready to Work: Yes` right now.
+- **Parallelism opportunities within Epic 1**: Stories 1.2 and 1.3 can now be started in parallel (1.1 is done/merged). 1.5 waits on all of 1.2, 1.3, 1.4 — 1.4 is already done.
+- **Completed stories**: 1.1 (PR #43, merged 2026-06-25) and 1.4 (PR #44, merged 2026-06-25) are done.
+- **Worktree cleanup**: story-1-1 and story-1-4 worktrees removed; their remote branches deleted.
+- **Stories 1.2 and 1.3** are the two stories that are `Ready to Work: Yes` right now (both unblocked by 1.1's merge).
 - **Current epic**: Epic 1 — Secure Platform Foundation (lowest incomplete epic).
 - **All stories done**: false.
