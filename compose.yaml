@@ -121,8 +121,11 @@ services:
       keycloak:
         condition: service_healthy
     healthcheck:
+      # Target the local /healthz endpoint (NOT /) so Nginx health reflects its
+      # own liveness, not Keycloak's upstream status — proxying / would mark
+      # Nginx unhealthy whenever Keycloak returns 4xx/5xx.
       # nginx:alpine includes curl; -k bypasses self-signed cert; -sf fails on HTTP error
-      test: ["CMD", "curl", "-k", "-sf", "https://localhost/", "-o", "/dev/null"]
+      test: ["CMD", "curl", "-k", "-sf", "https://localhost/healthz", "-o", "/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 3

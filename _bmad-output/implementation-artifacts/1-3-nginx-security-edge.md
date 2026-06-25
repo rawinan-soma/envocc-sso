@@ -4,7 +4,7 @@ baseline_commit: 4da01ef
 
 # Story 1.3: Nginx security edge
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -77,6 +77,17 @@ so that all public traffic is TLS-terminated, header-hardened, and abuse-protect
   - [x] AC5: `docker compose ps` → all three services show `healthy` or `running`.
   - [x] AC6: `git status` → `nginx/certs/*.key` and `nginx/certs/*.crt` are NOT tracked. `git check-ignore -v nginx/certs/dev.key` → shows a matching `.gitignore` rule.
   - [x] `gitleaks detect --source=.` → clean (no secrets detected in committed files).
+
+### Review Findings
+
+Code review (2026-06-25) — three adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). 4 patches applied, 2 deferred, rest dismissed as noise/out-of-scope.
+
+- [x] [Review][Patch] Admin console (`/admin/`) missing CSP `frame-ancestors 'none'` [nginx/nginx.conf] — AC2 names "admin" as an auth surface and the README directs admins to `https://localhost/admin/`, but `/admin/` matched neither `^/realms/` nor `^/auth/`, so it fell through to `location /` with no CSP. Added a `location ~ ^/admin/` block with the full security-header set + CSP + rate-limit. (AC2 violation — fixed.)
+- [x] [Review][Patch] Security headers absent on the port-80 HTTP→HTTPS redirect [nginx/nginx.conf] — AC1 requires headers on "any request arriving at the Nginx listener"; the port-80 server had no `add_header`. Added X-Frame-Options / X-Content-Type-Options / Referrer-Policy / Permissions-Policy to the redirect server block. (AC1 deviation — fixed.)
+- [x] [Review][Patch] nginx healthcheck coupled to Keycloak upstream status [compose.yaml + nginx/nginx.conf] — `curl -sf https://localhost/` proxied to Keycloak, so a Keycloak 4xx/5xx marked nginx unhealthy. Added a local `location = /healthz { return 200; }` and repointed the compose healthcheck at it, decoupling nginx liveness from the upstream. (AC5 hardening — fixed.)
+- [x] [Review][Patch] Dead `token_zone` declaration removed [nginx/nginx.conf] — `limit_req_zone ... zone=token_zone` was declared but never applied (the token endpoint sits under `^/realms/` and is throttled by `login_zone`). Removed the unused zone (saved its 10MB shared-memory allocation); the stricter 10r/m budget on the token endpoint is intentional. (AC3 cleanup — fixed.)
+- [x] [Review][Defer] No `resolver` for `proxy_pass http://keycloak:8080` [nginx/nginx.conf] — deferred, infra hardening. nginx resolves the upstream name once at start; a Keycloak-only restart that changes its container IP leaves nginx proxying a stale IP (502) until reload. Live boot is verified; fixing properly (resolver + variable upstream) changes proxy URI handling and warrants its own pass.
+- [x] [Review][Defer] Host-header reflection in port-80 `return 301 https://$host` [nginx/nginx.conf] — deferred, out of scope. `server_name _` reflects an arbitrary Host into the redirect and into Keycloak (`KC_HOSTNAME_STRICT=false`). Production hostname/TLS handling is explicitly out of scope for this local-dev story; a `server_name` allowlist belongs to the production-hardening pass.
 
 ## Dev Notes
 
