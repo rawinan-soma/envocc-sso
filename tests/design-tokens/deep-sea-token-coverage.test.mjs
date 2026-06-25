@@ -138,6 +138,7 @@ describe('AC2 — Typography tokens declared on :root', () => {
     '--font-family',
     '--font-family-mono',
     // Wordmark
+    '--font-wordmark-family',
     '--font-wordmark-weight',
     '--font-wordmark-size',
     '--font-wordmark-letter-spacing',
@@ -256,8 +257,9 @@ describe('AC2 — Key hex values match DESIGN.md exactly', () => {
 
   for (const { token, expected } of VALUE_SPOT_CHECKS) {
     it(`${token} has value ${expected}`, () => {
-      // Match: --color-primary: #0E5C53  (with optional semicolon, whitespace)
-      const re = new RegExp(`${token.replace('--', '--')}\\s*:\\s*(${expected})`, 'i');
+      // Match: --color-primary: #0E5C53;  with a trailing boundary (semicolon
+      // or whitespace) so a superset value (e.g. #0E5C53FF) cannot false-pass.
+      const re = new RegExp(`${token}\\s*:\\s*${expected}\\s*;`, 'i');
       assert.match(
         CSS,
         re,
@@ -309,25 +311,41 @@ describe('AC2 — Typography values match DESIGN.md', () => {
     it(`${token} has value ${expected}`, () => {
       // Escape special regex chars in expected (e.g. "-0.01em")
       const escapedExpected = expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(`${token}\\s*:\\s*${escapedExpected}`, 'i');
+      // Trailing semicolon anchors the value so "1.45" cannot satisfy "1.4".
+      const re = new RegExp(`${token}\\s*:\\s*${escapedExpected}\\s*;`, 'i');
       assert.match(CSS, re, `Expected ${token} to equal ${expected}`);
     });
   }
 
-  it('--font-family contains Noto Sans and Noto Sans Thai', () => {
-    const re = /--font-family\s*:.*Noto Sans.*Noto Sans Thai/;
-    assert.match(CSS, re, 'Expected --font-family to contain "Noto Sans" and "Noto Sans Thai"');
-  });
+  // Full font-stack assertions — the entire stack (faces, fallbacks, ordering)
+  // must match DESIGN.md, not just contain the primary face.
+  const FONT_STACK_CHECKS = [
+    {
+      token: '--font-family',
+      expected: '"Noto Sans", "Noto Sans Thai", system-ui, sans-serif',
+    },
+    {
+      token: '--font-family-mono',
+      expected: '"Noto Sans Mono", ui-monospace, monospace',
+    },
+    {
+      // wordmark family differs from --font-family: no system-ui, bare sans-serif
+      token: '--font-wordmark-family',
+      expected: '"Noto Sans", "Noto Sans Thai", sans-serif',
+    },
+    {
+      token: '--font-code-family',
+      expected: '"Noto Sans Mono", ui-monospace, monospace',
+    },
+  ];
 
-  it('--font-family-mono contains Noto Sans Mono', () => {
-    const re = /--font-family-mono\s*:.*Noto Sans Mono/;
-    assert.match(CSS, re, 'Expected --font-family-mono to contain "Noto Sans Mono"');
-  });
-
-  it('--font-code-family contains Noto Sans Mono', () => {
-    const re = /--font-code-family\s*:.*Noto Sans Mono/;
-    assert.match(CSS, re, 'Expected --font-code-family to contain "Noto Sans Mono"');
-  });
+  for (const { token, expected } of FONT_STACK_CHECKS) {
+    it(`${token} has full stack ${expected}`, () => {
+      const escapedExpected = expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`${token}\\s*:\\s*${escapedExpected}\\s*;`);
+      assert.match(CSS, re, `Expected ${token} to equal ${expected}`);
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -349,7 +367,9 @@ describe('AC2 — Spacing values match 4-based scale', () => {
 
   for (const { token, expected } of SPACING_VALUE_CHECKS) {
     it(`${token} has value ${expected}`, () => {
-      const re = new RegExp(`${token}\\s*:\\s*${expected.replace('px', 'px')}`, 'i');
+      // Trailing semicolon anchors the value so "48px" cannot satisfy "4px"
+      // via a substring match.
+      const re = new RegExp(`${token}\\s*:\\s*${expected}\\s*;`, 'i');
       assert.match(CSS, re, `Expected ${token} to equal ${expected}`);
     });
   }
@@ -369,7 +389,8 @@ describe('AC2 — Border-radius values', () => {
 
   for (const { token, expected } of RADIUS_VALUE_CHECKS) {
     it(`${token} has value ${expected}`, () => {
-      const re = new RegExp(`${token}\\s*:\\s*${expected}`, 'i');
+      // Trailing semicolon anchors the value so "999px" cannot satisfy "9px".
+      const re = new RegExp(`${token}\\s*:\\s*${expected}\\s*;`, 'i');
       assert.match(CSS, re, `Expected ${token} to equal ${expected}`);
     });
   }

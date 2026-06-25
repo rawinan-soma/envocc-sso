@@ -86,6 +86,7 @@
   --font-family-mono:         "Noto Sans Mono", ui-monospace, monospace;
 
   /* ── Typography — wordmark ────────────────────────────────── */
+  --font-wordmark-family:         "Noto Sans", "Noto Sans Thai", sans-serif;
   --font-wordmark-weight:         700;
   --font-wordmark-size:           19px;
   --font-wordmark-letter-spacing: 0.2px;
