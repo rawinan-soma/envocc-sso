@@ -51,14 +51,14 @@ function extractRootCustomProperties(css) {
 // ---------------------------------------------------------------------------
 
 describe('AC1 — File exists at canonical path', () => {
-  it.skip('design-tokens/deep-sea.css exists at monorepo root', () => {
+  it('design-tokens/deep-sea.css exists at monorepo root', () => {
     assert.ok(
       fs.existsSync(CSS_FILE),
       `Expected design-tokens/deep-sea.css to exist at ${CSS_FILE}`,
     );
   });
 
-  it.skip('file is not empty', () => {
+  it('file is not empty', () => {
     const stat = fs.statSync(CSS_FILE);
     assert.ok(stat.size > 0, 'Expected file to be non-empty');
   });
@@ -109,7 +109,7 @@ describe('AC2 — Color tokens declared on :root', () => {
   ];
 
   for (const token of REQUIRED_COLOR_TOKENS) {
-    it.skip(`${token} is declared on :root`, () => {
+    it(`${token} is declared on :root`, () => {
       const css = fs.readFileSync(CSS_FILE, 'utf-8');
       const props = extractRootCustomProperties(css);
       assert.ok(props.has(token), `Expected ${token} to be declared on :root`);
@@ -158,7 +158,7 @@ describe('AC2 — Typography tokens declared on :root', () => {
   ];
 
   for (const token of REQUIRED_TYPOGRAPHY_TOKENS) {
-    it.skip(`${token} is declared on :root`, () => {
+    it(`${token} is declared on :root`, () => {
       const css = fs.readFileSync(CSS_FILE, 'utf-8');
       const props = extractRootCustomProperties(css);
       assert.ok(props.has(token), `Expected ${token} to be declared on :root`);
@@ -184,7 +184,7 @@ describe('AC2 — Spacing tokens declared on :root', () => {
   ];
 
   for (const token of REQUIRED_SPACING_TOKENS) {
-    it.skip(`${token} is declared on :root`, () => {
+    it(`${token} is declared on :root`, () => {
       const css = fs.readFileSync(CSS_FILE, 'utf-8');
       const props = extractRootCustomProperties(css);
       assert.ok(props.has(token), `Expected ${token} to be declared on :root`);
@@ -205,7 +205,7 @@ describe('AC2 — Border-radius tokens declared on :root', () => {
   ];
 
   for (const token of REQUIRED_RADIUS_TOKENS) {
-    it.skip(`${token} is declared on :root`, () => {
+    it(`${token} is declared on :root`, () => {
       const css = fs.readFileSync(CSS_FILE, 'utf-8');
       const props = extractRootCustomProperties(css);
       assert.ok(props.has(token), `Expected ${token} to be declared on :root`);
@@ -249,7 +249,7 @@ describe('AC2 — Key hex values match DESIGN.md exactly', () => {
   ];
 
   for (const { token, expected } of VALUE_SPOT_CHECKS) {
-    it.skip(`${token} has value ${expected}`, () => {
+    it(`${token} has value ${expected}`, () => {
       const css = fs.readFileSync(CSS_FILE, 'utf-8');
       // Match: --color-primary: #0E5C53  (with optional semicolon, whitespace)
       const re = new RegExp(`${token.replace('--', '--')}\\s*:\\s*(${expected})`, 'i');
@@ -280,7 +280,7 @@ describe('AC2 — Spacing values match 4-based scale', () => {
   ];
 
   for (const { token, expected } of SPACING_VALUE_CHECKS) {
-    it.skip(`${token} has value ${expected}`, () => {
+    it(`${token} has value ${expected}`, () => {
       const css = fs.readFileSync(CSS_FILE, 'utf-8');
       const re = new RegExp(`${token}\\s*:\\s*${expected.replace('px', 'px')}`, 'i');
       assert.match(css, re, `Expected ${token} to equal ${expected}`);
@@ -301,7 +301,7 @@ describe('AC2 — Border-radius values', () => {
   ];
 
   for (const { token, expected } of RADIUS_VALUE_CHECKS) {
-    it.skip(`${token} has value ${expected}`, () => {
+    it(`${token} has value ${expected}`, () => {
       const css = fs.readFileSync(CSS_FILE, 'utf-8');
       const re = new RegExp(`${token}\\s*:\\s*${expected}`, 'i');
       assert.match(css, re, `Expected ${token} to equal ${expected}`);
@@ -314,7 +314,7 @@ describe('AC2 — Border-radius values', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC2 — Light-mode only (no dark-mode block)', () => {
-  it.skip('file contains no @media (prefers-color-scheme: dark) block', () => {
+  it('file contains no @media (prefers-color-scheme: dark) block', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.doesNotMatch(
       css,
@@ -329,12 +329,12 @@ describe('AC2 — Light-mode only (no dark-mode block)', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC3 — WCAG AA comment block in file header', () => {
-  it.skip('file header contains WCAG 2.1 AA mention', () => {
+  it('file header contains WCAG 2.1 AA mention', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(css, /WCAG/i, 'Expected WCAG mention in file header comment');
   });
 
-  it.skip('comment block lists text-primary on background pairing with 14.5:1 ratio', () => {
+  it('comment block lists text-primary on background pairing with 14.5:1 ratio', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(
       css,
@@ -343,7 +343,7 @@ describe('AC3 — WCAG AA comment block in file header', () => {
     );
   });
 
-  it.skip('comment block lists text-muted on background pairing with 5.4:1 ratio', () => {
+  it('comment block lists text-muted on background pairing with 5.4:1 ratio', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(
       css,
@@ -352,7 +352,7 @@ describe('AC3 — WCAG AA comment block in file header', () => {
     );
   });
 
-  it.skip('comment block lists primary-foreground on primary pairing with 6.4:1 ratio', () => {
+  it('comment block lists primary-foreground on primary pairing with 6.4:1 ratio', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(
       css,
@@ -361,7 +361,7 @@ describe('AC3 — WCAG AA comment block in file header', () => {
     );
   });
 
-  it.skip('comment block mentions all semantic pairings (success, warning, error, info)', () => {
+  it('comment block mentions all semantic pairings (success, warning, error, info)', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     for (const semantic of ['success', 'warning', 'error', 'info']) {
       assert.match(
@@ -378,7 +378,7 @@ describe('AC3 — WCAG AA comment block in file header', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC4 — Plain CSS only (no preprocessor syntax)', () => {
-  it.skip('file contains no Sass variable syntax ($variable)', () => {
+  it('file contains no Sass variable syntax ($variable)', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.doesNotMatch(
       css,
@@ -387,19 +387,19 @@ describe('AC4 — Plain CSS only (no preprocessor syntax)', () => {
     );
   });
 
-  it.skip('file contains no Less variable syntax (@variable)', () => {
+  it('file contains no Less variable syntax (@variable)', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     // Exclude valid CSS @rules like @media, @import, @charset, @layer, @keyframes
     const lessVarPattern = /@(?!media|import|charset|layer|keyframes|font-face|supports|namespace|page)[a-zA-Z_-]+\s*:/;
     assert.doesNotMatch(css, lessVarPattern, 'Expected no Less @variable declarations');
   });
 
-  it.skip('file contains no @use or @forward (Sass module syntax)', () => {
+  it('file contains no @use or @forward (Sass module syntax)', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.doesNotMatch(css, /@use\s+|@forward\s+/, 'Expected no Sass @use/@forward syntax');
   });
 
-  it.skip('file contains no nesting operator (&) that requires a preprocessor', () => {
+  it('file contains no nesting operator (&) that requires a preprocessor', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     // Simple check: & used as Sass/Less parent selector (inside a rule body followed by identifier)
     assert.doesNotMatch(css, /&[.:#\w]/, 'Expected no preprocessor nesting (&.class) syntax');
@@ -411,7 +411,7 @@ describe('AC4 — Plain CSS only (no preprocessor syntax)', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC5 — Import path math from admin/src/app.css', () => {
-  it.skip('../../design-tokens/deep-sea.css resolves to the canonical file from admin/src/', () => {
+  it('../../design-tokens/deep-sea.css resolves to the canonical file from admin/src/', () => {
     // admin/src/ → admin/ → monorepo root → design-tokens/deep-sea.css
     // Two levels up from admin/src/ lands at the monorepo root
     const adminSrcDir = path.join(MONOREPO_ROOT, 'admin', 'src');
@@ -423,7 +423,7 @@ describe('AC5 — Import path math from admin/src/app.css', () => {
     );
   });
 
-  it.skip('the file referenced by the import path exists', () => {
+  it('the file referenced by the import path exists', () => {
     const adminSrcDir = path.join(MONOREPO_ROOT, 'admin', 'src');
     const resolvedPath = path.resolve(adminSrcDir, '../../design-tokens/deep-sea.css');
     assert.ok(
@@ -438,27 +438,27 @@ describe('AC5 — Import path math from admin/src/app.css', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC6 — Naming convention documented in file header', () => {
-  it.skip('file header documents --color-* prefix convention', () => {
+  it('file header documents --color-* prefix convention', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(css, /--color-\*/, 'Expected --color-* prefix documented in file header');
   });
 
-  it.skip('file header documents --font-* prefix convention', () => {
+  it('file header documents --font-* prefix convention', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(css, /--font-\*/, 'Expected --font-* prefix documented in file header');
   });
 
-  it.skip('file header documents --spacing-* prefix convention', () => {
+  it('file header documents --spacing-* prefix convention', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(css, /--spacing-\*/, 'Expected --spacing-* prefix documented in file header');
   });
 
-  it.skip('file header documents --radius-* prefix convention', () => {
+  it('file header documents --radius-* prefix convention', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(css, /--radius-\*/, 'Expected --radius-* prefix documented in file header');
   });
 
-  it.skip('file header references the source of truth (DESIGN.md)', () => {
+  it('file header references the source of truth (DESIGN.md)', () => {
     const css = fs.readFileSync(CSS_FILE, 'utf-8');
     assert.match(css, /DESIGN\.md/, 'Expected DESIGN.md source reference in file header');
   });
