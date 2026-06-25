@@ -101,10 +101,16 @@ setup() {
 
   # Guard the curl explicitly so a network/auth failure surfaces a clear message
   # rather than an opaque JSONDecodeError from python3 on the next step.
+  # Capture curl's exit code before rm -f can overwrite $?.
+  local curl_exit=0
   curl -sf --max-time 10 \
     -H "Authorization: Bearer ${token}" \
     "http://localhost:8080/admin/realms/envocc" > "${realm_tmpfile}" \
-    || { rm -f "${realm_tmpfile}"; fail "Could not fetch realm JSON from Admin API (curl exited $?)"; }
+    || curl_exit=$?
+  if [[ "${curl_exit}" -ne 0 ]]; then
+    rm -f "${realm_tmpfile}"
+    fail "Could not fetch realm JSON from Admin API (curl exited ${curl_exit})"
+  fi
 
   run python3 - "${realm_tmpfile}" <<'PYEOF'
 import json, sys
@@ -172,8 +178,7 @@ PYEOF
     elapsed=$((elapsed + 2))
   done
 
-  run echo "${oidc_status}"
-  assert_output "200"
+  assert_equal "${oidc_status}" "200" "OIDC discovery did not return 200 after 30 s post-healthy wait (got: ${oidc_status})"
 }
 
 # ---------------------------------------------------------------------------
