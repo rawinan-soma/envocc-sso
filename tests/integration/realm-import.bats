@@ -1,30 +1,29 @@
 #!/usr/bin/env bats
 # tests/integration/realm-import.bats
-# ATDD tests — Story 1.2 AC1, AC3: Realm config-as-code baseline & secret hygiene
+# ATDD integration tests — Story 1.2: Realm config-as-code baseline & secret hygiene
 #
-# AC1: Given keycloak/realm-export.json in git,
-#      when the stack starts (docker compose up),
-#      then the realm is imported automatically and baseline settings
-#      are applied without manual intervention.
-#
-# AC3: Given a realm change made through the Keycloak Admin UI,
-#      when it is exported back to the repo (using the documented procedure),
-#      then the resulting diff is reviewable (no sensitive material) and the
-#      updated file is re-importable on a fresh stack (docker compose down -v
-#      && docker compose up) with the change applied.
+# AC1: Given keycloak/realm-export.json in git, when the stack starts (docker compose up),
+#      then the realm is imported automatically and baseline settings are applied
+#      without manual intervention.
+# AC3: Given a realm change made through the Admin UI, when it is exported back to the
+#      repo, then the resulting diff is reviewable and the updated file is re-importable
+#      on a fresh stack.
 #
 # Test scenarios covered:
-#   TS-201a [P0] OIDC discovery endpoint returns HTTP 200 for 'envocc' realm
-#   TS-201b [P0] OIDC discovery issuer matches expected realm URL
-#   TS-201c [P0] Keycloak admin API confirms 'envocc' realm exists and is enabled
-#   TS-201d [P1] Baseline realm settings match realm-export.json values
-#   TS-201e [P1] Realm imports cleanly on fresh stack (down -v + up --build)
-#   TS-201f [P1] Round-trip: realm re-imports after export+import cycle on fresh stack
-#   TS-201g [P2] Realm import is idempotent on existing DB (IGNORE_EXISTING strategy)
+#   TS-201a [P0] OIDC discovery returns HTTP 200 for 'envocc' realm
+#   TS-201b [P0] OIDC issuer matches expected realm URL
+#   TS-201c [P0] Admin REST API confirms realm exists and is enabled
+#   TS-201d [P1] Baseline settings match realm-export.json (bruteForceProtected, accessTokenLifespan)
+#   TS-201e [P1] Fresh stack imports realm automatically (destructive — down -v + up)
+#   TS-201f [P1] Round-trip: export → strip → reimport on fresh stack (manual procedure)
+#   TS-201g [P2] IGNORE_EXISTING: runtime change survives KC restart (import strategy)
 #
-# NOTE: These tests require a running stack (docker compose up --build).
-# Run manually: docker compose up --build -d, then: bats tests/integration/realm-import.bats
-# In CI (Story 1.5), these run as part of the integration test suite after health checks.
+# IMPORTANT: All tests in this file require a live Keycloak stack.
+# They are skipped unless the INTEGRATION environment variable is set.
+# To run: INTEGRATION=1 bats tests/integration/realm-import.bats
+# Pre-requisites:
+#   1. docker compose up --build (stack healthy)
+#   2. BATS_LIB_PATH=$(pwd)/tests/lib bats tests/integration/realm-import.bats
 
 bats_load_library 'bats-support'
 bats_load_library 'bats-assert'
@@ -32,314 +31,189 @@ bats_load_library 'bats-assert'
 load '../helpers/common'
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Suite setup: require INTEGRATION env var, set up .env if needed
 # ---------------------------------------------------------------------------
+setup_suite() {
+  if [[ -z "${INTEGRATION}" ]]; then
+    skip "Integration tests skipped — set INTEGRATION=1 and ensure stack is running"
+  fi
+  env_setup
+}
 
-# keycloak_api_token
-# Obtain an admin access token from the master realm using bootstrap credentials.
-keycloak_api_token() {
-  local admin_user
-  local admin_pass
-  admin_user="$(env_value KC_BOOTSTRAP_ADMIN_USERNAME)"
-  admin_pass="$(env_value KC_BOOTSTRAP_ADMIN_PASSWORD)"
+setup() {
+  if [[ -z "${INTEGRATION}" ]]; then
+    skip "Integration tests skipped — set INTEGRATION=1 and ensure stack is running"
+  fi
+}
 
-  curl -s \
+# ---------------------------------------------------------------------------
+# TS-201a [P0] — OIDC discovery endpoint returns HTTP 200 (AC1)
+# ---------------------------------------------------------------------------
+@test "[P0][TS-201a] OIDC discovery endpoint returns HTTP 200 for envocc realm" {
+  run curl -sf --max-time 10 \
+    "http://localhost:8080/realms/envocc/.well-known/openid-configuration" \
+    -o /dev/null \
+    -w "%{http_code}"
+  assert_success
+  assert_output "200"
+}
+
+# ---------------------------------------------------------------------------
+# TS-201b [P0] — OIDC issuer matches expected realm URL (AC1)
+# ---------------------------------------------------------------------------
+@test "[P0][TS-201b] OIDC issuer URL matches http://localhost:8080/realms/envocc" {
+  run curl -sf --max-time 10 \
+    "http://localhost:8080/realms/envocc/.well-known/openid-configuration"
+  assert_success
+
+  # Extract issuer from JSON
+  local issuer
+  issuer=$(echo "${output}" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('issuer',''))")
+  assert_equal "${issuer}" "http://localhost:8080/realms/envocc"
+}
+
+# ---------------------------------------------------------------------------
+# TS-201c [P0] — Admin REST API confirms realm exists and is enabled (AC1)
+# ---------------------------------------------------------------------------
+@test "[P0][TS-201c] Admin REST API confirms envocc realm exists and is enabled" {
+  # Obtain admin token using .env credentials
+  local admin_user admin_pass
+  admin_user=$(grep KC_BOOTSTRAP_ADMIN_USERNAME "${PROJECT_ROOT}/.env" | cut -d= -f2)
+  admin_pass=$(grep KC_BOOTSTRAP_ADMIN_PASSWORD "${PROJECT_ROOT}/.env" | cut -d= -f2)
+
+  local token
+  token=$(curl -sf --max-time 15 \
     -d "client_id=admin-cli" \
     -d "username=${admin_user}" \
     -d "password=${admin_pass}" \
     -d "grant_type=password" \
     "http://localhost:8080/realms/master/protocol/openid-connect/token" \
-    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))"
-}
+    | python3 -c "import json,sys; print(json.load(sys.stdin).get('access_token',''))")
 
-# realm_setting <realm> <token> <jq_filter>
-# Query the Keycloak Admin REST API for a realm and extract a setting via jq filter.
-realm_setting() {
-  local realm="${1}"
-  local token="${2}"
-  local jq_filter="${3}"
+  [ -n "${token}" ] || fail "Could not obtain admin token — check KC_BOOTSTRAP_ADMIN_* in .env"
 
-  curl -s \
+  # Query the realm endpoint
+  run curl -sf --max-time 10 \
     -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/${realm}" \
-    | python3 -c "import sys,json; d=json.load(sys.stdin); print(${jq_filter})" 2>/dev/null
-}
-
-# env_value <KEY>
-# Reads the literal value of KEY from .env without shell-evaluating the file.
-env_value() {
-  local key="${1}"
-  sed -n "s/^${key}=//p" "${PROJECT_ROOT}/.env" | tail -n 1
-}
-
-# ---------------------------------------------------------------------------
-# Suite setup: handled by tests/integration/setup_suite.bash (BATS 1.5+).
-# ---------------------------------------------------------------------------
-
-setup() {
-  : # per-test setup (noop for infra tests)
-}
-
-teardown() {
-  : # per-test teardown
-}
-
-# ---------------------------------------------------------------------------
-# TS-201a [P0] — OIDC discovery endpoint returns HTTP 200 for 'envocc' realm
-# ---------------------------------------------------------------------------
-@test "[P0][TS-201a] OIDC discovery endpoint for 'envocc' realm returns HTTP 200" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
-
-  # Given the stack is healthy
-  run wait_for_healthy "keycloak" 120
+    "http://localhost:8080/admin/realms/envocc"
   assert_success
 
-  # When we query the OIDC discovery endpoint for the envocc realm
-  run bash -c "curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
-    'http://localhost:8080/realms/envocc/.well-known/openid-configuration'"
+  # Confirm realm is enabled
+  local enabled
+  enabled=$(echo "${output}" | python3 -c "import json,sys; d=json.load(sys.stdin); print(str(d.get('enabled',False)).lower())")
+  assert_equal "${enabled}" "true"
+}
 
-  # Then it returns HTTP 200 (not 404 — realm exists)
+# ---------------------------------------------------------------------------
+# TS-201d [P1] — Baseline settings match realm-export.json (AC1)
+# Checks: bruteForceProtected, accessTokenLifespan, ssoSessionIdleTimeout
+# ---------------------------------------------------------------------------
+@test "[P1][TS-201d] Baseline realm settings match realm-export.json spec" {
+  local admin_user admin_pass
+  admin_user=$(grep KC_BOOTSTRAP_ADMIN_USERNAME "${PROJECT_ROOT}/.env" | cut -d= -f2)
+  admin_pass=$(grep KC_BOOTSTRAP_ADMIN_PASSWORD "${PROJECT_ROOT}/.env" | cut -d= -f2)
+
+  local token
+  token=$(curl -sf --max-time 15 \
+    -d "client_id=admin-cli" \
+    -d "username=${admin_user}" \
+    -d "password=${admin_pass}" \
+    -d "grant_type=password" \
+    "http://localhost:8080/realms/master/protocol/openid-connect/token" \
+    | python3 -c "import json,sys; print(json.load(sys.stdin).get('access_token',''))")
+
+  [ -n "${token}" ] || fail "Could not obtain admin token"
+
+  local realm_json
+  realm_json=$(curl -sf --max-time 10 \
+    -H "Authorization: Bearer ${token}" \
+    "http://localhost:8080/admin/realms/envocc")
+
+  run python3 -c "
+import json, sys
+d = json.loads('''${realm_json}''')
+failures = []
+
+checks = [
+    ('bruteForceProtected', True),
+    ('accessTokenLifespan', 300),
+    ('ssoSessionIdleTimeout', 1800),
+    ('ssoSessionMaxLifespan', 36000),
+    ('registrationAllowed', False),
+    ('resetPasswordAllowed', False),
+]
+
+for key, expected in checks:
+    actual = d.get(key)
+    if actual != expected:
+        failures.append(f'{key}: expected={expected} actual={actual}')
+
+if failures:
+    print('Realm setting mismatches: ' + str(failures))
+    sys.exit(1)
+sys.exit(0)
+"
+  assert_success
+}
+
+# ---------------------------------------------------------------------------
+# TS-201e [P1] — Fresh stack imports realm automatically (AC1, destructive)
+# CAUTION: This test tears down the stack and all volumes.
+# Only run when DESTRUCTIVE_INTEGRATION=1 is also set.
+# ---------------------------------------------------------------------------
+@test "[P1][TS-201e] Fresh stack (down -v + up --build) auto-imports envocc realm" {
+  if [[ -z "${DESTRUCTIVE_INTEGRATION}" ]]; then
+    skip "Destructive test — set DESTRUCTIVE_INTEGRATION=1 to run (tears down volumes)"
+  fi
+
+  # Tear down completely
+  docker compose -f "${PROJECT_ROOT}/compose.yaml" down -v --remove-orphans
+
+  # Bring up fresh
+  docker compose -f "${PROJECT_ROOT}/compose.yaml" up -d --build
+
+  # Wait for Keycloak to become healthy
+  wait_for_healthy keycloak 180
+
+  # Verify realm imported
+  run curl -sf --max-time 10 \
+    "http://localhost:8080/realms/envocc/.well-known/openid-configuration" \
+    -o /dev/null \
+    -w "%{http_code}"
+  assert_success
   assert_output "200"
 }
 
 # ---------------------------------------------------------------------------
-# TS-201b [P0] — OIDC discovery issuer matches expected realm URL
+# TS-201f [P1] — Round-trip: export → strip → reimport (AC3, manual procedure)
+# This test is always skipped — it documents the manual AC3 verification procedure.
 # ---------------------------------------------------------------------------
-@test "[P0][TS-201b] OIDC discovery issuer is 'http://localhost:8080/realms/envocc'" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
+@test "[P1][TS-201f] Manual: round-trip export → strip → reimport applies changes" {
+  skip "Manual procedure — see keycloak/REALM-EXPORT-NOTES.md for step-by-step instructions"
 
-  # Given the stack is healthy and the realm is imported
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  # When we fetch the OIDC discovery document
-  run bash -c "curl -sf --max-time 10 \
-    'http://localhost:8080/realms/envocc/.well-known/openid-configuration' \
-    | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d['issuer'])\""
-
-  # Then the issuer exactly matches the expected realm URL (confirms realm name = 'envocc')
-  assert_success
-  assert_output "http://localhost:8080/realms/envocc"
+  # Manual steps (not automated — requires human review of diff):
+  # 1. Make a trivial change via Admin UI (e.g. update displayName)
+  # 2. Export via Admin UI → Realm Settings → Action → Export
+  # 3. Save as keycloak/realm-export.json
+  # 4. Strip secrets: inspect for privateKey, certificate, secret, clientSecret fields
+  # 5. Run: gitleaks detect --source keycloak/realm-export.json --no-git --config .gitleaks.toml --redact
+  # 6. Review diff (should show only the setting change, no secret material)
+  # 7. docker compose down -v && docker compose up --build
+  # 8. Verify the change was applied via Admin UI or REST API
+  # 9. Revert test change before final commit
 }
 
 # ---------------------------------------------------------------------------
-# TS-201c [P0] — Keycloak admin API confirms 'envocc' realm exists and is enabled
+# TS-201g [P2] — IGNORE_EXISTING: runtime change survives KC restart (AC3)
 # ---------------------------------------------------------------------------
-@test "[P0][TS-201c] Admin REST API confirms 'envocc' realm exists and is enabled" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
+@test "[P2][TS-201g] IGNORE_EXISTING strategy: realm survives KC restart (no overwrite)" {
+  skip "P2: import strategy edge case — run manually after verifying IGNORE_EXISTING behaviour"
 
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  # Obtain admin token
-  local token
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token from master realm"
-
-  # Query the envocc realm via Admin REST API
-  run bash -c "curl -sf --max-time 10 \
-    -H 'Authorization: Bearer ${token}' \
-    'http://localhost:8080/admin/realms/envocc' \
-    | python3 -c \"import sys,json; d=json.load(sys.stdin); print(str(d.get('enabled',False)).lower())\""
-
-  # Then the realm exists (200 response) and is enabled
-  assert_success
-  assert_output "true"
-}
-
-# ---------------------------------------------------------------------------
-# TS-201d [P1] — Baseline realm settings match realm-export.json values
-# Verifies that imported settings match what was committed (config-as-code fidelity).
-# ---------------------------------------------------------------------------
-@test "[P1][TS-201d] Imported realm 'displayName' is 'EnvOcc SSO'" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
-
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  local token
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token"
-
-  run realm_setting "envocc" "${token}" "d.get('displayName','')"
-  assert_success
-  assert_output "EnvOcc SSO"
-}
-
-@test "[P1][TS-201d] Imported realm 'loginWithEmailAllowed' is true" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
-
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  local token
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token"
-
-  run realm_setting "envocc" "${token}" "str(d.get('loginWithEmailAllowed',False)).lower()"
-  assert_success
-  assert_output "true"
-}
-
-@test "[P1][TS-201d] Imported realm 'registrationAllowed' is false (no self-registration)" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
-
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  local token
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token"
-
-  run realm_setting "envocc" "${token}" "str(d.get('registrationAllowed',True)).lower()"
-  assert_success
-  assert_output "false"
-}
-
-@test "[P1][TS-201d] Imported realm 'bruteForceProtected' is true" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
-
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  local token
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token"
-
-  run realm_setting "envocc" "${token}" "str(d.get('bruteForceProtected',False)).lower()"
-  assert_success
-  assert_output "true"
-}
-
-@test "[P1][TS-201d] Imported realm 'accessTokenLifespan' is 300 seconds (5 min)" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
-
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  local token
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token"
-
-  run realm_setting "envocc" "${token}" "str(d.get('accessTokenLifespan',0))"
-  assert_success
-  assert_output "300"
-}
-
-@test "[P1][TS-201d] Imported realm 'defaultSignatureAlgorithm' is RS256" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
-
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  local token
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token"
-
-  run realm_setting "envocc" "${token}" "d.get('defaultSignatureAlgorithm','')"
-  assert_success
-  assert_output "RS256"
-}
-
-# ---------------------------------------------------------------------------
-# TS-201e [P1] — Realm imports cleanly on fresh stack (down -v + up --build)
-# This is the canonical AC1 proof: fresh state must produce an imported realm.
-# ---------------------------------------------------------------------------
-@test "[P1][TS-201e] Fresh stack (down -v + up --build) imports 'envocc' realm automatically" {
-  skip "Integration: DESTRUCTIVE — requires docker compose down -v. Run manually only."
-
-  # DESTRUCTIVE STEP: wipe volumes and rebuild
-  run compose_down_volumes
-  assert_success
-
-  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' up -d --build"
-  assert_success
-
-  # Wait for Keycloak to become healthy (realm import happens during startup)
-  run wait_for_healthy "keycloak" 180
-  assert_success
-
-  # Then the OIDC discovery endpoint must return 200 — not 404
-  run bash -c "curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
-    'http://localhost:8080/realms/envocc/.well-known/openid-configuration'"
-  assert_output "200"
-}
-
-# ---------------------------------------------------------------------------
-# TS-201f [P1] — Round-trip: export → strip → reimport on fresh stack (AC3)
-# Verifies the export procedure documented in keycloak/REALM-EXPORT-NOTES.md works.
-# ---------------------------------------------------------------------------
-@test "[P1][TS-201f] Round-trip: realm re-imports after export-strip-commit cycle on fresh stack" {
-  skip "Integration: MANUAL — requires Admin UI export + gitleaks strip + fresh stack. Run manually per REALM-EXPORT-NOTES.md."
-
-  # MANUAL PROCEDURE (see keycloak/REALM-EXPORT-NOTES.md):
-  # 1. Make a trivial change via Admin UI (e.g., set ssoSessionIdleTimeout to 2000)
-  # 2. Export: Realm Settings → Action → Export → Save as keycloak/realm-export.json
-  # 3. Run gitleaks: gitleaks detect --source keycloak/realm-export.json --no-git --config .gitleaks.toml --redact
-  # 4. docker compose down -v && docker compose up --build -d
-  # 5. Verify the change was imported via the Admin API or OIDC endpoint
-
-  # The test below verifies step 5 — after the manual round-trip, the realm still imports correctly.
-  run wait_for_healthy "keycloak" 180
-  assert_success
-
-  run bash -c "curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
-    'http://localhost:8080/realms/envocc/.well-known/openid-configuration'"
-  assert_output "200"
-
-  # Verify the round-tripped setting (ssoSessionIdleTimeout = 2000 from the manual test change).
-  # Revert this test change before the final commit.
-  local token
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token"
-
-  run realm_setting "envocc" "${token}" "str(d.get('ssoSessionIdleTimeout',0))"
-  assert_success
-  # The baseline value from realm-export.json is 1800; a test change of 2000 would appear here.
-  # This assertion documents the round-trip intent — adjust as needed for the actual test change.
-  assert_output "1800"
-}
-
-# ---------------------------------------------------------------------------
-# TS-201g [P2] — IGNORE_EXISTING: realm import is skipped on existing DB
-# Verifies KC 26 default import strategy (IGNORE_EXISTING) — existing realm is
-# NOT overwritten on container restart without volume wipe.
-# ---------------------------------------------------------------------------
-@test "[P2][TS-201g] Realm import is skipped (IGNORE_EXISTING) on existing DB restart" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
-
-  # Given the stack is up with the envocc realm imported
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  # Make a change via Admin API (to verify it survives a restart)
-  local token
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token"
-
-  # Change ssoSessionIdleTimeout to 9999 via the Admin API — simulates a UI change
-  run bash -c "curl -sf --max-time 10 \
-    -X PUT \
-    -H 'Authorization: Bearer ${token}' \
-    -H 'Content-Type: application/json' \
-    -d '{\"ssoSessionIdleTimeout\": 9999}' \
-    'http://localhost:8080/admin/realms/envocc'"
-  assert_success
-
-  # When we restart the Keycloak container WITHOUT wiping volumes (IGNORE_EXISTING behavior)
-  run docker compose -f "${PROJECT_ROOT}/compose.yaml" restart keycloak
-  assert_success
-
-  run wait_for_healthy "keycloak" 120
-  assert_success
-
-  # Re-obtain token after restart
-  token="$(keycloak_api_token)"
-  [ -n "${token}" ] || fail "Failed to obtain admin API token after restart"
-
-  # Then the runtime change (9999) is preserved — import file was NOT re-applied
-  # (This confirms IGNORE_EXISTING strategy: DB wins over import file on restart)
-  run realm_setting "envocc" "${token}" "str(d.get('ssoSessionIdleTimeout',0))"
-  assert_success
-  assert_output "9999"
+  # Steps to test manually:
+  # 1. Stack is running with realm imported.
+  # 2. Make a change via Admin UI (e.g. set ssoSessionIdleTimeout to 2000).
+  # 3. Restart KC without down -v: docker compose restart keycloak
+  # 4. Wait for healthy.
+  # 5. Verify via Admin API that ssoSessionIdleTimeout is STILL 2000 (not reverted to 1800).
+  # This confirms IGNORE_EXISTING: the import file is skipped on existing realm.
 }

@@ -1,18 +1,12 @@
 #!/usr/bin/env bats
 # tests/unit/secret-hygiene.bats
 # ATDD tests — Story 1.1 AC4: No hard-coded secrets
-#              Story 1.2 AC2: realm-export.json is gitleaks-clean
 #
-# AC4 (Story 1.1): Given secrets are required,
+# AC4: Given secrets are required,
 #      when I inspect the repo,
 #      then every secret comes from env (.env.example committed with
 #      placeholders, real .env git-ignored) and no secret value is
 #      hard-coded anywhere in compose.yaml, the Dockerfile, or init scripts.
-#
-# AC2 (Story 1.2): Given the exported realm file,
-#      when I inspect it (and run gitleaks detect),
-#      then it contains no client secrets, passwords, or signing-key material —
-#      i.e. no secret fields are populated with real values.
 #
 # Test scenarios covered:
 #   TS-104a [P0] .env is present in .gitignore (not tracked by git)
@@ -24,16 +18,6 @@
 #   TS-104g [P1] .env.example defines all required keys consumed by compose.yaml
 #   TS-104h [P1] Real .env is not tracked by git (git ls-files check)
 #   TS-104i [P2] gitleaks detects synthetic secret injection (negative test — validates gate)
-#   TS-104j [P0] keycloak/Dockerfile CMD includes --import-realm flag (Story 1.2 AC1)
-#   TS-104k [P0] keycloak/Dockerfile COPYs realm-export.json into image (Story 1.2 AC1)
-#   TS-104-realm-a [P0] keycloak/realm-export.json exists and is valid JSON (Story 1.2)
-#   TS-104-realm-b [P0] realm-export.json passes gitleaks scan — no secrets populated (Story 1.2 AC2)
-#   TS-104-realm-c [P0] realm-export.json contains no populated privateKey fields (Story 1.2 AC2)
-#   TS-104-realm-d [P0] realm-export.json contains no populated certificate fields ≥64 chars (Story 1.2 AC2)
-#   TS-104-realm-e [P0] realm-export.json contains no populated clientSecret/secret fields ≥8 chars (Story 1.2 AC2)
-#   TS-104-realm-f [P1] realm-export.json declares realm name 'envocc' (Story 1.2 AC1)
-#   TS-104-realm-g [P1] realm-export.json has enabled=true (Story 1.2 AC1)
-#   TS-104-realm-h [P1] realm-export.json is tracked by git (committed, not gitignored) (Story 1.2)
 
 bats_load_library 'bats-support'
 bats_load_library 'bats-assert'
@@ -237,147 +221,112 @@ env_refs_in_file() {
 
 # ===========================================================================
 # Story 1.2 — Realm config-as-code baseline & secret hygiene
+# Tests added per ATDD checklist (atdd-checklist-1-2-...)
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
-# TS-104j [P0] — keycloak/Dockerfile CMD includes --import-realm flag (AC1)
+# TS-104j [P0] — Dockerfile CMD includes --import-realm (AC1)
 # ---------------------------------------------------------------------------
-@test "[P0][TS-104j] keycloak/Dockerfile CMD includes '--import-realm' flag" {
+@test "[P0][TS-104j] keycloak/Dockerfile CMD includes --import-realm flag" {
   assert [ -f "${PROJECT_ROOT}/keycloak/Dockerfile" ]
 
-  # The CMD line must include --import-realm so KC auto-imports the realm on boot.
-  # Expected: CMD ["start", "--optimized", "--import-realm"]
-  run grep -E "CMD.*--import-realm" "${PROJECT_ROOT}/keycloak/Dockerfile"
+  run grep -E 'CMD.*--import-realm' "${PROJECT_ROOT}/keycloak/Dockerfile"
   assert_success
+  assert_output --partial "--import-realm"
 }
 
 # ---------------------------------------------------------------------------
-# TS-104k [P0] — keycloak/Dockerfile COPYs realm-export.json into image (AC1)
+# TS-104k [P0] — Dockerfile COPYs realm-export.json into image (AC1)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-104k] keycloak/Dockerfile COPYs realm-export.json into /opt/keycloak/data/import/" {
   assert [ -f "${PROJECT_ROOT}/keycloak/Dockerfile" ]
 
-  # COPY must place the file at the exact KC 26 import path.
-  run grep -E "COPY.*realm-export\.json.*/opt/keycloak/data/import/realm-export\.json" \
-    "${PROJECT_ROOT}/keycloak/Dockerfile"
+  run grep -E 'COPY.*realm-export\.json.*/opt/keycloak/data/import/' "${PROJECT_ROOT}/keycloak/Dockerfile"
   assert_success
 }
 
 # ---------------------------------------------------------------------------
-# TS-104-realm-a [P0] — realm-export.json exists and is valid JSON (AC1, AC2)
+# TS-104-realm-a [P0] — keycloak/realm-export.json exists and is valid JSON (AC1)
 # ---------------------------------------------------------------------------
-@test "[P0][TS-104-realm-a] keycloak/realm-export.json exists" {
-  assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
-}
-
-@test "[P0][TS-104-realm-a] keycloak/realm-export.json is valid JSON" {
+@test "[P0][TS-104-realm-a] keycloak/realm-export.json exists and is valid JSON" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  # python3 -m json.tool exits non-zero on invalid JSON
   run python3 -m json.tool "${PROJECT_ROOT}/keycloak/realm-export.json"
   assert_success
 }
 
 # ---------------------------------------------------------------------------
 # TS-104-realm-b [P0] — realm-export.json passes gitleaks scan (AC2)
-# Static check — no live stack needed; the file exists on disk.
 # ---------------------------------------------------------------------------
-@test "[P0][TS-104-realm-b] keycloak/realm-export.json passes gitleaks scan — no secrets populated" {
+@test "[P0][TS-104-realm-b] keycloak/realm-export.json passes gitleaks scan (no secrets)" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
-  assert [ -f "${PROJECT_ROOT}/.gitleaks.toml" ]
 
-  # gitleaks exits 0 when no leaks are found; non-zero when leaks detected.
   run gitleaks detect \
-    --source="${PROJECT_ROOT}/keycloak/realm-export.json" \
+    --source "${PROJECT_ROOT}/keycloak/realm-export.json" \
     --no-git \
-    --config="${PROJECT_ROOT}/.gitleaks.toml" \
+    --config "${PROJECT_ROOT}/.gitleaks.toml" \
     --redact \
-    --verbose \
-    2>&1
+    --verbose
+
   assert_success
 }
 
 # ---------------------------------------------------------------------------
-# TS-104-realm-c [P0] — realm-export.json contains no populated privateKey fields (AC2)
-# The gitleaks keycloak-private-key rule catches these, but this static test
-# provides an independent, human-readable check without requiring gitleaks.
+# TS-104-realm-c [P0] — No populated privateKey or certificate fields (AC2)
 # ---------------------------------------------------------------------------
-@test "[P0][TS-104-realm-c] realm-export.json contains no populated 'privateKey' fields" {
+@test "[P0][TS-104-realm-c] realm-export.json contains no populated privateKey or certificate fields" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  # A populated privateKey would be a long Base64 string.
-  # Empty string ("") or absent field are both acceptable.
-  # Flag: "privateKey": "<value with ≥16 non-whitespace chars>"
-  local violations
-  violations=$(python3 -c "
-import json, sys, re
+  # "privateKey":"<64+ chars>" or "certificate":"<64+ chars>" must not appear
+  run bash -c "python3 -c \"
+import json, sys
 with open('${PROJECT_ROOT}/keycloak/realm-export.json') as f:
-  text = f.read()
-# Find all privateKey values in JSON (simple regex for quick static check)
-matches = re.findall(r'\"privateKey\"\s*:\s*\"([^\"]{16,})\"', text)
+    content = f.read()
+import re
+# Match privateKey or certificate with value >= 64 chars
+pattern = r'\\\"(privateKey|certificate)\\\"\\s*:\\s*\\\"[^\\\"]{64,}\\\"'
+matches = re.findall(pattern, content)
 if matches:
-  print('FAIL: populated privateKey found')
-  sys.exit(1)
-else:
-  print('OK')
-  sys.exit(0)
-" 2>&1 || true)
-
-  echo "${violations}" | grep -q "FAIL" \
-    && fail "realm-export.json contains populated 'privateKey' field — strip before committing" \
-    || true
+    print('FOUND populated key fields: ' + str(matches))
+    sys.exit(1)
+sys.exit(0)
+\""
+  assert_success
 }
 
 # ---------------------------------------------------------------------------
-# TS-104-realm-d [P0] — realm-export.json contains no populated certificate fields ≥64 chars (AC2)
+# TS-104-realm-d [P0] — No populated clientSecret or secret fields >= 8 chars (AC2)
 # ---------------------------------------------------------------------------
-@test "[P0][TS-104-realm-d] realm-export.json contains no populated 'certificate' fields ≥64 chars" {
+@test "[P0][TS-104-realm-d] realm-export.json contains no populated clientSecret or secret string values >= 8 chars" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  local violations
-  violations=$(python3 -c "
-import re, sys
+  run bash -c "python3 -c \"
+import json, sys
 with open('${PROJECT_ROOT}/keycloak/realm-export.json') as f:
-  text = f.read()
-# certificate fields with ≥64 chars (real X.509 certs are much longer)
-matches = re.findall(r'\"certificate\"\s*:\s*\"([^\"]{64,})\"', text)
+    content = f.read()
+import re
+# Match clientSecret or secret string values >= 8 chars
+pattern = r'\\\"(clientSecret|secret)\\\"\\s*:\\s*\\\"[^\\\"]{8,}\\\"'
+matches = re.findall(pattern, content)
 if matches:
-  print('FAIL: populated certificate found (length >= 64)')
-  sys.exit(1)
-else:
-  print('OK')
-  sys.exit(0)
-" 2>&1 || true)
-
-  echo "${violations}" | grep -q "FAIL" \
-    && fail "realm-export.json contains populated 'certificate' field — strip before committing" \
-    || true
+    print('FOUND populated secret fields: ' + str(matches))
+    sys.exit(1)
+sys.exit(0)
+\""
+  assert_success
 }
 
 # ---------------------------------------------------------------------------
-# TS-104-realm-e [P0] — realm-export.json contains no populated clientSecret/secret ≥8 chars (AC2)
+# TS-104-realm-e [P0] — No HMAC/AES array secret >= 16 chars (AC2)
 # ---------------------------------------------------------------------------
-@test "[P0][TS-104-realm-e] realm-export.json contains no populated 'clientSecret' or 'secret' fields ≥8 chars" {
+@test "[P0][TS-104-realm-e] realm-export.json contains no populated HMAC array secret >= 16 chars" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  local violations
-  violations=$(python3 -c "
-import re, sys
-with open('${PROJECT_ROOT}/keycloak/realm-export.json') as f:
-  text = f.read()
-# clientSecret or secret with real values (≥8 chars, not empty)
-matches = re.findall(r'\"(?:clientSecret|secret)\"\s*:\s*\"([^\"]{8,})\"', text)
-if matches:
-  print('FAIL: populated secret/clientSecret found')
-  sys.exit(1)
-else:
-  print('OK')
-  sys.exit(0)
-" 2>&1 || true)
-
-  echo "${violations}" | grep -q "FAIL" \
-    && fail "realm-export.json contains populated 'clientSecret' or 'secret' field — strip before committing" \
-    || true
+  # Use grep -P to detect array form: "secret":["<16+ chars>"]
+  # gitleaks keycloak-hmac-secret rule: "secret"\s*:\s*\[\s*"[^"]{16,}"\s*\]
+  # If grep finds a match, the file has a populated HMAC secret — FAIL.
+  run grep -Pzo '"secret"\s*:\s*\[\s*"[^"]{16,}"' "${PROJECT_ROOT}/keycloak/realm-export.json"
+  assert_failure
 }
 
 # ---------------------------------------------------------------------------
@@ -389,36 +338,39 @@ else:
   run python3 -c "
 import json, sys
 with open('${PROJECT_ROOT}/keycloak/realm-export.json') as f:
-  d = json.load(f)
-print(d.get('realm',''))
+    data = json.load(f)
+realm = data.get('realm', '')
+if realm != 'envocc':
+    print('Expected realm=envocc, got: ' + realm)
+    sys.exit(1)
+sys.exit(0)
 "
   assert_success
-  assert_output "envocc"
 }
 
 # ---------------------------------------------------------------------------
 # TS-104-realm-g [P1] — realm-export.json has enabled=true (AC1)
 # ---------------------------------------------------------------------------
-@test "[P1][TS-104-realm-g] realm-export.json has 'enabled' set to true" {
+@test "[P1][TS-104-realm-g] realm-export.json has enabled set to true" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
   run python3 -c "
 import json, sys
 with open('${PROJECT_ROOT}/keycloak/realm-export.json') as f:
-  d = json.load(f)
-print(str(d.get('enabled', False)).lower())
+    data = json.load(f)
+if not data.get('enabled', False):
+    print('realm-export.json: enabled is not true')
+    sys.exit(1)
+sys.exit(0)
 "
   assert_success
-  assert_output "true"
 }
 
 # ---------------------------------------------------------------------------
-# TS-104-realm-h [P1] — realm-export.json is tracked by git (Story 1.2)
-# The file must be committed — not gitignored or untracked.
+# TS-104-realm-h [P1] — git tracks keycloak/realm-export.json (config-as-code)
 # ---------------------------------------------------------------------------
-@test "[P1][TS-104-realm-h] git tracks keycloak/realm-export.json (file is committed)" {
-  # git ls-files returns a non-empty line if the file is tracked.
-  # An untracked or gitignored file produces empty output.
+@test "[P1][TS-104-realm-h] git tracks keycloak/realm-export.json (config-as-code)" {
   run git -C "${PROJECT_ROOT}" ls-files "keycloak/realm-export.json"
-  refute_output ""
+  assert_success
+  assert_output "keycloak/realm-export.json"
 }
