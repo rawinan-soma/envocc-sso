@@ -98,9 +98,13 @@ setup() {
   # when passing large JSON strings into python3 -c "..." inline scripts.
   local realm_tmpfile
   realm_tmpfile=$(mktemp)
+
+  # Guard the curl explicitly so a network/auth failure surfaces a clear message
+  # rather than an opaque JSONDecodeError from python3 on the next step.
   curl -sf --max-time 10 \
     -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc" > "${realm_tmpfile}"
+    "http://localhost:8080/admin/realms/envocc" > "${realm_tmpfile}" \
+    || { rm -f "${realm_tmpfile}"; fail "Could not fetch realm JSON from Admin API (curl exited $?)"; }
 
   run python3 - "${realm_tmpfile}" <<'PYEOF'
 import json, sys
@@ -129,8 +133,9 @@ if failures:
 sys.exit(0)
 PYEOF
 
-  rm -f "${realm_tmpfile}"
+  # Assert first, then clean up — so the temp file is available for diagnosis on failure.
   assert_success
+  rm -f "${realm_tmpfile}"
 }
 
 # ---------------------------------------------------------------------------
@@ -149,15 +154,25 @@ PYEOF
   # Bring up fresh
   docker compose -f "${PROJECT_ROOT}/compose.yaml" up -d --build
 
-  # Wait for Keycloak to become healthy
+  # Wait for Keycloak to become healthy (Docker healthcheck passes once KC is ready).
+  # KC 26 with --import-realm performs the import synchronously before the server
+  # accepts traffic, so a healthy status means import is complete.
+  # Add a brief retry loop on the realm endpoint as a belt-and-suspenders guard
+  # for environments where the healthcheck probe races the realm registration.
   wait_for_healthy keycloak 180
 
-  # Verify realm imported
-  run curl -sf --max-time 10 \
-    "http://localhost:8080/realms/envocc/.well-known/openid-configuration" \
-    -o /dev/null \
-    -w "%{http_code}"
-  assert_success
+  # Verify realm imported — retry up to 30 s to absorb any brief post-healthy lag.
+  local oidc_status="" elapsed=0
+  while [[ "${elapsed}" -lt 30 ]]; do
+    oidc_status=$(curl -sf --max-time 5 \
+      "http://localhost:8080/realms/envocc/.well-known/openid-configuration" \
+      -o /dev/null -w "%{http_code}" 2>/dev/null || echo "000")
+    [[ "${oidc_status}" == "200" ]] && break
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  run echo "${oidc_status}"
   assert_output "200"
 }
 

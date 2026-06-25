@@ -67,21 +67,27 @@ _env_value() {
 }
 
 get_admin_token() {
-  local admin_user admin_pass
+  local admin_user admin_pass response
   admin_user=$(_env_value "KC_BOOTSTRAP_ADMIN_USERNAME")
   admin_pass=$(_env_value "KC_BOOTSTRAP_ADMIN_PASSWORD")
 
-  curl -sf --max-time 15 \
+  # Capture curl output explicitly so we can check curl's exit code before
+  # passing the body to python3. This avoids an opaque JSONDecodeError when
+  # curl fails (timeout, HTTP 4xx/5xx) and the pipe delivers empty stdin.
+  response=$(curl -sf --max-time 15 \
     -d "client_id=admin-cli" \
     -d "username=${admin_user}" \
     -d "password=${admin_pass}" \
     -d "grant_type=password" \
-    "http://localhost:8080/realms/master/protocol/openid-connect/token" \
-    | python3 -c "
+    "http://localhost:8080/realms/master/protocol/openid-connect/token") \
+    || { echo "get_admin_token: curl failed (exit $?) — is Keycloak running?" >&2; return 1; }
+
+  echo "${response}" | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 t = d.get('access_token', '')
 if not t:
+    print('get_admin_token: no access_token in response (bad credentials?)', file=sys.stderr)
     sys.exit(1)
 print(t)
 "

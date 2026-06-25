@@ -359,16 +359,18 @@ PYEOF
 @test "[P1][TS-104-realm-f] realm-export.json declares realm name 'envocc'" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  run python3 -c "
+  # Pass file path as sys.argv[1] (consistent with TS-104-realm-c/d/e) so the
+  # Python script is not sensitive to special characters in PROJECT_ROOT.
+  run python3 - "${PROJECT_ROOT}/keycloak/realm-export.json" <<'PYEOF'
 import json, sys
-with open('${PROJECT_ROOT}/keycloak/realm-export.json') as f:
+with open(sys.argv[1]) as f:
     data = json.load(f)
 realm = data.get('realm', '')
 if realm != 'envocc':
     print('Expected realm=envocc, got: ' + realm)
     sys.exit(1)
 sys.exit(0)
-"
+PYEOF
   assert_success
 }
 
@@ -378,15 +380,17 @@ sys.exit(0)
 @test "[P1][TS-104-realm-g] realm-export.json has enabled set to true" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  run python3 -c "
+  # Pass file path as sys.argv[1] (consistent with TS-104-realm-c/d/e) so the
+  # Python script is not sensitive to special characters in PROJECT_ROOT.
+  run python3 - "${PROJECT_ROOT}/keycloak/realm-export.json" <<'PYEOF'
 import json, sys
-with open('${PROJECT_ROOT}/keycloak/realm-export.json') as f:
+with open(sys.argv[1]) as f:
     data = json.load(f)
 if not data.get('enabled', False):
     print('realm-export.json: enabled is not true')
     sys.exit(1)
 sys.exit(0)
-"
+PYEOF
   assert_success
 }
 
