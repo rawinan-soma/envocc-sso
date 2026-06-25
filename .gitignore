@@ -12,52 +12,8 @@ secrets/
 *.crt
 *.pfx
 
-# Keycloak admin credentials master key
-admin/config/master.key
-
-# Kamal secrets
-.kamal/secrets
-
 # Full (un-stripped) realm exports — only stripped export is committed
 *.full-export.json
-
-# ─── Ruby on Rails ───────────────────────────────────────────────────────────
-*.gem
-*.rbc
-/.config
-/coverage/
-/InstalledFiles
-/pkg/
-/spec/reports/
-/spec/examples.txt
-/test/tmp/
-/test/version_tmp/
-/tmp/
-
-# Rails specific
-log/
-tmp/
-storage/
-/public/system
-/public/uploads
-/vendor/bundle
-/vendor/cache
-
-# Rails credentials (project-specific key)
-config/credentials/*.key
-config/master.key
-config/credentials/production.key
-config/credentials/staging.key
-
-# Database
-db/*.sqlite3
-db/*.sqlite3-journal
-db/*.sqlite3-shm
-db/*.sqlite3-wal
-
-# bundler
-.bundle/
-Gemfile.lock
 
 # ─── Keycloak / Docker ───────────────────────────────────────────────────────
 keycloak/data/
@@ -100,6 +56,9 @@ ehthumbs.db
 *.swp
 *.swo
 *~
+
+# ─── Test libraries (vendored via git clone, not committed) ──────────────────
+tests/lib/
 
 # ─── Claude Code internal ─────────────────────────────────────────────────────
 # (keep .claude/ tracked — it holds project settings, not secrets)
