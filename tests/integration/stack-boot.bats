@@ -23,18 +23,9 @@ bats_load_library 'bats-assert'
 load '../helpers/common'
 
 # ---------------------------------------------------------------------------
-# Suite setup / teardown
+# Suite setup: handled by tests/integration/setup_suite.bash (BATS 1.5+ companion).
+# Per-test setup/teardown: no-ops for infra tests.
 # ---------------------------------------------------------------------------
-
-setup_suite() {
-  env_setup
-}
-
-teardown_suite() {
-  # Leave the stack running for subsequent tests in the suite;
-  # a dedicated cleanup job or manual `docker compose down -v` handles teardown.
-  :
-}
 
 setup() {
   : # per-test setup (noop for most infra tests)
@@ -130,10 +121,18 @@ teardown() {
 @test "[P1][TS-101d] Keycloak container waits for postgres healthy before starting" {
   skip "Integration: requires running stack — run manually after docker compose up --build"
 
-  # When we inspect the compose config for depends_on
-  run docker compose -f "${PROJECT_ROOT}/compose.yaml" config
-  assert_success
-
-  # Then the keycloak service config shows depends_on postgres with condition service_healthy
-  assert_output --partial "condition: service_healthy"
+  # Verify via compose config that keycloak's depends_on specifies postgres with service_healthy.
+  # We parse the config output to assert the keycloak service block specifically names postgres
+  # and condition: service_healthy — not just any service with that condition.
+  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config \
+    | python3 -c \"
+import sys, yaml
+cfg = yaml.safe_load(sys.stdin)
+svc = cfg.get('services', {}).get('keycloak', {})
+deps = svc.get('depends_on', {})
+pg = deps.get('postgres', {}) if isinstance(deps, dict) else {}
+cond = pg.get('condition', '')
+print(cond)
+\""
+  assert_output "service_healthy"
 }

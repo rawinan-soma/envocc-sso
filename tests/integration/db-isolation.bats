@@ -55,9 +55,7 @@ psql_as() {
     psql -U "${role}" -d "${dbname}" -c "${sql}" -t -A 2>&1
 }
 
-setup_suite() {
-  env_setup
-}
+# Suite setup: handled by tests/integration/setup_suite.bash (BATS 1.5+ companion).
 
 # ---------------------------------------------------------------------------
 # TS-102a [P0] — Both databases exist
@@ -114,6 +112,31 @@ setup_suite() {
     "SELECT COUNT(DISTINCT rolname) FROM pg_catalog.pg_roles WHERE rolname IN ('keycloak','adminapp');"
   assert_success
   assert_output --partial "2"
+}
+
+# ---------------------------------------------------------------------------
+# TS-102b2 [P0] — Each database is owned by its designated role (least-privilege)
+# ---------------------------------------------------------------------------
+@test "[P0][TS-102b2] 'keycloak' database is owned by role 'keycloak'" {
+  skip "Integration: requires running postgres container — run manually after docker compose up"
+
+  run wait_for_healthy "postgres" 60
+  assert_success
+
+  # pg_database.datdba is the OID of the owning role; join with pg_roles to get rolname
+  run psql_as "postgres" "postgres" \
+    "SELECT r.rolname FROM pg_catalog.pg_database d JOIN pg_catalog.pg_roles r ON d.datdba = r.oid WHERE d.datname = 'keycloak';"
+  assert_success
+  assert_output --partial "keycloak"
+}
+
+@test "[P0][TS-102b2] 'admin' database is owned by role 'adminapp'" {
+  skip "Integration: requires running postgres container — run manually after docker compose up"
+
+  run psql_as "postgres" "postgres" \
+    "SELECT r.rolname FROM pg_catalog.pg_database d JOIN pg_catalog.pg_roles r ON d.datdba = r.oid WHERE d.datname = 'admin';"
+  assert_success
+  assert_output --partial "adminapp"
 }
 
 # ---------------------------------------------------------------------------

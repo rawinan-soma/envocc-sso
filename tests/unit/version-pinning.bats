@@ -72,32 +72,45 @@ load '../helpers/common'
 }
 
 # ---------------------------------------------------------------------------
+# TS-103d2 [P1] — postgres image version tag is exact (not a floating tag)
+# ---------------------------------------------------------------------------
+@test "[P1][TS-103d2] compose.yaml postgres image tag is an exact version (not floating)" {
+  assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
+
+  # Must contain an explicit version tag like postgres:17.5 (not just postgres: or postgres:latest)
+  # Pattern: postgres:<MAJOR>.<MINOR> (optionally .<PATCH>) followed by @sha256
+  run grep -E "postgres:[0-9]+\.[0-9]+(\.[0-9]+)?@sha256:" "${PROJECT_ROOT}/compose.yaml"
+  assert_success
+}
+
+# ---------------------------------------------------------------------------
 # TS-103e [P2] — Runtime: pulled image digest matches compose pin
 #   (Requires stack to be running; skipped in offline/unit-only runs)
 # ---------------------------------------------------------------------------
 @test "[P2][TS-103e] Runtime postgres image digest matches @sha256: pin in compose.yaml" {
   skip "P2 runtime test: requires running stack — run manually via Task 5"
 
-  # Extract expected digest from compose.yaml
+  # Extract expected digest from compose.yaml (first sha256 line, which is postgres)
   local expected_digest
   expected_digest=$(grep -oE "sha256:[a-f0-9]{64}" "${PROJECT_ROOT}/compose.yaml" \
     | head -1)
 
   [ -n "${expected_digest}" ] || fail "No sha256 digest found in compose.yaml for postgres"
 
-  # Get actual image digest from running container
-  local actual_digest
-  actual_digest=$(docker compose -f "${PROJECT_ROOT}/compose.yaml" \
-    exec -T postgres \
-    bash -c "cat /etc/os-release" 2>/dev/null || true)
+  # Get the running container's image ID via docker compose ps --format json
+  # then inspect the image to retrieve its repo digest
+  local container_name
+  container_name=$(docker compose -f "${PROJECT_ROOT}/compose.yaml" ps --format json 2>/dev/null \
+    | python3 -c "import sys,json; data=[json.loads(l) for l in sys.stdin if l.strip()]; \
+      pg=[d for d in data if 'postgres' in d.get('Service','')]; \
+      print(pg[0]['Image'] if pg else '')" 2>/dev/null || true)
 
-  # Compare via docker inspect on the image ID
-  local image_id
-  image_id=$(docker compose -f "${PROJECT_ROOT}/compose.yaml" images --format json postgres 2>/dev/null \
-    | grep -o '"ID":"[^"]*"' | head -1 | sed 's/"ID":"//;s/"//')
+  [ -n "${container_name}" ] || fail "Could not determine postgres image name from running containers"
 
-  run docker inspect --format '{{index .RepoDigests 0}}' "${image_id}"
-  assert_output --partial "${expected_digest}"
+  # docker inspect returns RepoDigests as an array; assert the pinned digest is present
+  run bash -c "docker inspect --format '{{range .RepoDigests}}{{.}}{{\"\\n\"}}{{end}}' '${container_name}' \
+    | grep -q '${expected_digest}' && echo MATCH || echo MISMATCH"
+  assert_output "MATCH"
 }
 
 # ---------------------------------------------------------------------------

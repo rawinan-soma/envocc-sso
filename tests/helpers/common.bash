@@ -8,7 +8,9 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # ---------------------------------------------------------------------------
 # wait_for_healthy <service> <timeout_seconds>
-# Poll "docker compose ps" until <service> status contains "healthy".
+# Poll "docker compose ps <service>" until the output contains "(healthy)".
+# Uses the plain-text compose ps output which reliably shows "(healthy)" once
+# the container's healthcheck has passed.
 # ---------------------------------------------------------------------------
 wait_for_healthy() {
   local service="${1}"
@@ -16,15 +18,8 @@ wait_for_healthy() {
   local elapsed=0
 
   while [[ "${elapsed}" -lt "${timeout}" ]]; do
-    local status
-    status=$(docker compose -f "${PROJECT_ROOT}/compose.yaml" ps --format json 2>/dev/null \
-      | grep -o '"Health":"[^"]*"' \
-      | head -1 \
-      | sed 's/"Health":"//;s/"//')
-
-    # Fallback: use plain text output
     if docker compose -f "${PROJECT_ROOT}/compose.yaml" ps "${service}" 2>/dev/null \
-        | grep -q "healthy"; then
+        | grep -q "(healthy)"; then
       return 0
     fi
 
@@ -33,6 +28,7 @@ wait_for_healthy() {
   done
 
   echo "TIMEOUT: ${service} did not reach healthy within ${timeout}s" >&2
+  docker compose -f "${PROJECT_ROOT}/compose.yaml" ps 2>/dev/null >&2 || true
   return 1
 }
 
