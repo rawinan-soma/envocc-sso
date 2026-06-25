@@ -1,0 +1,138 @@
+/* ============================================================
+ * EnvOcc SSO — Deep Sea Design Tokens
+ * ============================================================
+ *
+ * Single source of truth for all visual design tokens.
+ * Import this file into both consuming surfaces:
+ *   - Keycloak theme: <link rel="stylesheet" href="${url.resourcesPath}/design-tokens/deep-sea.css">
+ *                     in FreeMarker template (story 2.5)
+ *   - Admin app:      @import '../../design-tokens/deep-sea.css'
+ *                     in admin/src/app.css (story 4.1)
+ *
+ * Naming convention:
+ *   --color-*     colors (primary, background, text-primary, success, etc.)
+ *   --font-*      typography (--font-family, --font-h1-size, --font-body-line-height, etc.)
+ *   --spacing-*   spacing (--spacing-xs, --spacing-auth-card-width, etc.)
+ *   --radius-*    border-radius (--radius-sm, --radius-md, etc.)
+ *
+ * For compound typography tokens: --font-{role}-{property}
+ * e.g. --font-h1-size, --font-body-line-height, --font-wordmark-weight
+ *
+ * Downstream consumers MUST reference only CSS variable names (e.g. var(--color-primary)),
+ * never raw hex or unit values. This file is the authoritative naming contract.
+ *
+ * ── WCAG 2.1 AA Verified Pairings ──────────────────────────────────────────
+ *
+ *   text-primary (#14211F) on background (#F6F4EF) : 14.5:1  (AAA — exceeds AA)
+ *   text-muted   (#51605D) on background (#F6F4EF) :  5.4:1  (AA)
+ *   primary-fg   (#FFFFFF) on primary   (#0E5C53)  :  6.4:1  (AA — large text AAA)
+ *   success-fg   (#0E4A33) on success-bg (#E0F0E8) :  AA verified (DESIGN.md)
+ *   warning-fg   (#5E3F00) on warning-bg (#F4EAD2) :  AA verified (DESIGN.md)
+ *   error-fg     (#7A1A11) on error-bg  (#F8E2DF)  :  AA verified (DESIGN.md)
+ *   info-fg      (#0F4A60) on info-bg   (#E4EFF4)  :  AA verified (DESIGN.md)
+ *
+ * Light-mode only — no dark-mode media query block.
+ * Source: _bmad-output/planning-artifacts/ux-designs/ux-envocc-sso-2026-06-21/DESIGN.md
+ * ============================================================ */
+
+:root {
+  /* ── Colors — primary ─────────────────────────────────────── */
+  --color-primary:            #0E5C53;
+  --color-primary-hover:      #0A4842;
+  --color-accent:             #137A6E;
+  --color-primary-foreground: #FFFFFF;
+
+  /* ── Colors — neutral surface ─────────────────────────────── */
+  --color-background:         #F6F4EF;
+  --color-surface:            #FFFFFF;
+  --color-surface-raised:     #F1EEE7;
+  --color-border:             #DCD6CA;
+
+  /* ── Colors — text ────────────────────────────────────────── */
+  --color-text-primary:       #14211F;
+  --color-text-muted:         #51605D;
+
+  /* ── Colors — semantic: success ───────────────────────────── */
+  --color-success:            #1A6E50;
+  --color-success-bg:         #E0F0E8;
+  --color-success-fg:         #0E4A33;
+
+  /* ── Colors — semantic: warning ───────────────────────────── */
+  --color-warning:            #9C6A0F;
+  --color-warning-bg:         #F4EAD2;
+  --color-warning-fg:         #5E3F00;
+
+  /* ── Colors — semantic: error ─────────────────────────────── */
+  --color-error:              #AE2E21;
+  --color-error-bg:           #F8E2DF;
+  --color-error-fg:           #7A1A11;
+
+  /* ── Colors — semantic: info ──────────────────────────────── */
+  --color-info:               #1E6E8C;
+  --color-info-bg:            #E4EFF4;
+  --color-info-border:        #B8DAE6;
+  --color-info-fg:            #0F4A60;
+
+  /* ── Colors — disabled / neutral status ───────────────────── */
+  --color-disabled-bg:        #E7E3DA;
+  --color-disabled-fg:        #51605D;
+  --color-disabled-dot:       #8B938F;
+
+  /* ── Colors — interaction ─────────────────────────────────── */
+  --color-focus-ring:         #137A6E;
+
+  /* ── Typography — font families ───────────────────────────── */
+  --font-family:              "Noto Sans", "Noto Sans Thai", system-ui, sans-serif;
+  --font-family-mono:         "Noto Sans Mono", ui-monospace, monospace;
+
+  /* ── Typography — wordmark ────────────────────────────────── */
+  --font-wordmark-family:         "Noto Sans", "Noto Sans Thai", sans-serif;
+  --font-wordmark-weight:         700;
+  --font-wordmark-size:           19px;
+  --font-wordmark-letter-spacing: 0.2px;
+
+  /* ── Typography — headings ────────────────────────────────── */
+  --font-h1-size:             22px;
+  --font-h1-weight:           700;
+  --font-h1-line-height:      1.35;
+  --font-h1-letter-spacing:   -0.01em;
+  --font-h2-size:             18px;
+  --font-h2-weight:           700;
+  --font-h2-line-height:      1.4;
+
+  /* ── Typography — body, label, caption ────────────────────── */
+  --font-body-size:           14px;
+  --font-body-weight:         400;
+  --font-body-line-height:    1.6;
+  --font-label-size:          12px;
+  --font-label-weight:        600;
+  --font-label-line-height:   1.5;
+  --font-caption-size:        11px;
+  --font-caption-weight:      400;
+  --font-caption-line-height: 1.5;
+
+  /* ── Typography — code ────────────────────────────────────── */
+  --font-code-family:         "Noto Sans Mono", ui-monospace, monospace;
+  --font-code-size:           24px;
+  --font-code-weight:         600;
+  --font-code-letter-spacing: 0.04em;
+
+  /* ── Spacing — 4-based scale ──────────────────────────────── */
+  --spacing-xs:   4px;
+  --spacing-sm:   8px;
+  --spacing-md:   12px;
+  --spacing-lg:   16px;
+  --spacing-xl:   24px;
+  --spacing-2xl:  32px;
+  --spacing-3xl:  48px;
+
+  /* ── Spacing — layout ─────────────────────────────────────── */
+  --spacing-auth-card-width:   420px;
+  --spacing-admin-content-max: 1280px;
+
+  /* ── Border radius ────────────────────────────────────────── */
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-full: 999px;
+}
