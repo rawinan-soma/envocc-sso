@@ -21,6 +21,10 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Pin the default database to `postgres` so the image does not create a
+      # stray database named after POSTGRES_USER. The two real databases
+      # (keycloak, admin) are created by the init script below.
+      POSTGRES_DB: postgres
       # Pass role credentials to the init script
       KC_DB_USERNAME: ${KC_DB_USERNAME}
       KC_DB_PASSWORD: ${KC_DB_PASSWORD}
@@ -30,7 +34,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -42,9 +46,11 @@ services:
       context: ./keycloak
       dockerfile: Dockerfile
     restart: unless-stopped
-    # Explicit environment block — only the 8 vars KC actually needs.
-    # Do NOT use env_file: .env here: that would leak Postgres superuser
-    # password and admin-app DB credentials into the KC process env.
+    # Explicit environment block — only the vars KC actually needs:
+    # the 6 DB/bootstrap credentials plus 2 HTTP/hostname settings for the
+    # local HTTP-only stack. Do NOT use env_file: .env here: that would leak
+    # the Postgres superuser password and admin-app DB credentials into the
+    # KC process env.
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
@@ -64,17 +70,22 @@ services:
         condition: service_healthy
     healthcheck:
       # Health endpoint moved to management port 9000 in KC 25+.
-      # The ubi9-micro base image has no curl/wget — use bash TCP socket.
-      # Assert: HTTP 200 status line AND "status": "UP" (KC 26 JSON format)
+      # The ubi9-micro base image has no curl/wget — use a bash TCP socket.
+      # /dev/tcp is a bash builtin, so invoke bash explicitly (CMD-SHELL would
+      # run /bin/sh, which is not guaranteed to support /dev/tcp).
+      # Assert: HTTP 200 status line (reason phrase optional per RFC 7230)
+      #         AND "status": "UP" (KC 26 JSON format)
       #         AND absence of "status": "DOWN".
       test:
-        - "CMD-SHELL"
+        - "CMD"
+        - "bash"
+        - "-c"
         - >-
           exec 3<>/dev/tcp/localhost/9000 &&
           printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
           out=$$(cat <&3) &&
           exec 3>&- &&
-          echo "$$out" | grep -q '200 OK' &&
+          echo "$$out" | grep -Eq '^HTTP/[0-9.]+ 200( |$$|\r)' &&
           echo "$$out" | grep -q '"status": "UP"' &&
           ! echo "$$out" | grep -q '"status": "DOWN"'
       interval: 15s

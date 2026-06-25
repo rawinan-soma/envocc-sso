@@ -31,6 +31,16 @@ load '../helpers/common'
 # Helpers
 # ---------------------------------------------------------------------------
 
+# env_value <KEY>
+# Reads the literal value of KEY from .env WITHOUT shell-evaluating the file.
+# `source`-ing .env would mangle passwords containing ', $, \ — the exact
+# special characters TS-102g is designed to validate.
+env_value() {
+  local key="${1}"
+  # Last matching assignment wins; strip the leading "KEY=" only.
+  sed -n "s/^${key}=//p" "${PROJECT_ROOT}/.env" | tail -n 1
+}
+
 # psql_as <role> <dbname> <sql>
 # Runs SQL inside the running postgres container as the given role.
 psql_as() {
@@ -38,15 +48,11 @@ psql_as() {
   local dbname="${2}"
   local sql="${3}"
 
-  # Source the .env to pick up credentials
-  # shellcheck source=/dev/null
-  source "${PROJECT_ROOT}/.env"
-
   local password_var
   case "${role}" in
-    keycloak)  password_var="${KC_DB_PASSWORD}" ;;
-    adminapp)  password_var="${ADMINAPP_DB_PASSWORD}" ;;
-    postgres)  password_var="${POSTGRES_PASSWORD}" ;;
+    keycloak)  password_var="$(env_value KC_DB_PASSWORD)" ;;
+    adminapp)  password_var="$(env_value ADMINAPP_DB_PASSWORD)" ;;
+    postgres)  password_var="$(env_value POSTGRES_PASSWORD)" ;;
     *)         password_var="" ;;
   esac
 

@@ -4,7 +4,7 @@ baseline_commit: 90325bbe45463f00871982ccca0efe8d2b23230b
 
 # Story 1.1: Docker Compose stack — pinned Keycloak + PostgreSQL (two databases)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -201,3 +201,32 @@ claude-sonnet-4-6 (Claude Code — bmad-dev-story workflow)
 ## Change Log
 
 - 2026-06-25: Initial implementation — Tasks 1–5 complete. Created compose.yaml, keycloak/Dockerfile, postgres/init/01-init-databases.sh, rewrote .env.example and .gitignore, created README.md. All ATDD unit tests (AC3, AC4) pass. Static AC checks pass. Status set to review.
+- 2026-06-25: Code review (Step 5) — 3 layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). 7 patches applied, 4 deferred, 4 dismissed (incl. false positive on `.env` gitignore — verified `.env` IS ignored). All 4 ACs confirmed met. Status set to done.
+
+### Review Findings
+
+Code review: 0 decision-needed, 7 patch (all applied), 4 defer, 4 dismissed. All 17 unit tests pass; `docker compose config` validates clean.
+
+Patches applied:
+
+- [x] [Review][Patch] Add missing `:?` fail-fast guard for `POSTGRES_USER` (spec Task 2 required it) [postgres/init/01-init-databases.sh:17]
+- [x] [Review][Patch] Quote role identifiers via `format('%I', …)` + `\gexec` in GRANT statements — was unquoted `:kc_role`/`:admin_role`, inconsistent with the script's own injection-safety discipline; breaks on mixed-case/special role names [postgres/init/01-init-databases.sh:90,94]
+- [x] [Review][Patch] Make health probe shell explicit (`CMD: ["bash","-c",…]` instead of `CMD-SHELL`) — `/dev/tcp` is a bash builtin; `/bin/sh` is not guaranteed to support it [compose.yaml:70]
+- [x] [Review][Patch] Anchor healthcheck status-line grep to `^HTTP/… 200( |$|\r)` instead of literal `200 OK` — RFC 7230 allows an empty/varying reason phrase; old pattern could also match body text [compose.yaml:79]
+- [x] [Review][Patch] Quote `POSTGRES_USER` in `pg_isready` healthcheck and read it from the container env (`"$$POSTGRES_USER"`) instead of unquoted compose-time interpolation [compose.yaml:36]
+- [x] [Review][Patch] Set `POSTGRES_DB=postgres` so the image does not create a stray third database named after `POSTGRES_USER` [compose.yaml:24]
+- [x] [Review][Patch] Replace `source .env` in `psql_as` test helper with a non-evaluating `.env` parser (`env_value`) — `source` mangles passwords containing `'`, `$`, `\`, corrupting the exact special-char password TS-102g is meant to validate [tests/integration/db-isolation.bats:34]
+
+Deferred (real but out of this story's minimal scope / mitigated):
+
+- [x] [Review][Defer] Healthcheck `cat <&3` has no client-side read timeout — relies on server honoring `Connection: close`; already bounded by Docker `timeout: 10s` and live-verified. Defer hardening.
+- [x] [Review][Defer] `postgres`/`template1` maintenance DBs remain PUBLIC-connectable by both roles — AC2 pairwise isolation (keycloak↔admin) IS enforced; stricter `REVOKE CONNECT … FROM PUBLIC` on maintenance DBs is later hardening.
+- [x] [Review][Defer] `pg_isready` healthcheck does not assert the `keycloak` DB exists — mitigated by Postgres entrypoint not opening the TCP listener until init completes; deeper readiness gating deferred.
+- [x] [Review][Defer] Integration tests share the dev's named volume / no isolated compose project — broader test-isolation infra concern (Story 1.5 CI gate).
+
+Dismissed (noise / false positive / expected behavior):
+
+- `.env` not git-ignored — FALSE POSITIVE: `git check-ignore` confirms `.env` and `.env.*` are ignored, `.env.example` is tracked.
+- `*.env` overbroad gitignore pattern — intentional broad secret protection; `.env.example` verified safe.
+- Story-prose digest drift (3 different KC digests in notes) — doc-only; Dockerfile + compose are internally consistent.
+- `restart: unless-stopped` masks crash-loop — standard compose idiom, expected behavior.

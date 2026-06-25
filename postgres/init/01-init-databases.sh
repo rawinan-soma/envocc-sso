@@ -14,6 +14,7 @@
 set -euo pipefail
 
 # ─── Fail fast on unset / empty required vars ─────────────────────────────────
+: "${POSTGRES_USER:?POSTGRES_USER must be set}"
 : "${KC_DB_USERNAME:?KC_DB_USERNAME must be set}"
 : "${KC_DB_PASSWORD:?KC_DB_PASSWORD must be set}"
 : "${ADMINAPP_DB_USERNAME:?ADMINAPP_DB_USERNAME must be set}"
@@ -79,14 +80,18 @@ WHERE NOT EXISTS (
 ) \gexec
 
 -- ─── Database isolation: revoke PUBLIC access, grant only to owning role ─────
+--
+-- Role names are quoted via format('%I', …) for the same injection/quoting
+-- safety as the CREATE statements above (plain :kc_role would fold case and
+-- break on identifiers needing quoting).
 
 -- keycloak DB isolation
 REVOKE ALL ON DATABASE keycloak FROM PUBLIC;
-GRANT CONNECT ON DATABASE keycloak TO :kc_role;
+SELECT format('GRANT CONNECT ON DATABASE keycloak TO %I', :'kc_role') \gexec
 
 -- admin DB isolation
 REVOKE ALL ON DATABASE admin FROM PUBLIC;
-GRANT CONNECT ON DATABASE admin TO :admin_role;
+SELECT format('GRANT CONNECT ON DATABASE admin TO %I', :'admin_role') \gexec
 
 EOSQL
 
