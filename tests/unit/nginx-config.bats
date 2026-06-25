@@ -33,8 +33,7 @@
 #   TS-138c [P1] compose.yaml nginx service has a healthcheck defined
 #   TS-138d [P1] compose.yaml nginx service depends_on keycloak with service_healthy
 #
-# TDD Phase: RED — all tests marked `skip`.
-# Remove `skip` for each test when the corresponding task is implemented.
+# TDD Phase: GREEN — skip directives removed after Story 1.3 implementation.
 
 bats_load_library 'bats-support'
 bats_load_library 'bats-assert'
@@ -45,8 +44,6 @@ load '../helpers/common'
 # TS-136a/b [P0] — nginx/certs key material git-ignored
 # ---------------------------------------------------------------------------
 @test "[P0][TS-136a] .gitignore covers 'nginx/certs/*.key' (private key files git-ignored)" {
-  skip "Unit: nginx/certs/ and .gitignore nginx rules not yet created"
-
   assert [ -f "${PROJECT_ROOT}/.gitignore" ]
 
   # The .gitignore must contain a rule covering nginx private key files
@@ -56,8 +53,6 @@ load '../helpers/common'
 }
 
 @test "[P0][TS-136b] .gitignore covers 'nginx/certs/*.crt' (certificate files git-ignored)" {
-  skip "Unit: nginx/certs/ and .gitignore nginx rules not yet created"
-
   assert [ -f "${PROJECT_ROOT}/.gitignore" ]
 
   # The .gitignore must contain a rule covering nginx cert files
@@ -67,8 +62,6 @@ load '../helpers/common'
 }
 
 @test "[P0][TS-136a-runtime] git does not track any file under nginx/certs/ with .key or .crt extension" {
-  skip "Unit: nginx/certs/ not yet created — run after Task 1"
-
   # Real key material must never be tracked
   run git -C "${PROJECT_ROOT}" ls-files "nginx/certs/*.key" "nginx/certs/*.crt" "nginx/certs/*.pem"
   assert_output ""
@@ -78,8 +71,6 @@ load '../helpers/common'
 # TS-136c [P0] — nginx/certs/.gitkeep tracks the empty directory
 # ---------------------------------------------------------------------------
 @test "[P0][TS-136c] nginx/certs/.gitkeep is tracked by git (directory placeholder)" {
-  skip "Unit: nginx/certs/.gitkeep not yet created — run after Task 1"
-
   assert [ -f "${PROJECT_ROOT}/nginx/certs/.gitkeep" ]
 
   # The .gitkeep must be tracked (not ignored)
@@ -91,8 +82,6 @@ load '../helpers/common'
 # TS-137a [P1] — compose.yaml nginx image has no ':latest'
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137a] compose.yaml nginx service image does not use ':latest' tag" {
-  skip "Unit: nginx service not yet added to compose.yaml — run after Task 3"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # compose.yaml must not contain ':latest' at all (for any service)
@@ -105,8 +94,6 @@ load '../helpers/common'
 # TS-137b [P1] — compose.yaml nginx image pinned by @sha256: digest
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137b] compose.yaml nginx service image includes @sha256: digest" {
-  skip "Unit: nginx service not yet added to compose.yaml — run after Task 3"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # The nginx image line must contain @sha256: followed by a 64-char hex digest
@@ -118,14 +105,10 @@ load '../helpers/common'
 # TS-137c [P1] — nginx/nginx.conf exists and references TLS cert paths
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137c] nginx/nginx.conf exists at repo root" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 }
 
 @test "[P1][TS-137c] nginx/nginx.conf references self-signed cert paths /etc/nginx/certs/dev.crt and dev.key" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
   run grep -E "ssl_certificate[^_]" "${PROJECT_ROOT}/nginx/nginx.conf"
@@ -142,8 +125,6 @@ load '../helpers/common'
 # TS-137d [P1] — nginx/nginx.conf sets ssl_protocols (TLS 1.0/1.1 disabled)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137d] nginx/nginx.conf sets ssl_protocols TLSv1.2 TLSv1.3 (TLS 1.0/1.1 absent)" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
   # ssl_protocols must only allow TLSv1.2 and TLSv1.3
@@ -161,8 +142,6 @@ load '../helpers/common'
 # TS-137e [P1] — nginx/nginx.conf includes HSTS header directive
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137e] nginx/nginx.conf adds Strict-Transport-Security header with 'always'" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
   # HSTS must be in nginx.conf with the correct value and 'always' parameter
@@ -174,8 +153,6 @@ load '../helpers/common'
 # TS-137f [P1] — nginx/nginx.conf includes X-Frame-Options: DENY
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137f] nginx/nginx.conf adds X-Frame-Options: DENY header" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
   run grep -E "add_header.*X-Frame-Options.*DENY" "${PROJECT_ROOT}/nginx/nginx.conf"
@@ -186,8 +163,6 @@ load '../helpers/common'
 # TS-137g [P1] — nginx/nginx.conf includes X-Content-Type-Options: nosniff
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137g] nginx/nginx.conf adds X-Content-Type-Options: nosniff header" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
   run grep -E "add_header.*X-Content-Type-Options.*nosniff" "${PROJECT_ROOT}/nginx/nginx.conf"
@@ -198,8 +173,6 @@ load '../helpers/common'
 # TS-137h [P1] — nginx/nginx.conf defines limit_req_zone for rate-limiting
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137h] nginx/nginx.conf defines limit_req_zone for login rate-limiting" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
   # limit_req_zone declaration must be present
@@ -208,8 +181,6 @@ load '../helpers/common'
 }
 
 @test "[P1][TS-137h] nginx/nginx.conf applies limit_req directive to auth locations" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
   # limit_req usage (not just declaration) must be present in a location block
@@ -223,8 +194,6 @@ load '../helpers/common'
 # TS-137i [P1] — nginx/nginx.conf sets limit_req_status 429
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137i] nginx/nginx.conf sets limit_req_status 429 (not default 503)" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
   run grep "limit_req_status 429" "${PROJECT_ROOT}/nginx/nginx.conf"
@@ -235,8 +204,6 @@ load '../helpers/common'
 # TS-137j [P1] — nginx/nginx.conf sets CSP frame-ancestors on auth locations
 # ---------------------------------------------------------------------------
 @test "[P1][TS-137j] nginx/nginx.conf sets Content-Security-Policy frame-ancestors 'none' on auth location" {
-  skip "Unit: nginx/nginx.conf not yet created — run after Task 2"
-
   assert [ -f "${PROJECT_ROOT}/nginx/nginx.conf" ]
 
   # CSP with frame-ancestors 'none' must appear in nginx.conf (in a location block)
@@ -248,8 +215,6 @@ load '../helpers/common'
 # TS-138a [P1] — compose.yaml Keycloak does NOT publish port 8080 to host
 # ---------------------------------------------------------------------------
 @test "[P1][TS-138a] compose.yaml Keycloak service does NOT publish port 8080 to host" {
-  skip "Unit: nginx service not yet added and KC port not yet removed from compose.yaml — run after Task 3"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # After Story 1.3, Keycloak's port 8080 must NOT be published to the host.
@@ -257,7 +222,7 @@ load '../helpers/common'
   # A published port appears as "8080:8080" or "- 8080:8080" in the keycloak service's ports block.
   #
   # Parse compose config to check keycloak published ports:
-  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config \
+  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config 2>/dev/null \
     | python3 -c \"
 import sys, yaml
 cfg = yaml.safe_load(sys.stdin)
@@ -274,12 +239,10 @@ print(len(published))
 # TS-138b [P1] — compose.yaml Keycloak has KC_PROXY_HEADERS: xforwarded
 # ---------------------------------------------------------------------------
 @test "[P1][TS-138b] compose.yaml Keycloak service has KC_PROXY_HEADERS set to xforwarded" {
-  skip "Unit: KC_PROXY_HEADERS not yet added to compose.yaml — run after Task 3"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # KC_PROXY_HEADERS must be set so Keycloak trusts X-Forwarded-* headers from Nginx
-  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config \
+  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config 2>/dev/null \
     | python3 -c \"
 import sys, yaml
 cfg = yaml.safe_load(sys.stdin)
@@ -295,12 +258,10 @@ print(val)
 # TS-138c [P1] — compose.yaml nginx service has a healthcheck
 # ---------------------------------------------------------------------------
 @test "[P1][TS-138c] compose.yaml nginx service defines a healthcheck" {
-  skip "Unit: nginx service not yet added to compose.yaml — run after Task 3"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # Nginx service must have a healthcheck block (for depends_on: service_healthy in future services)
-  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config \
+  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config 2>/dev/null \
     | python3 -c \"
 import sys, yaml
 cfg = yaml.safe_load(sys.stdin)
@@ -316,12 +277,10 @@ print('defined' if test_cmd else 'missing')
 # TS-138d [P1] — compose.yaml nginx depends_on keycloak with service_healthy
 # ---------------------------------------------------------------------------
 @test "[P1][TS-138d] compose.yaml nginx service depends_on keycloak with condition: service_healthy" {
-  skip "Unit: nginx service not yet added to compose.yaml — run after Task 3"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # Nginx must wait for Keycloak to be fully healthy before starting
-  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config \
+  run bash -c "docker compose -f '${PROJECT_ROOT}/compose.yaml' config 2>/dev/null \
     | python3 -c \"
 import sys, yaml
 cfg = yaml.safe_load(sys.stdin)

@@ -12,6 +12,14 @@ secrets/
 *.crt
 *.pfx
 
+# ─── Nginx TLS cert material (Story 1.3) ─────────────────────────────────────
+# Private keys and certificates are generated locally — never commit
+nginx/certs/*.key
+nginx/certs/*.crt
+nginx/certs/*.pem
+# The .gitkeep placeholder IS tracked (keeps the empty directory in git)
+!nginx/certs/.gitkeep
+
 # Full (un-stripped) realm exports — only stripped export is committed
 *.full-export.json
 

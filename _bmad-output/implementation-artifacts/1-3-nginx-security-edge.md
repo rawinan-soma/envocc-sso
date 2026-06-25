@@ -4,7 +4,7 @@ baseline_commit: 4da01ef
 
 # Story 1.3: Nginx security edge
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -38,45 +38,45 @@ so that all public traffic is TLS-terminated, header-hardened, and abuse-protect
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Create `nginx/` directory and generate local dev TLS certs (AC5, AC6)**
-  - [ ] Create `nginx/` directory at repo root (same level as `compose.yaml`, `keycloak/`, `postgres/`).
-  - [ ] Generate self-signed certificate for local dev: `openssl req -x509 -newkey rsa:4096 -keyout nginx/certs/dev.key -out nginx/certs/dev.crt -days 365 -nodes -subj "/CN=localhost"`. The `nginx/certs/` directory must be created manually or by the `openssl` command.
-  - [ ] Add `nginx/certs/*.key` and `nginx/certs/*.crt` (or `*.pem`) to `.gitignore` so key material never commits. Add `nginx/certs/.gitkeep` so the empty directory is tracked.
-  - [ ] Document the cert generation command in `README.md` under a "TLS (local dev)" section so the next developer knows how to regenerate certs.
+- [x] **Task 1 — Create `nginx/` directory and generate local dev TLS certs (AC5, AC6)**
+  - [x] Create `nginx/` directory at repo root (same level as `compose.yaml`, `keycloak/`, `postgres/`).
+  - [x] Generate self-signed certificate for local dev: `openssl req -x509 -newkey rsa:4096 -keyout nginx/certs/dev.key -out nginx/certs/dev.crt -days 365 -nodes -subj "/CN=localhost"`. The `nginx/certs/` directory must be created manually or by the `openssl` command.
+  - [x] Add `nginx/certs/*.key` and `nginx/certs/*.crt` (or `*.pem`) to `.gitignore` so key material never commits. Add `nginx/certs/.gitkeep` so the empty directory is tracked.
+  - [x] Document the cert generation command in `README.md` under a "TLS (local dev)" section so the next developer knows how to regenerate certs.
 
-- [ ] **Task 2 — Write `nginx/nginx.conf` (all ACs)**
-  - [ ] Use the `official nginx` Docker image (pinned by exact version + digest — see Dev Notes for current version). Do NOT use `:latest` or a floating tag.
-  - [ ] Configure TLS on port 443: `ssl_protocols TLSv1.2 TLSv1.3;`, `ssl_prefer_server_ciphers on;`, reference the self-signed certs at `/etc/nginx/certs/dev.crt` and `/etc/nginx/certs/dev.key` (mounted from `nginx/certs/`).
-  - [ ] Add HTTP→HTTPS redirect on port 80: `return 301 https://$host$request_uri;`.
-  - [ ] Add HSTS header: `add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;` (AC1).
-  - [ ] Add standard security headers on all locations (AC1): `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: geolocation=(), camera=(), microphone=()`.
-  - [ ] Add `Content-Security-Policy: frame-ancestors 'none'` specifically on auth-surface locations (AC2): use a Nginx `location` block matching Keycloak auth paths (`/realms/`, `/auth/`, etc.). This is the anti-phishing control from NFR4/FR12.
-  - [ ] Add rate-limiting for public login endpoints (AC3): declare a `limit_req_zone` (e.g., `$binary_remote_addr zone=login_zone:10m rate=10r/m`) and apply it with a small `burst` to the auth/token paths. Size the rate to be generous enough for legitimate use (TOTP entry, password reset) but protective against brute-force supplementing Keycloak's own brute-force protection. A good starting rate is **10 req/min with burst=20** for login endpoints. Set `limit_req_status 429;` in the `http {}` block so throttled clients receive `429 Too Many Requests` (not the default `503 Service Unavailable`).
-  - [ ] Configure the reverse proxy to Keycloak: `proxy_pass http://keycloak:8080;` with standard proxy headers (`proxy_set_header Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto https`). Keycloak listens on port 8080 (HTTP-only internal, TLS is terminated at Nginx). Do NOT proxy port 9000 (Keycloak management/health — internal only).
-  - [ ] Ensure JWKS and discovery endpoint responses from Keycloak pass through with their `Cache-Control` headers intact (AC4). Nginx's default `proxy_pass` preserves upstream headers. Do NOT use `proxy_hide_header Cache-Control` or add any `add_header Cache-Control` directive on the JWKS/discovery `location` blocks. **CRITICAL gotcha:** if the JWKS/discovery location uses its own `add_header` directives (e.g. to add security headers), it will NOT inherit security headers from the parent `server {}` block — repeat all required headers in that location block explicitly. Do NOT accidentally include a `Cache-Control` header when repeating them.
-  - [ ] Set `proxy_buffer_size`, `proxy_buffers`, and appropriate timeouts for the Keycloak proxy (Keycloak can be slow on first login/TOTP).
+- [x] **Task 2 — Write `nginx/nginx.conf` (all ACs)**
+  - [x] Use the `official nginx` Docker image (pinned by exact version + digest — see Dev Notes for current version). Do NOT use `:latest` or a floating tag.
+  - [x] Configure TLS on port 443: `ssl_protocols TLSv1.2 TLSv1.3;`, `ssl_prefer_server_ciphers on;`, reference the self-signed certs at `/etc/nginx/certs/dev.crt` and `/etc/nginx/certs/dev.key` (mounted from `nginx/certs/`).
+  - [x] Add HTTP→HTTPS redirect on port 80: `return 301 https://$host$request_uri;`.
+  - [x] Add HSTS header: `add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;` (AC1).
+  - [x] Add standard security headers on all locations (AC1): `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: geolocation=(), camera=(), microphone=()`.
+  - [x] Add `Content-Security-Policy: frame-ancestors 'none'` specifically on auth-surface locations (AC2): use a Nginx `location` block matching Keycloak auth paths (`/realms/`, `/auth/`, etc.). This is the anti-phishing control from NFR4/FR12.
+  - [x] Add rate-limiting for public login endpoints (AC3): declare a `limit_req_zone` (e.g., `$binary_remote_addr zone=login_zone:10m rate=10r/m`) and apply it with a small `burst` to the auth/token paths. Size the rate to be generous enough for legitimate use (TOTP entry, password reset) but protective against brute-force supplementing Keycloak's own brute-force protection. A good starting rate is **10 req/min with burst=20** for login endpoints. Set `limit_req_status 429;` in the `http {}` block so throttled clients receive `429 Too Many Requests` (not the default `503 Service Unavailable`).
+  - [x] Configure the reverse proxy to Keycloak: `proxy_pass http://keycloak:8080;` with standard proxy headers (`proxy_set_header Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto https`). Keycloak listens on port 8080 (HTTP-only internal, TLS is terminated at Nginx). Do NOT proxy port 9000 (Keycloak management/health — internal only).
+  - [x] Ensure JWKS and discovery endpoint responses from Keycloak pass through with their `Cache-Control` headers intact (AC4). Nginx's default `proxy_pass` preserves upstream headers. Do NOT use `proxy_hide_header Cache-Control` or add any `add_header Cache-Control` directive on the JWKS/discovery `location` blocks. **CRITICAL gotcha:** if the JWKS/discovery location uses its own `add_header` directives (e.g. to add security headers), it will NOT inherit security headers from the parent `server {}` block — repeat all required headers in that location block explicitly. Do NOT accidentally include a `Cache-Control` header when repeating them.
+  - [x] Set `proxy_buffer_size`, `proxy_buffers`, and appropriate timeouts for the Keycloak proxy (Keycloak can be slow on first login/TOTP).
 
-- [ ] **Task 3 — Add `nginx` service to `compose.yaml` (AC5, AC6)**
-  - [ ] Add the `nginx` service to `compose.yaml` using the pinned official image (exact version + `@sha256:` digest).
-  - [ ] Mount `./nginx/nginx.conf:/etc/nginx/nginx.conf:ro` and `./nginx/certs:/etc/nginx/certs:ro`.
-  - [ ] Publish HTTPS port: `443:443`. Also publish `80:80` for the HTTP→HTTPS redirect. **REQUIRED: remove `ports: "8080:8080"` from the `keycloak` service** in `compose.yaml` — after this story, Nginx is the only external entry point. Leaving 8080 published bypasses all security headers, CSP, rate-limiting, and HSTS — defeating the purpose of this story.
-  - [ ] Set `depends_on` so Nginx waits for Keycloak to be `service_healthy` before starting (Nginx will otherwise get upstream errors on startup).
-  - [ ] Add a healthcheck for the Nginx service: `curl -k https://localhost/health` or a simple TCP check on port 443. Since the `nginx` Docker image includes `curl`, use `curl -k -sf https://localhost/ -o /dev/null` (the `-k` flag bypasses the self-signed cert; `-s` silent; `-f` fail on HTTP error).
-  - [ ] Verify: `KC_HTTP_ENABLED: "true"` and `KC_HOSTNAME_STRICT: "false"` MUST remain in the Keycloak service environment in `compose.yaml`. Keycloak communicates with Nginx via HTTP internally; TLS is at the edge. These flags are NOT removed by this story.
-  - [ ] Add comment in `compose.yaml` explaining that KC port 8080 is intentionally NOT published to host after Story 1.3 — Nginx is the only external entry point.
+- [x] **Task 3 — Add `nginx` service to `compose.yaml` (AC5, AC6)**
+  - [x] Add the `nginx` service to `compose.yaml` using the pinned official image (exact version + `@sha256:` digest).
+  - [x] Mount `./nginx/nginx.conf:/etc/nginx/nginx.conf:ro` and `./nginx/certs:/etc/nginx/certs:ro`.
+  - [x] Publish HTTPS port: `443:443`. Also publish `80:80` for the HTTP→HTTPS redirect. **REQUIRED: remove `ports: "8080:8080"` from the `keycloak` service** in `compose.yaml` — after this story, Nginx is the only external entry point. Leaving 8080 published bypasses all security headers, CSP, rate-limiting, and HSTS — defeating the purpose of this story.
+  - [x] Set `depends_on` so Nginx waits for Keycloak to be `service_healthy` before starting (Nginx will otherwise get upstream errors on startup).
+  - [x] Add a healthcheck for the Nginx service: `curl -k https://localhost/health` or a simple TCP check on port 443. Since the `nginx` Docker image includes `curl`, use `curl -k -sf https://localhost/ -o /dev/null` (the `-k` flag bypasses the self-signed cert; `-s` silent; `-f` fail on HTTP error).
+  - [x] Verify: `KC_HTTP_ENABLED: "true"` and `KC_HOSTNAME_STRICT: "false"` MUST remain in the Keycloak service environment in `compose.yaml`. Keycloak communicates with Nginx via HTTP internally; TLS is at the edge. These flags are NOT removed by this story.
+  - [x] Add comment in `compose.yaml` explaining that KC port 8080 is intentionally NOT published to host after Story 1.3 — Nginx is the only external entry point.
 
-- [ ] **Task 4 — Update `.env.example` (AC6)**
-  - [ ] No new secrets are needed — TLS certs are local-generated files, not env vars. Verify that `.env.example` needs no changes. If any Nginx-specific env var is added (e.g., for a domain name), add a `NGINX_SERVER_NAME` placeholder with a `change-me-*` value and document it.
+- [x] **Task 4 — Update `.env.example` (AC6)**
+  - [x] No new secrets are needed — TLS certs are local-generated files, not env vars. Verify that `.env.example` needs no changes. If any Nginx-specific env var is added (e.g., for a domain name), add a `NGINX_SERVER_NAME` placeholder with a `change-me-*` value and document it.
 
-- [ ] **Task 5 — Verify end-to-end (all ACs)**
-  - [ ] From clean state, run `docker compose up --build`. Confirm all three services reach healthy/running.
-  - [ ] AC1: `curl -kI https://localhost/` → verify response includes `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`.
-  - [ ] AC2: `curl -kI https://localhost/realms/` → verify `Content-Security-Policy` header includes `frame-ancestors 'none'`.
-  - [ ] AC3: Run a quick burst test (e.g., `for i in $(seq 1 30); do curl -sk -o /dev/null -w "%{http_code}\n" https://localhost/realms/master/protocol/openid-connect/token; done`) — confirm `429` responses appear after the burst limit.
-  - [ ] AC4: `curl -kI https://localhost/realms/master/protocol/openid-connect/certs` → verify `Cache-Control` header is present and not negated.
-  - [ ] AC5: `docker compose ps` → all three services show `healthy` or `running`.
-  - [ ] AC6: `git status` → `nginx/certs/*.key` and `nginx/certs/*.crt` are NOT tracked. `git check-ignore -v nginx/certs/dev.key` → shows a matching `.gitignore` rule.
-  - [ ] `gitleaks detect --source=.` → clean (no secrets detected in committed files).
+- [x] **Task 5 — Verify end-to-end (all ACs)**
+  - [x] From clean state, run `docker compose up --build`. Confirm all three services reach healthy/running.
+  - [x] AC1: `curl -kI https://localhost/` → verify response includes `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`.
+  - [x] AC2: `curl -kI https://localhost/realms/` → verify `Content-Security-Policy` header includes `frame-ancestors 'none'`.
+  - [x] AC3: Run a quick burst test (e.g., `for i in $(seq 1 30); do curl -sk -o /dev/null -w "%{http_code}\n" https://localhost/realms/master/protocol/openid-connect/token; done`) — confirm `429` responses appear after the burst limit.
+  - [x] AC4: `curl -kI https://localhost/realms/master/protocol/openid-connect/certs` → verify `Cache-Control` header is present and not negated.
+  - [x] AC5: `docker compose ps` → all three services show `healthy` or `running`.
+  - [x] AC6: `git status` → `nginx/certs/*.key` and `nginx/certs/*.crt` are NOT tracked. `git check-ignore -v nginx/certs/dev.key` → shows a matching `.gitignore` rule.
+  - [x] `gitleaks detect --source=.` → clean (no secrets detected in committed files).
 
 ## Dev Notes
 
@@ -227,10 +227,31 @@ Pattern from Story 1.1: the integration test files exist as bats scaffolds with 
 
 ### Agent Model Used
 
-claude-sonnet-4-6 (Claude Code — bmad-create-story workflow)
+claude-sonnet-4-6 (Claude Code — bmad-dev-story workflow, 2026-06-25)
 
 ### Debug Log References
 
+- Fixed test assertions in `tests/unit/nginx-config.bats` (TS-138a/b/c/d): `docker compose config` outputs Docker warnings to stderr but `run bash -c "..."` in bats captures both stdout and stderr. Fixed by adding `2>/dev/null` to all `docker compose config` calls in test assertions.
+
 ### Completion Notes List
 
+- Task 1: Created `nginx/certs/` directory, generated self-signed RSA 4096 cert (`dev.crt`/`dev.key`) via openssl. Added nginx-specific `.gitignore` rules (`nginx/certs/*.key`, `nginx/certs/*.crt`, `nginx/certs/*.pem` + `!nginx/certs/.gitkeep`). Updated `README.md` with "TLS (local dev)" section including the full openssl command. `nginx/certs/.gitkeep` staged and tracked by git.
+- Task 2: Wrote `nginx/nginx.conf` with: TLS (TLSv1.2 + TLSv1.3 only), HTTP→HTTPS redirect on port 80, HSTS, standard security headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy), CSP `frame-ancestors 'none'` on `/realms/` and `/auth/` location blocks, rate-limiting (`limit_req_zone` 10r/m + 20r/m, burst=20, `limit_req_status 429`), reverse proxy to `http://keycloak:8080` with X-Forwarded-Proto https, proxy buffer/timeout settings. Critical: all `add_header` directives repeated in each location block to avoid nginx inheritance issue.
+- Task 3: Added `nginx` service to `compose.yaml` using `nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236` (pinned). Published ports 80 and 443. Removed Keycloak `ports: "8080:8080"`. Added `KC_PROXY_HEADERS: xforwarded` to Keycloak env. Nginx `depends_on keycloak: service_healthy`. Healthcheck: `curl -k -sf https://localhost/ -o /dev/null`.
+- Task 4: Verified `.env.example` needs no changes — no new Nginx-specific env vars required.
+- Task 5: Ran full stack (`docker compose up --build -d --project-name story13`). All 3 services (postgres, keycloak, nginx) reached `healthy`. Verified AC1 (HSTS + security headers), AC2 (CSP frame-ancestors on /realms/), AC3 (429 rate-limit triggered on burst test), AC4 (Cache-Control: no-cache preserved from Keycloak on JWKS), AC5 (all healthy), AC6 (dev.key git-ignored, gitleaks clean). HTTP→HTTPS redirect returns 301.
+- Unit tests: All 20/20 tests in `tests/unit/nginx-config.bats` pass (GREEN). All 37/37 total unit tests pass (2 are skipped P2 runtime tests).
+- `gitleaks detect` (git-tracked files only): 0 leaks found.
+
 ### File List
+
+- `nginx/nginx.conf` (new)
+- `nginx/certs/.gitkeep` (new)
+- `compose.yaml` (modified — added nginx service, removed KC port 8080, added KC_PROXY_HEADERS)
+- `.gitignore` (modified — added nginx/certs/*.key, nginx/certs/*.crt, nginx/certs/*.pem rules)
+- `README.md` (modified — added TLS local dev section, updated prerequisites and access URLs)
+- `tests/unit/nginx-config.bats` (modified — removed skip directives for GREEN phase; fixed docker compose config stderr suppression in test assertions)
+
+### Change Log
+
+- 2026-06-25: Implemented Story 1.3 — Nginx security edge. Added nginx/nginx.conf (TLS, headers, rate-limiting, CSP, reverse proxy), nginx service to compose.yaml with pinned image + healthcheck, removed KC port 8080, added KC_PROXY_HEADERS, updated .gitignore and README. All ACs verified live. Status → review.
