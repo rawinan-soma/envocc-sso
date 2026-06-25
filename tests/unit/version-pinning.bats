@@ -1,10 +1,6 @@
 #!/usr/bin/env bats
 # tests/unit/version-pinning.bats
-# ATDD RED-PHASE scaffolds — Story 1.1 AC3: Exact version pinning
-#
-# TDD RED PHASE: All tests are marked `skip` until compose.yaml and
-# keycloak/Dockerfile exist with pinned-by-digest images.
-# Remove `skip` for the current task to activate.
+# ATDD tests — Story 1.1 AC3: Exact version pinning
 #
 # AC3: Given the compose file, when images are resolved,
 #      then Keycloak (26.6.x) and PostgreSQL are pinned by exact version
@@ -28,8 +24,6 @@ load '../helpers/common'
 # TS-103a [P1] — No ':latest' in compose.yaml or Dockerfile
 # ---------------------------------------------------------------------------
 @test "[P1][TS-103a] compose.yaml contains no ':latest' image tag" {
-  skip "RED PHASE: compose.yaml not yet created (Story 1.1 Task 4)"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   run grep -n ":latest" "${PROJECT_ROOT}/compose.yaml"
@@ -38,8 +32,6 @@ load '../helpers/common'
 }
 
 @test "[P1][TS-103a] keycloak/Dockerfile contains no ':latest' image tag" {
-  skip "RED PHASE: keycloak/Dockerfile not yet created (Story 1.1 Task 3)"
-
   assert [ -f "${PROJECT_ROOT}/keycloak/Dockerfile" ]
 
   run grep -n ":latest" "${PROJECT_ROOT}/keycloak/Dockerfile"
@@ -50,8 +42,6 @@ load '../helpers/common'
 # TS-103b [P1] — postgres image pinned by @sha256: digest in compose.yaml
 # ---------------------------------------------------------------------------
 @test "[P1][TS-103b] compose.yaml postgres image includes @sha256: digest" {
-  skip "RED PHASE: compose.yaml not yet created (Story 1.1 Task 4)"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # The postgres image line must contain @sha256: followed by a hex string
@@ -63,8 +53,6 @@ load '../helpers/common'
 # TS-103c [P1] — Keycloak Dockerfile FROM pinned by @sha256: digest
 # ---------------------------------------------------------------------------
 @test "[P1][TS-103c] keycloak/Dockerfile FROM line includes @sha256: digest" {
-  skip "RED PHASE: keycloak/Dockerfile not yet created (Story 1.1 Task 3)"
-
   assert [ -f "${PROJECT_ROOT}/keycloak/Dockerfile" ]
 
   # FROM quay.io/keycloak/keycloak:26.6.3@sha256:<64-hex>
@@ -76,8 +64,6 @@ load '../helpers/common'
 # TS-103d [P1] — Keycloak version tag is exactly 26.6.x
 # ---------------------------------------------------------------------------
 @test "[P1][TS-103d] keycloak/Dockerfile FROM tag matches 26.6.x version pattern" {
-  skip "RED PHASE: keycloak/Dockerfile not yet created (Story 1.1 Task 3)"
-
   assert [ -f "${PROJECT_ROOT}/keycloak/Dockerfile" ]
 
   # Must be 26.6.N — not 25.x, 27.x, or a floating '26' tag
@@ -90,7 +76,7 @@ load '../helpers/common'
 #   (Requires stack to be running; skipped in offline/unit-only runs)
 # ---------------------------------------------------------------------------
 @test "[P2][TS-103e] Runtime postgres image digest matches @sha256: pin in compose.yaml" {
-  skip "RED PHASE: compose.yaml not yet created AND stack not yet running (Story 1.1 Task 5)"
+  skip "P2 runtime test: requires running stack — run manually via Task 5"
 
   # Extract expected digest from compose.yaml
   local expected_digest
@@ -118,8 +104,6 @@ load '../helpers/common'
 # TS-103f [P2] — postgres/init script has no floating version refs
 # ---------------------------------------------------------------------------
 @test "[P2][TS-103f] postgres/init/01-init-databases.sh contains no floating version strings" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
-
   assert [ -f "${PROJECT_ROOT}/postgres/init/01-init-databases.sh" ]
 
   # The init script should reference no external image tags or version pins

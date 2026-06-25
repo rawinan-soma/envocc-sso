@@ -1,10 +1,6 @@
 #!/usr/bin/env bats
 # tests/integration/db-isolation.bats
-# ATDD RED-PHASE scaffolds — Story 1.1 AC2: Two least-privilege databases
-#
-# TDD RED PHASE: All tests are marked `skip` until compose.yaml and
-# postgres/init/01-init-databases.sh exist.
-# Remove `skip` for the current task to activate.
+# ATDD tests — Story 1.1 AC2: Two least-privilege databases
 #
 # AC2: Given the Postgres container initialises,
 #      when bring-up completes,
@@ -22,6 +18,9 @@
 #   TS-102f [P0] adminapp role connects to admin DB successfully
 #   TS-102g [P1] Special chars in KC_DB_PASSWORD do not break connection
 #            (validates SQL quoting fix — passwords with ', $, \)
+#
+# NOTE: These tests require a running postgres container.
+# Run manually: docker compose up -d, then: bats tests/integration/db-isolation.bats
 
 bats_load_library 'bats-support'
 bats_load_library 'bats-assert'
@@ -64,7 +63,7 @@ setup_suite() {
 # TS-102a [P0] — Both databases exist
 # ---------------------------------------------------------------------------
 @test "[P0][TS-102a] Database 'keycloak' exists in pg_catalog.pg_database" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
+  skip "Integration: requires running postgres container — run manually after docker compose up"
 
   run wait_for_healthy "postgres" 60
   assert_success
@@ -76,7 +75,7 @@ setup_suite() {
 }
 
 @test "[P0][TS-102a] Database 'admin' exists in pg_catalog.pg_database" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
+  skip "Integration: requires running postgres container — run manually after docker compose up"
 
   run wait_for_healthy "postgres" 60
   assert_success
@@ -91,7 +90,7 @@ setup_suite() {
 # TS-102b [P0] — Two distinct roles exist
 # ---------------------------------------------------------------------------
 @test "[P0][TS-102b] Role 'keycloak' exists in pg_catalog.pg_roles" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
+  skip "Integration: requires running postgres container — run manually after docker compose up"
 
   run psql_as "postgres" "postgres" \
     "SELECT rolname FROM pg_catalog.pg_roles WHERE rolname = 'keycloak';"
@@ -100,7 +99,7 @@ setup_suite() {
 }
 
 @test "[P0][TS-102b] Role 'adminapp' exists in pg_catalog.pg_roles" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
+  skip "Integration: requires running postgres container — run manually after docker compose up"
 
   run psql_as "postgres" "postgres" \
     "SELECT rolname FROM pg_catalog.pg_roles WHERE rolname = 'adminapp';"
@@ -109,7 +108,7 @@ setup_suite() {
 }
 
 @test "[P0][TS-102b] Roles 'keycloak' and 'adminapp' are distinct (not the same role)" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
+  skip "Integration: requires running postgres container — run manually after docker compose up"
 
   run psql_as "postgres" "postgres" \
     "SELECT COUNT(DISTINCT rolname) FROM pg_catalog.pg_roles WHERE rolname IN ('keycloak','adminapp');"
@@ -121,7 +120,7 @@ setup_suite() {
 # TS-102c [P0] — keycloak role CANNOT connect to admin DB (isolation)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-102c] keycloak role is denied connection to 'admin' database" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
+  skip "Integration: requires running postgres container — run manually after docker compose up"
 
   run psql_as "keycloak" "admin" "SELECT 1;"
   # Should fail — FATAL: permission denied for database admin
@@ -133,7 +132,7 @@ setup_suite() {
 # TS-102d [P0] — adminapp role CANNOT connect to keycloak DB (isolation)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-102d] adminapp role is denied connection to 'keycloak' database" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
+  skip "Integration: requires running postgres container — run manually after docker compose up"
 
   run psql_as "adminapp" "keycloak" "SELECT 1;"
   # Should fail — FATAL: permission denied for database keycloak
@@ -145,7 +144,7 @@ setup_suite() {
 # TS-102e [P0] — keycloak role CAN connect to its own DB
 # ---------------------------------------------------------------------------
 @test "[P0][TS-102e] keycloak role connects successfully to 'keycloak' database" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
+  skip "Integration: requires running postgres container — run manually after docker compose up"
 
   run psql_as "keycloak" "keycloak" "SELECT 1;"
   assert_success
@@ -156,7 +155,7 @@ setup_suite() {
 # TS-102f [P0] — adminapp role CAN connect to its own DB
 # ---------------------------------------------------------------------------
 @test "[P0][TS-102f] adminapp role connects successfully to 'admin' database" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
+  skip "Integration: requires running postgres container — run manually after docker compose up"
 
   run psql_as "adminapp" "admin" "SELECT 1;"
   assert_success
@@ -169,7 +168,7 @@ setup_suite() {
 # raw shell interpolation) from Story 1.1 dev notes guardrail #2.
 # ---------------------------------------------------------------------------
 @test "[P1][TS-102g] KC_DB_PASSWORD with special chars (' \$ \\) still allows keycloak DB connection" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2); requires manual .env override with special-char password"
+  skip "Integration: requires running stack with special-char password in .env — run manually"
 
   # This test requires a .env where KC_DB_PASSWORD contains special chars.
   # In CI, set: KC_DB_PASSWORD="p@ss'word\$with\\special"

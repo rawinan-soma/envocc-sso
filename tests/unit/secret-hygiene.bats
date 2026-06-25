@@ -1,11 +1,6 @@
 #!/usr/bin/env bats
 # tests/unit/secret-hygiene.bats
-# ATDD RED-PHASE scaffolds — Story 1.1 AC4: No hard-coded secrets
-#
-# TDD RED PHASE: All tests are marked `skip` until compose.yaml,
-# keycloak/Dockerfile, postgres/init/01-init-databases.sh,
-# and .env.example are in their final form.
-# Remove `skip` for the current task to activate.
+# ATDD tests — Story 1.1 AC4: No hard-coded secrets
 #
 # AC4: Given secrets are required,
 #      when I inspect the repo,
@@ -45,8 +40,6 @@ env_refs_in_file() {
 # TS-104a [P0] — .env is listed in .gitignore
 # ---------------------------------------------------------------------------
 @test "[P0][TS-104a] .gitignore contains a rule that covers '.env'" {
-  skip "RED PHASE: .gitignore not yet trimmed to final form (Story 1.1 Task 1)"
-
   assert [ -f "${PROJECT_ROOT}/.gitignore" ]
 
   # .env must be ignored (exact line or pattern)
@@ -58,8 +51,6 @@ env_refs_in_file() {
 # TS-104b [P0] — .env.example is NOT excluded from git (explicitly allowed)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-104b] .gitignore contains '!.env.example' or .env.example is tracked" {
-  skip "RED PHASE: .gitignore / .env.example not yet in final form (Story 1.1 Task 1)"
-
   assert [ -f "${PROJECT_ROOT}/.gitignore" ]
 
   # Either the gitignore explicitly allows .env.example…
@@ -78,8 +69,6 @@ env_refs_in_file() {
 # TS-104c [P0] — .env.example values are only placeholders, not real secrets
 # ---------------------------------------------------------------------------
 @test "[P0][TS-104c] .env.example uses 'change-me' placeholder values, not real secrets" {
-  skip "RED PHASE: .env.example not yet rewritten to final form (Story 1.1 Task 1)"
-
   assert [ -f "${PROJECT_ROOT}/.env.example" ]
 
   # All value assignments should contain 'change-me' or be empty
@@ -102,8 +91,6 @@ env_refs_in_file() {
 # TS-104d [P0] — compose.yaml has no hard-coded secret values
 # ---------------------------------------------------------------------------
 @test "[P0][TS-104d] compose.yaml contains no hard-coded password values" {
-  skip "RED PHASE: compose.yaml not yet created (Story 1.1 Task 4)"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
 
   # Secret keys that must ONLY appear as ${VAR} references, never as literals
@@ -130,8 +117,6 @@ env_refs_in_file() {
 # TS-104e [P0] — keycloak/Dockerfile has no hard-coded secret values
 # ---------------------------------------------------------------------------
 @test "[P0][TS-104e] keycloak/Dockerfile contains no hard-coded secret values" {
-  skip "RED PHASE: keycloak/Dockerfile not yet created (Story 1.1 Task 3)"
-
   assert [ -f "${PROJECT_ROOT}/keycloak/Dockerfile" ]
 
   # Dockerfile must not contain ENV instructions with secret values
@@ -148,8 +133,6 @@ env_refs_in_file() {
 # TS-104f [P0] — postgres init script has no hard-coded secret values
 # ---------------------------------------------------------------------------
 @test "[P0][TS-104f] postgres/init/01-init-databases.sh contains no hard-coded passwords" {
-  skip "RED PHASE: postgres/init/01-init-databases.sh not yet created (Story 1.1 Task 2)"
-
   assert [ -f "${PROJECT_ROOT}/postgres/init/01-init-databases.sh" ]
 
   # No raw password strings should appear — credentials come from env vars via psql -v flags
@@ -168,8 +151,6 @@ env_refs_in_file() {
 # TS-104g [P1] — .env.example defines all keys consumed by compose.yaml
 # ---------------------------------------------------------------------------
 @test "[P1][TS-104g] .env.example defines every env var referenced in compose.yaml" {
-  skip "RED PHASE: compose.yaml and .env.example not yet in final form (Story 1.1 Tasks 1 and 4)"
-
   assert [ -f "${PROJECT_ROOT}/compose.yaml" ]
   assert [ -f "${PROJECT_ROOT}/.env.example" ]
 
@@ -204,8 +185,6 @@ env_refs_in_file() {
 # TS-104h [P1] — Real .env is NOT tracked by git
 # ---------------------------------------------------------------------------
 @test "[P1][TS-104h] git does not track the real .env file" {
-  skip "RED PHASE: .gitignore not yet in final form (Story 1.1 Task 1)"
-
   # git ls-files returns empty output for untracked files
   run git -C "${PROJECT_ROOT}" ls-files ".env"
   assert_output ""
@@ -215,7 +194,7 @@ env_refs_in_file() {
 # TS-104i [P2] — gitleaks negative test: detects synthetic secret (validates gate)
 # ---------------------------------------------------------------------------
 @test "[P2][TS-104i] gitleaks detects a synthetic injected secret (gate validation)" {
-  skip "RED PHASE: gitleaks gate is Story 1.5 scope; this is a P2 pre-validation scaffold"
+  skip "P2: gitleaks gate is Story 1.5 scope; this is a pre-validation scaffold"
 
   # This test validates that gitleaks is correctly configured to catch secrets.
   # It injects a synthetic AWS-like key into a temp file and asserts gitleaks catches it.

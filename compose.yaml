@@ -1,0 +1,86 @@
+# compose.yaml — envocc-sso foundation stack
+#
+# Services:
+#   postgres  — PostgreSQL 17.5, two isolated databases (keycloak + admin)
+#   keycloak  — Keycloak 26.6.3, backed by the keycloak database
+#
+# Prerequisites:
+#   1. Copy .env.example → .env
+#   2. Fill in all `change-me-*` placeholder values
+#   3. docker compose up --build
+#
+# Secrets: ALL credentials come from .env — no hard-coded values here.
+# Version pinning: both images pinned by exact tag AND @sha256: digest.
+
+services:
+
+  # ── PostgreSQL 17.5 ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17.5@sha256:aadf2c0696f5ef357aa7a68da995137f0cf17bad0bf6e1f17de06ae5c769b302
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Pass role credentials to the init script
+      KC_DB_USERNAME: ${KC_DB_USERNAME}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      ADMINAPP_DB_USERNAME: ${ADMINAPP_DB_USERNAME}
+      ADMINAPP_DB_PASSWORD: ${ADMINAPP_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Keycloak 26.6.3 ────────────────────────────────────────────────────────
+  keycloak:
+    build:
+      context: ./keycloak
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # Explicit environment block — only the 8 vars KC actually needs.
+    # Do NOT use env_file: .env here: that would leak Postgres superuser
+    # password and admin-app DB credentials into the KC process env.
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${KC_DB_USERNAME}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+      # Required for HTTP-only local stack (TLS termination via Nginx is Story 1.3)
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "8080:8080"
+      # Port 9000 (management/health) is intentionally NOT published to host.
+      # It is used in-container for the healthcheck below only.
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Health endpoint moved to management port 9000 in KC 25+.
+      # The ubi9-micro base image has no curl/wget — use bash TCP socket.
+      # Assert: HTTP 200 status line AND "status": "UP" (KC 26 JSON format)
+      #         AND absence of "status": "DOWN".
+      test:
+        - "CMD-SHELL"
+        - >-
+          exec 3<>/dev/tcp/localhost/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          out=$$(cat <&3) &&
+          exec 3>&- &&
+          echo "$$out" | grep -q '200 OK' &&
+          echo "$$out" | grep -q '"status": "UP"' &&
+          ! echo "$$out" | grep -q '"status": "DOWN"'
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
+
+volumes:
+  postgres_data:
