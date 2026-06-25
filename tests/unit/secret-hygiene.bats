@@ -325,6 +325,10 @@ sys.exit(0)
   # Use grep -P to detect array form: "secret":["<16+ chars>"]
   # gitleaks keycloak-hmac-secret rule: "secret"\s*:\s*\[\s*"[^"]{16,}"\s*\]
   # If grep finds a match, the file has a populated HMAC secret — FAIL.
+  #
+  # NOTE: -P (Perl-compatible regex) requires GNU grep (Linux/CI) or ugrep (macOS).
+  # BSD grep (bare macOS /usr/bin/grep) does not support -P; ensure GNU grep or ugrep
+  # is on PATH before running locally (CI always uses ubuntu-latest with GNU grep).
   run grep -Pzo '"secret"\s*:\s*\[\s*"[^"]{16,}"' "${PROJECT_ROOT}/keycloak/realm-export.json"
   assert_failure
 }

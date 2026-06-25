@@ -31,14 +31,9 @@ bats_load_library 'bats-assert'
 load '../helpers/common'
 
 # ---------------------------------------------------------------------------
-# Suite setup: require INTEGRATION env var, set up .env if needed
+# Suite setup: handled by tests/integration/setup_suite.bash (BATS 1.5+ companion).
+# Per-test: guard against non-INTEGRATION runs.
 # ---------------------------------------------------------------------------
-setup_suite() {
-  if [[ -z "${INTEGRATION}" ]]; then
-    skip "Integration tests skipped — set INTEGRATION=1 and ensure stack is running"
-  fi
-  env_setup
-}
 
 setup() {
   if [[ -z "${INTEGRATION}" ]]; then
@@ -76,21 +71,8 @@ setup() {
 # TS-201c [P0] — Admin REST API confirms realm exists and is enabled (AC1)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-201c] Admin REST API confirms envocc realm exists and is enabled" {
-  # Obtain admin token using .env credentials
-  local admin_user admin_pass
-  admin_user=$(grep KC_BOOTSTRAP_ADMIN_USERNAME "${PROJECT_ROOT}/.env" | cut -d= -f2)
-  admin_pass=$(grep KC_BOOTSTRAP_ADMIN_PASSWORD "${PROJECT_ROOT}/.env" | cut -d= -f2)
-
   local token
-  token=$(curl -sf --max-time 15 \
-    -d "client_id=admin-cli" \
-    -d "username=${admin_user}" \
-    -d "password=${admin_pass}" \
-    -d "grant_type=password" \
-    "http://localhost:8080/realms/master/protocol/openid-connect/token" \
-    | python3 -c "import json,sys; print(json.load(sys.stdin).get('access_token',''))")
-
-  [ -n "${token}" ] || fail "Could not obtain admin token — check KC_BOOTSTRAP_ADMIN_* in .env"
+  token=$(get_admin_token) || fail "Could not obtain admin token — check KC_BOOTSTRAP_ADMIN_* in .env"
 
   # Query the realm endpoint
   run curl -sf --max-time 10 \
@@ -109,31 +91,24 @@ setup() {
 # Checks: bruteForceProtected, accessTokenLifespan, ssoSessionIdleTimeout
 # ---------------------------------------------------------------------------
 @test "[P1][TS-201d] Baseline realm settings match realm-export.json spec" {
-  local admin_user admin_pass
-  admin_user=$(grep KC_BOOTSTRAP_ADMIN_USERNAME "${PROJECT_ROOT}/.env" | cut -d= -f2)
-  admin_pass=$(grep KC_BOOTSTRAP_ADMIN_PASSWORD "${PROJECT_ROOT}/.env" | cut -d= -f2)
-
   local token
-  token=$(curl -sf --max-time 15 \
-    -d "client_id=admin-cli" \
-    -d "username=${admin_user}" \
-    -d "password=${admin_pass}" \
-    -d "grant_type=password" \
-    "http://localhost:8080/realms/master/protocol/openid-connect/token" \
-    | python3 -c "import json,sys; print(json.load(sys.stdin).get('access_token',''))")
+  token=$(get_admin_token) || fail "Could not obtain admin token"
 
-  [ -n "${token}" ] || fail "Could not obtain admin token"
-
-  local realm_json
-  realm_json=$(curl -sf --max-time 10 \
+  # Fetch realm JSON and write to a temp file to avoid shell-interpolation risks
+  # when passing large JSON strings into python3 -c "..." inline scripts.
+  local realm_tmpfile
+  realm_tmpfile=$(mktemp)
+  curl -sf --max-time 10 \
     -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc")
+    "http://localhost:8080/admin/realms/envocc" > "${realm_tmpfile}"
 
-  run python3 -c "
+  run python3 - "${realm_tmpfile}" <<'PYEOF'
 import json, sys
-d = json.loads('''${realm_json}''')
-failures = []
 
+with open(sys.argv[1]) as f:
+    d = json.load(f)
+
+failures = []
 checks = [
     ('bruteForceProtected', True),
     ('accessTokenLifespan', 300),
@@ -152,7 +127,9 @@ if failures:
     print('Realm setting mismatches: ' + str(failures))
     sys.exit(1)
 sys.exit(0)
-"
+PYEOF
+
+  rm -f "${realm_tmpfile}"
   assert_success
 }
 
