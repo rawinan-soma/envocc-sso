@@ -19,5 +19,15 @@ export PROJECT_ROOT
 source "${PROJECT_ROOT}/tests/helpers/common.bash"
 
 setup_suite() {
-    env_setup
+    # env_setup copies .env.example → .env for compose-based tests (TS-138x).
+    # Guard: if .env.example is absent (sparse checkout, deleted file), skip the
+    # copy rather than letting `cp` fail and aborting the entire suite — the many
+    # grep/git-only unit tests (TS-136x, TS-137x, TS-103x) have no .env dependency
+    # and must not be blocked by a missing .env.example.
+    if [[ -f "${PROJECT_ROOT}/.env.example" ]]; then
+        env_setup
+    else
+        echo "WARNING: ${PROJECT_ROOT}/.env.example not found; skipping env_setup." \
+             "TS-138x compose tests may fail if .env is also absent." >&2
+    fi
 }

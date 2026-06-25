@@ -67,6 +67,13 @@ compose_service_field() {
     | python3 -c "
 import sys, yaml
 cfg = yaml.safe_load(sys.stdin)
+# Guard: yaml.safe_load returns None on empty input (docker compose config failed
+# or produced no output). Fail with a clear message rather than an AttributeError
+# on None.get() which is hard to diagnose from a BATS test failure.
+if cfg is None:
+    import sys as _sys
+    print('ERROR: docker compose config produced no output (docker down? missing .env?)', file=_sys.stderr)
+    raise SystemExit(1)
 svc = cfg.get('services', {}).get('${service}', {})
 print(${py_expr})
 "
