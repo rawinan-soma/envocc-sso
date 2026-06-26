@@ -1,5 +1,5 @@
 # Story Dependency Graph
-_Last updated: 2026-06-26T15:10:00Z_
+_Last updated: 2026-06-26T16:00:31Z_
 
 ## Stories
 
@@ -90,6 +90,7 @@ _Last updated: 2026-06-26T15:10:00Z_
 
 - **Stories 1.2 and 1.3 merged**: PR #45 (story-1-2, 2026-06-26T15:04Z) and PR #46 (story-1-3, 2026-06-26T15:01Z) are both merged into main.
 - **Story 1.5 is now Ready to Work**: All its dependencies (1.2, 1.3, 1.4) have merged PRs. This is the only unblocked, incomplete story.
+- **Story 1.5 worktree active**: `.worktrees/story-1-5-agentic-build-ci-security-gate` exists on branch `story-1-5-agentic-build-ci-security-gate` — in-progress work, do not remove.
 - **Epic 1 completion gate**: Only 1.5 remains. Once it is done, Epic 2 stories become unblocked.
 - **Worktree cleanup**: story-1-2 and story-1-3 worktrees removed; remote branches deleted (2026-06-26).
 - **Completed stories**: 1.1 (PR #43), 1.2 (PR #45), 1.3 (PR #46), 1.4 (PR #44) — all merged into main.
