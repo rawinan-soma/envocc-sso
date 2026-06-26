@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-25
-last_updated: 2026-06-27T02:10:00Z
+last_updated: 2026-06-27T06:00:00Z
 project: envocc-sso
 project_key: NOKEY
 tracking_system: file-system
