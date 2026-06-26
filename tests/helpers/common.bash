@@ -94,6 +94,54 @@ print(t)
 }
 
 # ---------------------------------------------------------------------------
+# compose_service_field <service_name> <python_expression>
+# Parses compose.yaml and evaluates <python_expression> with `svc` bound to
+# the named service's dict. Prints the evaluated result to stdout.
+#
+# Uses `docker compose config --format json` for env-var-substituted output;
+# falls back to raw YAML parse via PyYAML if docker is unavailable.
+#
+# Usage examples:
+#   compose_service_field nginx "'defined' if svc.get('healthcheck') else 'missing'"
+#   compose_service_field keycloak "svc.get('environment', {}).get('KC_PROXY_HEADERS', '')"
+# ---------------------------------------------------------------------------
+compose_service_field() {
+  local service="${1}"
+  local expression="${2}"
+
+  python3 - "${PROJECT_ROOT}/compose.yaml" "${service}" "${expression}" <<'PYEOF'
+import sys, json, subprocess
+
+compose_file = sys.argv[1]
+service_name = sys.argv[2]
+expression   = sys.argv[3]
+
+# Prefer docker compose config (resolves env vars) over raw YAML parse.
+cfg = None
+try:
+    result = subprocess.run(
+        ["docker", "compose", "-f", compose_file, "config", "--format", "json"],
+        capture_output=True, text=True, check=True
+    )
+    cfg = json.loads(result.stdout)
+except Exception:
+    pass
+
+if cfg is None:
+    try:
+        import yaml
+        with open(compose_file) as f:
+            cfg = yaml.safe_load(f)
+    except ImportError:
+        print("ERROR: docker unavailable and PyYAML not installed", file=sys.stderr)
+        sys.exit(2)
+
+svc = cfg.get("services", {}).get(service_name, {})
+print(eval(expression))
+PYEOF
+}
+
+# ---------------------------------------------------------------------------
 # env_setup
 # Copy .env.example -> .env if no real .env exists (CI / clean checkout).
 # ---------------------------------------------------------------------------
