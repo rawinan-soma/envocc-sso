@@ -185,8 +185,11 @@ jobs:
     name: Format Check (Prettier)
     runs-on: ubuntu-latest
     needs: admin-app-check
-    # result == 'success' ensures a transient error in admin-app-check causes this job
-    # to fail (not silently skip), preventing security checks from being bypassed.
+    # result == 'success' is a defensive guard: it ensures this job only runs when
+    # admin-app-check fully completed, preventing the edge case where a stale or
+    # unexpected output value could trigger a run after a partial failure.
+    # Note: a failed admin-app-check still causes this job to be SKIPPED (not failed).
+    # Configure branch-protection required checks to block merges on skipped jobs.
     if: needs.admin-app-check.result == 'success' && needs.admin-app-check.outputs.exists == 'true'
     steps:
       - name: Checkout code

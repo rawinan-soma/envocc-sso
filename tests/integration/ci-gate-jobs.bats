@@ -197,8 +197,10 @@ EOF
   assert [ -f "${CI_YML}" ]
 
   # Count job IDs (scoped to the jobs: block) vs ubuntu-latest occurrences.
-  # grep -cE "^  [a-z]..." over the full file would also match "  push:" in
-  # the on: block, producing a false over-count — use Python to scope correctly.
+  # Use the same broad pattern as TS-152j ([A-Za-z][A-Za-z0-9_-]*) so ALL job
+  # entries are counted — including any with invalid names (underscores, uppercase)
+  # that TS-152j would flag separately. A narrow pattern like [a-z][a-z0-9-]* would
+  # silently under-count invalid job names, letting a missing ubuntu-latest slip through.
   local job_count ubuntu_count
   job_count=$(python3 - "${CI_YML}" <<'PYEOF'
 import re, sys
@@ -209,7 +211,7 @@ if not jobs_match:
     print(0)
     sys.exit(0)
 jobs_block = jobs_match.group(1)
-count = len(re.findall(r'^  [a-z][a-z0-9-]*:', jobs_block, re.MULTILINE))
+count = len(re.findall(r'^  [A-Za-z][A-Za-z0-9_-]*:', jobs_block, re.MULTILINE))
 print(count)
 PYEOF
 )
