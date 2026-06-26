@@ -196,9 +196,23 @@ EOF
 
   assert [ -f "${CI_YML}" ]
 
-  # Count job definitions vs ubuntu-latest occurrences (rough but effective)
+  # Count job IDs (scoped to the jobs: block) vs ubuntu-latest occurrences.
+  # grep -cE "^  [a-z]..." over the full file would also match "  push:" in
+  # the on: block, producing a false over-count — use Python to scope correctly.
   local job_count ubuntu_count
-  job_count=$(grep -cE "^  [a-z][a-z0-9-]*:" "${CI_YML}" || true)
+  job_count=$(python3 - "${CI_YML}" <<'PYEOF'
+import re, sys
+with open(sys.argv[1]) as f:
+    content = f.read()
+jobs_match = re.search(r'^jobs:\n(.*)', content, re.MULTILINE | re.DOTALL)
+if not jobs_match:
+    print(0)
+    sys.exit(0)
+jobs_block = jobs_match.group(1)
+count = len(re.findall(r'^  [a-z][a-z0-9-]*:', jobs_block, re.MULTILINE))
+print(count)
+PYEOF
+)
   ubuntu_count=$(grep -c "ubuntu-latest" "${CI_YML}" || true)
 
   # Every job must have exactly one runs-on line with ubuntu-latest

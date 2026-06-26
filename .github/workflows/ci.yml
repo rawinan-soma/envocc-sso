@@ -132,7 +132,9 @@ jobs:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
     permissions:
-      security-events: write
+      security-events: write  # required to upload SARIF to the GitHub Security tab
+      contents: read          # required for actions/checkout; job-level permissions
+                              # zero out all unspecified scopes, so this must be explicit
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
