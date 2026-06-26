@@ -14,12 +14,12 @@ pre-commit:
 
     sast:
       name: SAST (Semgrep)
-      # REQUESTS_CA_BUNDLE is unset here so semgrep uses its bundled certifi CA
-      # rather than any machine-level override (e.g. a stale slim-bundle.pem path).
-      # In CI, this env key is absent by default and semgrep works without it.
-      env:
-        REQUESTS_CA_BUNDLE: ""
-      run: semgrep scan --config auto --error
+      # Unset REQUESTS_CA_BUNDLE before invoking semgrep so it uses its bundled
+      # certifi CA rather than any stale machine-level override (e.g. a slim-bundle.pem
+      # path that no longer exists). Setting it to "" would leave the variable set
+      # (empty path), which some requests versions treat as a CA file path and raise
+      # an SSLError. Unsetting it entirely is the safe default.
+      run: env -u REQUESTS_CA_BUNDLE semgrep scan --config auto --error
 
     realm-lint:
       name: Realm Config Lint

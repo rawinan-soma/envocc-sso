@@ -20,7 +20,10 @@ import json
 import sys
 from pathlib import Path
 
-REALM_EXPORT_PATH = Path("keycloak/realm-export.json")
+# Default path (resolved relative to CWD, expected to be repo root).
+# An explicit path argument overrides this — used by tests and ad-hoc invocations.
+_DEFAULT_PATH = Path("keycloak/realm-export.json")
+REALM_EXPORT_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else _DEFAULT_PATH
 
 REQUIRED_FIELDS = [
     "realm",

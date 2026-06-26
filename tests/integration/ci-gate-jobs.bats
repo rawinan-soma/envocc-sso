@@ -233,7 +233,9 @@ if uc < jc:
   assert [ -f "${PROJECT_ROOT}/scripts/lint-realm-export.py" ]
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py"
+  # Pass explicit path so the script does not depend on CWD.
+  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" \
+    "${PROJECT_ROOT}/keycloak/realm-export.json"
   assert_success
   assert_output --partial "passed"
 }

@@ -187,7 +187,9 @@ load '../helpers/common'
   assert [ -f "${PROJECT_ROOT}/scripts/lint-realm-export.py" ]
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py"
+  # Pass explicit path so the script does not depend on CWD.
+  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" \
+    "${PROJECT_ROOT}/keycloak/realm-export.json"
   assert_success
   assert_output --partial "passed"
 }
@@ -200,15 +202,11 @@ load '../helpers/common'
 
   assert [ -f "${PROJECT_ROOT}/scripts/lint-realm-export.py" ]
 
-  # Create a temp malformed JSON file and point the script at it via env or temp override
+  # Create a temp malformed JSON file and pass it as a path argument.
   local bad_json
   bad_json="$(mktemp /tmp/bad-realm-XXXXXX.json)"
   echo "{ this is not valid json" > "${bad_json}"
 
-  # The script must be callable with a path argument or respect an env var override.
-  # Based on the story spec it reads keycloak/realm-export.json directly.
-  # We test by temporarily substituting — if the script accepts a path arg, prefer that.
-  # Adjust based on actual implementation.
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${bad_json}"
   assert_failure
 
@@ -318,45 +316,51 @@ print(json.dumps(data))
 }
 
 # ---------------------------------------------------------------------------
-# TS-153a [P0] — ci.yml format-check job guarded on admin/package.json
-# (admin/ does not exist yet — job must be absent or conditionally skipped)
+# TS-153a [P0] — ci.yml format-check job guarded (admin/ not yet present)
+# The guard is implemented via an admin-app-check job that sets an output
+# `exists`, consumed as `needs.admin-app-check.outputs.exists == 'true'`.
 # ---------------------------------------------------------------------------
-@test "[P0][TS-153a] ci.yml format-check job is guarded (hashFiles admin/package.json)" {
+@test "[P0][TS-153a] ci.yml format-check job is guarded (admin-app-check output)" {
   skip "RED PHASE — Task 2.1: add format-check job with admin/package.json guard"
 
   assert [ -f "${PROJECT_ROOT}/.github/workflows/ci.yml" ]
 
-  # When admin/package.json does not exist, the job must not fail.
-  # We verify the guard expression is present in the YAML.
-  run grep "hashFiles('admin/package.json')" "${PROJECT_ROOT}/.github/workflows/ci.yml"
+  # The admin-app-check job must be defined and expose an 'exists' output.
+  run grep -E "^  admin-app-check:" "${PROJECT_ROOT}/.github/workflows/ci.yml"
+  assert_success
+
+  # The format-check job must depend on admin-app-check and check its output.
+  run grep "needs.admin-app-check.outputs.exists" "${PROJECT_ROOT}/.github/workflows/ci.yml"
   assert_success
 }
 
 # ---------------------------------------------------------------------------
-# TS-153b [P0] — ci.yml dependency-audit job guarded on admin/package.json
+# TS-153b [P0] — ci.yml dependency-audit job guarded (admin/ not yet present)
 # ---------------------------------------------------------------------------
-@test "[P0][TS-153b] ci.yml dependency-audit job is guarded (hashFiles admin/package.json)" {
+@test "[P0][TS-153b] ci.yml dependency-audit job is guarded (admin-app-check output)" {
   skip "RED PHASE — Task 2.4: add dependency-audit job with admin/package.json guard"
 
   assert [ -f "${PROJECT_ROOT}/.github/workflows/ci.yml" ]
 
-  run grep -c "hashFiles('admin/package.json')" "${PROJECT_ROOT}/.github/workflows/ci.yml"
-  # Should appear at least twice: format-check guard + dependency-audit guard
+  # At least three jobs (format-check, dependency-audit, language-checks) must
+  # reference the admin-app-check output as their guard condition.
+  run grep -c "needs.admin-app-check.outputs.exists" "${PROJECT_ROOT}/.github/workflows/ci.yml"
   local count
   count="${output}"
   assert [ "${count}" -ge 2 ]
 }
 
 # ---------------------------------------------------------------------------
-# TS-153c [P0] — ci.yml language-checks job guarded on admin/package.json
+# TS-153c [P0] — ci.yml language-checks job guarded (admin/ not yet present)
 # ---------------------------------------------------------------------------
-@test "[P0][TS-153c] ci.yml language-checks job is guarded (hashFiles admin/package.json)" {
+@test "[P0][TS-153c] ci.yml language-checks job is guarded (admin-app-check output)" {
   skip "RED PHASE — Task 2.6: add language-checks job with admin/package.json guard"
 
   assert [ -f "${PROJECT_ROOT}/.github/workflows/ci.yml" ]
 
-  # Three guarded jobs: format-check, dependency-audit, language-checks
-  run grep -c "hashFiles('admin/package.json')" "${PROJECT_ROOT}/.github/workflows/ci.yml"
+  # All three guarded jobs (format-check, dependency-audit, language-checks)
+  # must reference needs.admin-app-check.outputs.exists == 'true'.
+  run grep -c "needs.admin-app-check.outputs.exists" "${PROJECT_ROOT}/.github/workflows/ci.yml"
   local count
   count="${output}"
   assert [ "${count}" -ge 3 ]
