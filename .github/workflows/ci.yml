@@ -148,6 +148,29 @@ jobs:
         with:
           sarif_file: semgrep.sarif
 
+  # ─── Admin-App Presence Check ──────────────────────────────────────────────
+  # Detects whether the admin SvelteKit app exists yet.
+  # hashFiles() is not available at the job-level if: context; use a shell test
+  # inside a lightweight job and expose the result as an output instead.
+  # Format-check, dependency-audit, and language-checks depend on this output.
+  admin-app-check:
+    name: Admin App Presence Check
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for admin/package.json
+        id: check
+        run: |
+          if [ -f admin/package.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # ─── Format Check (Prettier) ───────────────────────────────────────────────
   # Runs Prettier over the admin app source files.
   # Guarded: skipped entirely until admin/package.json exists (Story 4.1).
@@ -155,7 +178,8 @@ jobs:
   format-check:
     name: Format Check (Prettier)
     runs-on: ubuntu-latest
-    if: hashFiles('admin/package.json') != ''
+    needs: admin-app-check
+    if: needs.admin-app-check.outputs.exists == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -175,7 +199,8 @@ jobs:
   dependency-audit:
     name: Dependency Audit (bun)
     runs-on: ubuntu-latest
-    if: hashFiles('admin/package.json') != ''
+    needs: admin-app-check
+    if: needs.admin-app-check.outputs.exists == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -195,7 +220,8 @@ jobs:
   language-checks:
     name: Language Checks (ESLint + tsc + svelte-check)
     runs-on: ubuntu-latest
-    if: hashFiles('admin/package.json') != ''
+    needs: admin-app-check
+    if: needs.admin-app-check.outputs.exists == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
