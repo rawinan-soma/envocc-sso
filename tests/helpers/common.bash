@@ -2,6 +2,7 @@
 # tests/helpers/common.bash
 # Shared helpers for all bats integration and unit tests.
 # Story 1.1: Docker Compose stack — pinned Keycloak + PostgreSQL (two databases)
+# Story 1.2: Realm config-as-code baseline & secret hygiene
 
 # Project root — resolve two levels up from tests/helpers/
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -44,38 +45,51 @@ compose_down_volumes() {
 }
 
 # ---------------------------------------------------------------------------
-# compose_service_field <service> <python_expr>
+# get_admin_token
+# Obtain a Keycloak admin-cli token using KC_BOOTSTRAP_ADMIN_* from .env.
+# Reads credentials via literal sed-parse (not source) to preserve special chars.
+# Prints the access_token to stdout; exits non-zero if the token could not be obtained.
 #
-# Parse `docker compose config` output with python3 and evaluate <python_expr>
-# against the parsed YAML, printing the result to stdout.
-#
-# <python_expr> receives:
-#   svc  — the service dict for <service> (e.g. svc.get('environment', {}))
-#
-# Example:
-#   compose_service_field "nginx" "svc.get('healthcheck', {}).get('test', [])"
-#
-# Added in Story 1.3 review: the four TS-138x tests in nginx-config.bats each
-# ran a full `docker compose config | python3` pipeline independently (~300ms
-# each). Centralising here lets tests share the pattern and keeps the
-# extraction logic in one place.
+# Usage:
+#   local token
+#   token=$(get_admin_token) || fail "Could not obtain admin token"
 # ---------------------------------------------------------------------------
-compose_service_field() {
-  local service="${1}"
-  local py_expr="${2}"
-  docker compose -f "${PROJECT_ROOT}/compose.yaml" config 2>/dev/null \
-    | python3 -c "
-import sys, yaml
-cfg = yaml.safe_load(sys.stdin)
-# Guard: yaml.safe_load returns None on empty input (docker compose config failed
-# or produced no output). Fail with a clear message rather than an AttributeError
-# on None.get() which is hard to diagnose from a BATS test failure.
-if cfg is None:
-    import sys as _sys
-    print('ERROR: docker compose config produced no output (docker down? missing .env?)', file=_sys.stderr)
-    raise SystemExit(1)
-svc = cfg.get('services', {}).get('${service}', {})
-print(${py_expr})
+# Read one KEY=value from .env, normalising the way Docker Compose does:
+#   - last assignment wins (tail -n 1)
+#   - a trailing CR (CRLF checkouts) is removed
+#   - a single pair of surrounding quotes (" or ') is stripped
+_env_value() {
+  local key="${1}"
+  sed -n "s/^${key}=//p" "${PROJECT_ROOT}/.env" \
+    | tail -n 1 \
+    | tr -d '\r' \
+    | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+}
+
+get_admin_token() {
+  local admin_user admin_pass response
+  admin_user=$(_env_value "KC_BOOTSTRAP_ADMIN_USERNAME")
+  admin_pass=$(_env_value "KC_BOOTSTRAP_ADMIN_PASSWORD")
+
+  # Capture curl output explicitly so we can check curl's exit code before
+  # passing the body to python3. This avoids an opaque JSONDecodeError when
+  # curl fails (timeout, HTTP 4xx/5xx) and the pipe delivers empty stdin.
+  response=$(curl -sf --max-time 15 \
+    -d "client_id=admin-cli" \
+    -d "username=${admin_user}" \
+    -d "password=${admin_pass}" \
+    -d "grant_type=password" \
+    "http://localhost:8080/realms/master/protocol/openid-connect/token") \
+    || { echo "get_admin_token: curl failed (exit $?) — is Keycloak running?" >&2; return 1; }
+
+  echo "${response}" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+t = d.get('access_token', '')
+if not t:
+    print('get_admin_token: no access_token in response (bad credentials?)', file=sys.stderr)
+    sys.exit(1)
+print(t)
 "
 }
 
