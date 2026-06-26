@@ -4,7 +4,7 @@ baseline_commit: 795fc4cedd70362308e51bf41cebba7adbcb1fb1
 
 # Story 1.5: Agentic-build / CI Security Gate
 
-Status: review
+Status: done
 
 ## Story
 
@@ -294,6 +294,20 @@ None.
 - `README.md` — MODIFIED: added Pre-commit gate setup section
 - `_bmad-output/implementation-artifacts/1-5-agentic-build-ci-security-gate.md` — MODIFIED: story status + task checkboxes + completion notes
 
+## Review Findings
+
+Adversarial code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor), 2026-06-26. 4 patch, 2 defer, several dismissed as conforming-to-spec noise.
+
+- [x] [Review][Patch] Lint script missed array-form and `secret`-keyed key material — `scripts/lint-realm-export.py`. The script claimed to "mirror .gitleaks.toml" but only matched string values whose key was exactly `privateKey`/`certificate`/`clientSecret`. Gitleaks (`.gitleaks.toml:113-122`) explicitly catches the array form `"privateKey":["<64+>"]` (the form Keycloak actually emits for KeyProvider config) and the bare `"secret"` key (client + HMAC/AES secrets). Those secrets passed the script silently. Fixed: detection now walks single/multi-element string arrays and adds `secret` (>8). Verified against array-form privateKey, string/array `secret`, and certificate inputs. (blind+edge)
+- [x] [Review][Patch] Non-dict top-level JSON crashed with uncaught TypeError — `scripts/lint-realm-export.py:86`. A realm-export parsing to a JSON number/null/string hit `field not in data` on a non-iterable and threw a traceback instead of a clean exit 1. Fixed: added `isinstance(data, dict)` guard returning a human-readable error + exit 1. Verified with `42`, `null`, `"text"`, `[1,2,3]`. (blind+edge)
+- [x] [Review][Patch] Leftover verification artifact `test-secret-DELETEME.env` in worktree — removed. (Untracked + matched the `*.env` gitignore rule, so never at commit risk, but it was worktree litter from the dev's negative-path verification.) (reviewer)
+- [x] [Review][Patch] `__pycache__` not gitignored — this story introduced the first committed Python script, so `scripts/__pycache__/` is generated on every CI/pre-commit run. Added `__pycache__/` + `*.py[cod]` to `.gitignore`. (reviewer)
+- [x] [Review][Defer] `eval(expression)` in `compose_service_field` test helper [tests/helpers/common.bash:140] — deferred, test-only infra helper; all call sites pass hardcoded literal expressions, out of this story's scope.
+- [x] [Review][Defer] Required-field check is presence-only — empty/falsy values (`"realm":""`, `"bruteForceProtected":null`) pass lint [scripts/lint-realm-export.py:86] — deferred, minor hardening; spec only requires presence assertion.
+
+Dismissed as conforming to spec intent / noise: `semgrep --config auto` network dependency, `python-version: "3.x"` float, `hashFiles()` skip-as-success, `bun install --frozen-lockfile` lockfile ordering, `bun audit` severity threshold, Prettier glob scope, `.semgrepignore` path-level suppression, README placement, SARIF-missing-on-semgrep-crash, `certificate>64` public-cert false-positive (matches gitleaks behavior intentionally). All are either explicitly prescribed by the story spec/architecture or latent until Story 4.1 lands `admin/`.
+
 ## Change Log
 
 - 2026-06-26: Story 1.5 implemented — agentic-build / CI security gate. Created lefthook.yml (pre-commit), scripts/lint-realm-export.py, .semgrepignore; expanded .github/workflows/ci.yml with 5 new jobs; updated README.md with pre-commit onboarding. All AC1/AC2/AC3 criteria satisfied. (claude-sonnet-4-6)
+- 2026-06-26: Code review fixes — hardened scripts/lint-realm-export.py to detect array-form and `secret`-keyed key material (matching .gitleaks.toml) and to reject non-dict top-level JSON cleanly; removed leftover test-secret-DELETEME.env; added Python ignores to .gitignore. (claude-opus-4-8 — code review)
