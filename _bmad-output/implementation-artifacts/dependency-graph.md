@@ -1,5 +1,5 @@
 # Story Dependency Graph
-_Last updated: 2026-06-26T16:00:31Z_
+_Last updated: 2026-06-27T04:00:00Z_
 
 ## Stories
 
@@ -9,16 +9,16 @@ _Last updated: 2026-06-26T16:00:31Z_
 | 1.2 | 1 | Realm config-as-code baseline & secret hygiene | done | #3 | #45 | merged | 1.1 | ✅ Yes (done) |
 | 1.3 | 1 | Nginx security edge | done | #4 | #46 | merged | 1.1 | ✅ Yes (done) |
 | 1.4 | 1 | Shared Deep Sea design-token stylesheet | done | #5 | #44 | merged | none | ✅ Yes (done) |
-| 1.5 | 1 | Agentic-build / CI security gate | backlog | #6 | — | — | 1.2, 1.3, 1.4 | ✅ Yes |
-| 2.1 | 2 | Canonical identity model & lifecycle states | backlog | #7 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
-| 2.2 | 2 | OIDC Authorization Code + PKCE login | backlog | #8 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
-| 2.3 | 2 | Signed tokens, JWKS & OIDC discovery | backlog | #9 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
-| 2.4 | 2 | SSO session, lifetimes & RP-initiated logout | backlog | #10 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
-| 2.5 | 2 | Branded Deep Sea login theme | backlog | #11 | — | — | epic 1 complete, 1.4 | ❌ No (epic 1 not complete) |
-| 2.6 | 2 | TOTP MFA enforcement & verification hardening | backlog | #12 | — | — | epic 1 complete, 2.2 | ❌ No (epic 1 not complete) |
-| 2.7 | 2 | Brute-force protection & enumeration-resistant responses | backlog | #13 | — | — | epic 1 complete, 2.2 | ❌ No (epic 1 not complete) |
-| 2.8 | 2 | Disable blocks authentication & revokes sessions | backlog | #14 | — | — | epic 1 complete, 2.2 | ❌ No (epic 1 not complete) |
-| 2.9 | 2 | Login with ThaiD (brokered federation & account linking) | backlog | #15 | — | — | epic 1 complete, 2.2, 2.1 | ❌ No (epic 1 not complete) |
+| 1.5 | 1 | Agentic-build / CI security gate | done | #6 | #47 | open | 1.2, 1.3, 1.4 | ✅ Yes (done) |
+| 2.1 | 2 | Canonical identity model & lifecycle states | backlog | #7 | — | — | epic 1 complete | ❌ No (PR #47 not merged) |
+| 2.2 | 2 | OIDC Authorization Code + PKCE login | backlog | #8 | — | — | epic 1 complete | ❌ No (PR #47 not merged) |
+| 2.3 | 2 | Signed tokens, JWKS & OIDC discovery | backlog | #9 | — | — | epic 1 complete | ❌ No (PR #47 not merged) |
+| 2.4 | 2 | SSO session, lifetimes & RP-initiated logout | backlog | #10 | — | — | epic 1 complete | ❌ No (PR #47 not merged) |
+| 2.5 | 2 | Branded Deep Sea login theme | backlog | #11 | — | — | epic 1 complete, 1.4 | ❌ No (PR #47 not merged) |
+| 2.6 | 2 | TOTP MFA enforcement & verification hardening | backlog | #12 | — | — | epic 1 complete, 2.2 | ❌ No (PR #47 not merged) |
+| 2.7 | 2 | Brute-force protection & enumeration-resistant responses | backlog | #13 | — | — | epic 1 complete, 2.2 | ❌ No (PR #47 not merged) |
+| 2.8 | 2 | Disable blocks authentication & revokes sessions | backlog | #14 | — | — | epic 1 complete, 2.2 | ❌ No (PR #47 not merged) |
+| 2.9 | 2 | Login with ThaiD (brokered federation & account linking) | backlog | #15 | — | — | epic 1 complete, 2.2, 2.1 | ❌ No (PR #47 not merged) |
 | 3.1 | 3 | Password policy & breach screening | backlog | #16 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
 | 3.2 | 3 | Email delivery & link-token hygiene | backlog | #17 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
 | 3.3 | 3 | First-login activation | backlog | #18 | — | — | epic 1+2 complete, 3.1, 3.2 | ❌ No (epics 1+2 not complete) |
@@ -89,10 +89,10 @@ _Last updated: 2026-06-26T16:00:31Z_
 ## Notes
 
 - **Stories 1.2 and 1.3 merged**: PR #45 (story-1-2, 2026-06-26T15:04Z) and PR #46 (story-1-3, 2026-06-26T15:01Z) are both merged into main.
-- **Story 1.5 is now Ready to Work**: All its dependencies (1.2, 1.3, 1.4) have merged PRs. This is the only unblocked, incomplete story.
-- **Story 1.5 worktree active**: `.worktrees/story-1-5-agentic-build-ci-security-gate` exists on branch `story-1-5-agentic-build-ci-security-gate` — in-progress work, do not remove.
-- **Epic 1 completion gate**: Only 1.5 remains. Once it is done, Epic 2 stories become unblocked.
+- **Story 1.5 done (code review passed 2026-06-27)**: Sprint status is `done`; PR #47 is still open (not yet merged into main). Worktree `.worktrees/story-1-5-agentic-build-ci-security-gate` still active — do NOT remove until PR merges.
+- **Epic 1 completion gate**: All stories are done, but PR #47 must be merged into main before Epic 2 stories unlock. Once PR #47 merges, Epic 2 stories 2.1–2.5 (no intra-epic deps) become immediately ready.
 - **Worktree cleanup**: story-1-2 and story-1-3 worktrees removed; remote branches deleted (2026-06-26).
-- **Completed stories**: 1.1 (PR #43), 1.2 (PR #45), 1.3 (PR #46), 1.4 (PR #44) — all merged into main.
-- **Current epic**: Epic 1 — Secure Platform Foundation (lowest incomplete epic).
+- **Completed stories (merged PRs)**: 1.1 (PR #43), 1.2 (PR #45), 1.3 (PR #46), 1.4 (PR #44) — all merged into main.
+- **Done but PR open**: 1.5 (PR #47) — code done, awaiting merge.
+- **Current epic**: Epic 1 — Secure Platform Foundation (lowest epic with non-merged-to-main PR).
 - **All stories done**: false.
