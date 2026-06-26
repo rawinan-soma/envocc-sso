@@ -203,14 +203,12 @@ load '../helpers/common'
   assert [ -f "${PROJECT_ROOT}/scripts/lint-realm-export.py" ]
 
   # Create a temp malformed JSON file and pass it as a path argument.
-  local bad_json
-  bad_json="$(mktemp /tmp/bad-realm-XXXXXX.json)"
+  # BATS_TEST_TMPDIR is per-test and auto-cleaned on exit/abort — no manual rm needed.
+  local bad_json="${BATS_TEST_TMPDIR}/bad-realm.json"
   echo "{ this is not valid json" > "${bad_json}"
 
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${bad_json}"
   assert_failure
-
-  rm -f "${bad_json}"
 }
 
 # ---------------------------------------------------------------------------
@@ -222,8 +220,8 @@ load '../helpers/common'
   assert [ -f "${PROJECT_ROOT}/scripts/lint-realm-export.py" ]
 
   # Create a minimal JSON that is valid but missing 'bruteForceProtected'
-  local minimal_json
-  minimal_json="$(mktemp /tmp/minimal-realm-XXXXXX.json)"
+  # BATS_TEST_TMPDIR is per-test and auto-cleaned on exit/abort — no manual rm needed.
+  local minimal_json="${BATS_TEST_TMPDIR}/minimal-realm.json"
   cat > "${minimal_json}" <<'EOF'
 {
   "realm": "envocc",
@@ -236,20 +234,18 @@ EOF
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${minimal_json}"
   assert_failure
   assert_output --partial "bruteForceProtected"
-
-  rm -f "${minimal_json}"
 }
 
 # ---------------------------------------------------------------------------
 # TS-151o [P2] — lint-realm-export.py detects long clientSecret
 # ---------------------------------------------------------------------------
-@test "[P2][TS-151o] lint-realm-export.py exits 1 when a clientSecret > 8 chars is present" {
-  skip "RED PHASE — Task 3.4: scan for key material (clientSecret > 8 chars)"
+@test "[P2][TS-151o] lint-realm-export.py exits 1 when a clientSecret >= 8 chars is present" {
+  skip "RED PHASE — Task 3.4: scan for key material (clientSecret >= 8 chars)"
 
   assert [ -f "${PROJECT_ROOT}/scripts/lint-realm-export.py" ]
 
-  local secret_json
-  secret_json="$(mktemp /tmp/secret-realm-XXXXXX.json)"
+  # BATS_TEST_TMPDIR is per-test and auto-cleaned on exit/abort — no manual rm needed.
+  local secret_json="${BATS_TEST_TMPDIR}/secret-realm.json"
   cat > "${secret_json}" <<'EOF'
 {
   "realm": "envocc",
@@ -267,20 +263,18 @@ EOF
 
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${secret_json}"
   assert_failure
-
-  rm -f "${secret_json}"
 }
 
 # ---------------------------------------------------------------------------
 # TS-151p [P2] — lint-realm-export.py detects long privateKey value
 # ---------------------------------------------------------------------------
-@test "[P2][TS-151p] lint-realm-export.py exits 1 when a privateKey value > 64 chars is present" {
-  skip "RED PHASE — Task 3.4: scan for key material (privateKey > 64 chars)"
+@test "[P2][TS-151p] lint-realm-export.py exits 1 when a privateKey value >= 64 chars is present" {
+  skip "RED PHASE — Task 3.4: scan for key material (privateKey >= 64 chars)"
 
   assert [ -f "${PROJECT_ROOT}/scripts/lint-realm-export.py" ]
 
-  local key_json
-  key_json="$(mktemp /tmp/key-realm-XXXXXX.json)"
+  # BATS_TEST_TMPDIR is per-test and auto-cleaned on exit/abort — no manual rm needed.
+  local key_json="${BATS_TEST_TMPDIR}/key-realm.json"
   python3 -c "
 import json
 data = {
@@ -299,8 +293,6 @@ print(json.dumps(data))
 
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${key_json}"
   assert_failure
-
-  rm -f "${key_json}"
 }
 
 # ---------------------------------------------------------------------------
@@ -342,12 +334,12 @@ print(json.dumps(data))
 
   assert [ -f "${PROJECT_ROOT}/.github/workflows/ci.yml" ]
 
-  # At least three jobs (format-check, dependency-audit, language-checks) must
+  # All three jobs (format-check, dependency-audit, language-checks) must
   # reference the admin-app-check output as their guard condition.
   run grep -c "needs.admin-app-check.outputs.exists" "${PROJECT_ROOT}/.github/workflows/ci.yml"
   local count
   count="${output}"
-  assert [ "${count}" -ge 2 ]
+  assert [ "${count}" -ge 3 ]
 }
 
 # ---------------------------------------------------------------------------

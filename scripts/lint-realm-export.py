@@ -5,8 +5,8 @@ Checks performed:
   1. JSON is parseable.
   2. Required baseline fields are present: realm, enabled, bruteForceProtected,
      accessTokenLifespan.
-  3. No key material embedded: privateKey/certificate values > 64 chars,
-     clientSecret/secret values > 8 chars — in either the plain string form
+  3. No key material embedded: privateKey/certificate values >= 64 chars,
+     clientSecret/secret values >= 8 chars — in either the plain string form
      ("privateKey": "...") or the array form ("privateKey": ["..."]) that
      Keycloak actually emits for KeyProvider config — anywhere in the document
      (mirrors .gitleaks.toml rules).
@@ -37,13 +37,13 @@ REQUIRED_FIELDS = [
 # single-element arrays ("privateKey": ["..."]) — the gitleaks rules match
 # both forms, so this script must too. "secret" covers Keycloak client
 # secrets and HMAC/AES key-provider secrets (gitleaks: clientSecret|secret).
-KEY_MATERIAL_RULES = [
-    ("privateKey", 64),
-    ("certificate", 64),
-    ("clientSecret", 8),
-    ("secret", 8),
-]
-KEY_MATERIAL_THRESHOLDS = dict(KEY_MATERIAL_RULES)
+# Values >= the threshold are flagged (mirrors gitleaks {N,} quantifier).
+KEY_MATERIAL_THRESHOLDS = {
+    "privateKey": 64,
+    "certificate": 64,
+    "clientSecret": 8,
+    "secret": 8,
+}
 
 
 def _string_values(value):
@@ -69,9 +69,9 @@ def find_key_material(obj, path="$"):
         for key, value in obj.items():
             child_path = f"{path}.{key}"
             if key in KEY_MATERIAL_THRESHOLDS:
-                max_len = KEY_MATERIAL_THRESHOLDS[key]
+                threshold = KEY_MATERIAL_THRESHOLDS[key]
                 for sval in _string_values(value):
-                    if len(sval) > max_len:
+                    if len(sval) >= threshold:
                         yield (child_path, key, len(sval))
             if isinstance(value, (dict, list)):
                 yield from find_key_material(value, child_path)
@@ -129,7 +129,7 @@ def main():
     for json_path, field_name, value_len in find_key_material(data):
         errors.append(
             f"Key material detected at {json_path}: "
-            f"'{field_name}' value length {value_len} exceeds allowed maximum "
+            f"'{field_name}' value length {value_len} meets or exceeds key-material threshold "
             f"({KEY_MATERIAL_THRESHOLDS[field_name]} chars). "
             "Remove key material from realm-export.json before committing."
         )

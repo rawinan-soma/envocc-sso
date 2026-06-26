@@ -157,7 +157,7 @@ CI_YML="${PROJECT_ROOT}/.github/workflows/ci.yml"
   # Extract top-level job IDs (lines like '  job-id:' in the jobs: block)
   # A well-formed job ID must match [a-z][a-z0-9-]+ (kebab-case, no underscores)
   local bad_ids
-  bad_ids=$(python3 - <<'EOF'
+  bad_ids=$(python3 - "${CI_YML}" <<'EOF'
 import re, sys
 
 with open(sys.argv[1]) as f:
@@ -182,7 +182,7 @@ for m in re.finditer(r'^  ([A-Za-z][A-Za-z0-9_-]*):', jobs_block, re.MULTILINE):
 for b in bad:
     print(b)
 EOF
-"${CI_YML}")
+)
 
   run echo "${bad_ids}"
   assert_output ""
