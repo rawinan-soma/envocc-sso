@@ -1,0 +1,26 @@
+# lefthook.yml — pre-commit agentic-build gate
+# Story 1.5: Agentic-build / CI Security Gate
+#
+# Run `lefthook install` once after cloning to register the Git hook.
+# Required tools: gitleaks (8.24.0+), semgrep, python3
+#
+# Each command exits non-zero on violation; lefthook blocks the commit if any fail.
+
+pre-commit:
+  commands:
+    secret-scan:
+      name: Secret Scan (gitleaks)
+      run: gitleaks protect --staged --redact --config .gitleaks.toml
+
+    sast:
+      name: SAST (Semgrep)
+      # REQUESTS_CA_BUNDLE is unset here so semgrep uses its bundled certifi CA
+      # rather than any machine-level override (e.g. a stale slim-bundle.pem path).
+      # In CI, this env key is absent by default and semgrep works without it.
+      env:
+        REQUESTS_CA_BUNDLE: ""
+      run: semgrep scan --config auto --error
+
+    realm-lint:
+      name: Realm Config Lint
+      run: python3 scripts/lint-realm-export.py
