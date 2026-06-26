@@ -281,10 +281,6 @@ EOF
 
   assert [ -f "${PROJECT_ROOT}/scripts/lint-realm-export.py" ]
 
-  # Build a 65-char string for privateKey
-  local long_key
-  long_key="$(python3 -c "print('A' * 65)")"
-
   local key_json
   key_json="$(mktemp /tmp/key-realm-XXXXXX.json)"
   python3 -c "
