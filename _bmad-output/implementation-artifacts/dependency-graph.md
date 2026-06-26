@@ -1,15 +1,15 @@
 # Story Dependency Graph
-_Last updated: 2026-06-25T15:00:00Z_
+_Last updated: 2026-06-26T15:10:00Z_
 
 ## Stories
 
 | Story | Epic | Title | Sprint Status | Issue | PR | PR Status | Dependencies | Ready to Work |
 |-------|------|-------|--------------|-------|----|-----------|--------------|---------------|
 | 1.1 | 1 | Docker Compose stack — pinned Keycloak + PostgreSQL | done | #2 | #43 | merged | none | ✅ Yes (done) |
-| 1.2 | 1 | Realm config-as-code baseline & secret hygiene | backlog | #3 | — | — | 1.1 | ✅ Yes |
-| 1.3 | 1 | Nginx security edge | backlog | #4 | — | — | 1.1 | ✅ Yes |
+| 1.2 | 1 | Realm config-as-code baseline & secret hygiene | done | #3 | #45 | merged | 1.1 | ✅ Yes (done) |
+| 1.3 | 1 | Nginx security edge | done | #4 | #46 | merged | 1.1 | ✅ Yes (done) |
 | 1.4 | 1 | Shared Deep Sea design-token stylesheet | done | #5 | #44 | merged | none | ✅ Yes (done) |
-| 1.5 | 1 | Agentic-build / CI security gate | backlog | #6 | — | — | 1.2, 1.3, 1.4 | ❌ No (1.2, 1.3 not done) |
+| 1.5 | 1 | Agentic-build / CI security gate | backlog | #6 | — | — | 1.2, 1.3, 1.4 | ✅ Yes |
 | 2.1 | 2 | Canonical identity model & lifecycle states | backlog | #7 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
 | 2.2 | 2 | OIDC Authorization Code + PKCE login | backlog | #8 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
 | 2.3 | 2 | Signed tokens, JWKS & OIDC discovery | backlog | #9 | — | — | epic 1 complete | ❌ No (epic 1 not complete) |
@@ -88,9 +88,10 @@ _Last updated: 2026-06-25T15:00:00Z_
 
 ## Notes
 
-- **Parallelism opportunities within Epic 1**: Stories 1.2 and 1.3 can now be started in parallel (1.1 is done/merged). 1.5 waits on all of 1.2, 1.3, 1.4 — 1.4 is already done.
-- **Completed stories**: 1.1 (PR #43, merged 2026-06-25) and 1.4 (PR #44, merged 2026-06-25) are done.
-- **Worktree cleanup**: story-1-1 and story-1-4 worktrees removed; their remote branches deleted.
-- **Stories 1.2 and 1.3** are the two stories that are `Ready to Work: Yes` right now (both unblocked by 1.1's merge).
+- **Stories 1.2 and 1.3 merged**: PR #45 (story-1-2, 2026-06-26T15:04Z) and PR #46 (story-1-3, 2026-06-26T15:01Z) are both merged into main.
+- **Story 1.5 is now Ready to Work**: All its dependencies (1.2, 1.3, 1.4) have merged PRs. This is the only unblocked, incomplete story.
+- **Epic 1 completion gate**: Only 1.5 remains. Once it is done, Epic 2 stories become unblocked.
+- **Worktree cleanup**: story-1-2 and story-1-3 worktrees removed; remote branches deleted (2026-06-26).
+- **Completed stories**: 1.1 (PR #43), 1.2 (PR #45), 1.3 (PR #46), 1.4 (PR #44) — all merged into main.
 - **Current epic**: Epic 1 — Secure Platform Foundation (lowest incomplete epic).
 - **All stories done**: false.
