@@ -7,31 +7,53 @@ Self-hosted SSO platform — Keycloak backed by PostgreSQL.
 ### Prerequisites
 
 - Docker with Compose v2 (`docker compose version`)
-- No other process listening on port 8080
+- `openssl` installed (for TLS cert generation)
+- No other process listening on ports 80 or 443
+
+### TLS (local dev)
+
+Before starting the stack for the first time, generate a self-signed certificate for local development:
+
+```bash
+# Generate a self-signed TLS certificate (valid for 365 days)
+openssl req -x509 -newkey rsa:4096 \
+  -keyout nginx/certs/dev.key \
+  -out nginx/certs/dev.crt \
+  -days 365 -nodes \
+  -subj "/CN=localhost"
+```
+
+The private key (`nginx/certs/dev.key`) and certificate (`nginx/certs/dev.crt`) are git-ignored and must be regenerated on each new checkout. The `nginx/certs/.gitkeep` placeholder file keeps the directory tracked in git.
+
+> **Note:** This self-signed certificate is for **local development only**. Production TLS is handled by an organizational CA or Let's Encrypt (outside the scope of this repo).
 
 ### Bring-up
 
 ```bash
-# 1. Copy the example env file and fill in all placeholders
+# 1. Generate TLS certs (see above — one time per checkout)
+
+# 2. Copy the example env file and fill in all placeholders
 cp .env.example .env
 #    Edit .env and replace every `change-me-*` value with real credentials.
 #    Do NOT commit your real .env — it is git-ignored.
 
-# 2. Build and start the stack
+# 3. Build and start the stack
 docker compose up --build
 ```
 
-Wait for both services to report `healthy` (Keycloak may take 60–90 s on first boot):
+Wait for all three services to report `healthy` (Keycloak may take 60–90 s on first boot):
 
 ```
 envocc-sso-postgres-1   ... healthy
 envocc-sso-keycloak-1   ... healthy
+envocc-sso-nginx-1      ... healthy
 ```
 
 ### Access
 
-- **Admin console:** <http://localhost:8080/admin/>
+- **Admin console:** <https://localhost/admin/>
   Sign in with `KC_BOOTSTRAP_ADMIN_USERNAME` / `KC_BOOTSTRAP_ADMIN_PASSWORD` from your `.env`.
+  > Use `-k` / `--insecure` with curl or accept the self-signed cert warning in your browser.
 
 ### Stop and clean up
 

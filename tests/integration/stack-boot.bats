@@ -68,9 +68,18 @@ teardown() {
 
 # ---------------------------------------------------------------------------
 # TS-101b [P0] — Keycloak admin console reachable
+#
+# IMPORTANT (Story 1.3): Keycloak port 8080 is NO LONGER published to the host
+# after Story 1.3 introduced the Nginx security edge. These tests curl
+# http://localhost:8080 directly — they WILL fail with "Connection refused" if
+# run against any stack built from Story 1.3 onwards.
+#
+# DO NOT remove the `skip` guards below. To validate Keycloak reachability on
+# a post-1.3 stack, use the nginx-edge.bats TS-135b tests which curl through
+# Nginx on https://localhost/ (port 443).
 # ---------------------------------------------------------------------------
 @test "[P0][TS-101b] Keycloak HTTP port 8080 returns an HTTP response" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
+  skip "OBSOLETE after Story 1.3: port 8080 not published to host — use nginx-edge.bats TS-135b instead"
 
   # Given the stack is healthy
   run wait_for_healthy "keycloak" 120
@@ -83,7 +92,7 @@ teardown() {
 }
 
 @test "[P0][TS-101b] Keycloak admin console page returns HTTP response" {
-  skip "Integration: requires running stack — run manually after docker compose up --build"
+  skip "OBSOLETE after Story 1.3: port 8080 not published to host — use nginx-edge.bats TS-135b instead"
 
   run wait_for_healthy "keycloak" 120
   assert_success
