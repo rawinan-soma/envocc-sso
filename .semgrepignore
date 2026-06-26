@@ -1,0 +1,12 @@
+# .semgrepignore — known-safe suppressions for Semgrep SAST
+#
+# Each entry is a path or rule ID that has been reviewed and confirmed safe.
+# Prefer per-line suppressions (# nosemgrep) in source when possible;
+# use this file only for base-image patterns we cannot annotate.
+
+# keycloak/Dockerfile: dockerfile.security.missing-user.missing-user
+# The Keycloak base image (quay.io/keycloak/keycloak) already runs as the
+# non-root 'keycloak' user (uid 1000) — defined in the upstream base image.
+# Adding USER here would shadow the correct base-image user and is unnecessary.
+# Verified: https://github.com/keycloak/keycloak/blob/main/quarkus/container/Dockerfile
+keycloak/Dockerfile

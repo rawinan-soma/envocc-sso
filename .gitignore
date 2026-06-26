@@ -65,6 +65,10 @@ ehthumbs.db
 *.swo
 *~
 
+# ─── Python (lint scripts under scripts/) ────────────────────────────────────
+__pycache__/
+*.py[cod]
+
 # ─── Test libraries (vendored via git clone, not committed) ──────────────────
 tests/lib/
 

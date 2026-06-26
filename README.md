@@ -10,6 +10,36 @@ Self-hosted SSO platform — Keycloak backed by PostgreSQL.
 - `openssl` installed (for TLS cert generation)
 - No other process listening on ports 80 or 443
 
+### Pre-commit gate
+
+A two-layer security gate runs locally (pre-commit) and in CI on every push.
+
+**One-time setup after cloning:**
+
+```bash
+lefthook install
+```
+
+This registers `.git/hooks/pre-commit`. The hook runs three checks before every commit:
+
+| Check | Tool | Purpose |
+| --- | --- | --- |
+| Secret scan | gitleaks 8.24.0+ | Blocks any staged secrets |
+| SAST | semgrep (latest OSS) | Static analysis for security antipatterns |
+| Realm config lint | python3 | Validates `keycloak/realm-export.json` structure |
+
+**Required tool prerequisites** (install once):
+
+```bash
+# macOS
+brew install lefthook gitleaks semgrep
+# python3 is included with macOS; verify: python3 --version
+
+# Linux / CI
+pip install semgrep
+# Install gitleaks from https://github.com/gitleaks/gitleaks/releases
+```
+
 ### TLS (local dev)
 
 Before starting the stack for the first time, generate a self-signed certificate for local development:

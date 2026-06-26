@@ -1,11 +1,19 @@
 # CI Pipeline — envocc-sso
-# Story 1.1: Gitleaks secret-scanning gate (grows in subsequent stories)
+# Story 1.1: Gitleaks secret-scanning gate
+# Story 1.5: Full agentic-build / CI security gate
 #
-# Subsequent stories will add:
-#   - Docker Compose smoke test (Keycloak health, realm import)
-#   - RSpec test suite (Story 3.1)
-#   - Brakeman static analysis (Story 3.1)
-#   - BATS integration tests (Stories 1.2+)
+# Jobs added in Story 1.5:
+#   - sast          — Semgrep SAST (always runs; SARIF artifact uploaded)
+#   - realm-lint    — Python realm-export.json structure + key-material check
+#   - format-check  — Prettier (skipped until admin/package.json exists)
+#   - dependency-audit — bun audit (skipped until admin/package.json exists)
+#   - language-checks  — ESLint + tsc + svelte-check (skipped until admin/package.json exists)
+#
+# Admin-app jobs (format-check, dependency-audit, language-checks) depend on admin-app-check,
+# which detects whether admin/package.json exists and exposes an `exists` output. The guard:
+#   if: needs.admin-app-check.result == 'success' && needs.admin-app-check.outputs.exists == 'true'
+# ensures jobs are skipped now and activate automatically when Story 4.1 lands, while also
+# preventing a silent bypass if admin-app-check itself errors (result != 'success').
 
 name: CI
 
@@ -96,3 +104,150 @@ jobs:
             --redact \
             --verbose
           echo "realm-export.json passed secret scan — safe to commit."
+
+  # ─── Realm Config Lint ─────────────────────────────────────────────────────
+  # Validates realm-export.json structure and checks for embedded key material.
+  # Complements the gitleaks secret scan with semantic field-level validation.
+  realm-lint:
+    name: Realm Config Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Lint realm-export.json
+        run: python3 scripts/lint-realm-export.py
+
+  # ─── SAST (Semgrep) ────────────────────────────────────────────────────────
+  # Static application security testing — detects security antipatterns in source.
+  # Runs on the full repository; SARIF report uploaded as artifact for GitHub
+  # Security tab ingestion.
+  # --config auto uses the Semgrep OSS registry (no account/token required).
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write  # required to upload SARIF to the GitHub Security tab
+      contents: read          # required for actions/checkout; job-level permissions
+                              # zero out all unspecified scopes, so this must be explicit
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep SAST
+        run: semgrep scan --config auto --error --sarif --output semgrep.sarif
+
+      - name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@v3
+        # always() ensures upload runs even when --error causes semgrep to exit non-zero
+        # (violations found). The hashFiles guard prevents a misleading "file not found"
+        # failure when semgrep crashes before writing the SARIF file (e.g. network error).
+        if: always() && hashFiles('semgrep.sarif') != ''
+        with:
+          sarif_file: semgrep.sarif
+
+  # ─── Admin-App Presence Check ──────────────────────────────────────────────
+  # Detects whether the admin SvelteKit app exists yet.
+  # hashFiles() is not available at the job-level if: context; use a shell test
+  # inside a lightweight job and expose the result as an output instead.
+  # Format-check, dependency-audit, and language-checks depend on this output.
+  admin-app-check:
+    name: Admin App Presence Check
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for admin/package.json
+        id: check
+        run: |
+          if [ -f admin/package.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ─── Format Check (Prettier) ───────────────────────────────────────────────
+  # Runs Prettier over the admin app source files.
+  # Guarded: skipped entirely until admin/package.json exists (Story 4.1).
+  # No forward dependency — activates automatically when the admin app lands.
+  format-check:
+    name: Format Check (Prettier)
+    runs-on: ubuntu-latest
+    needs: admin-app-check
+    # result == 'success' is a defensive guard: it ensures this job only runs when
+    # admin-app-check fully completed, preventing the edge case where a stale or
+    # unexpected output value could trigger a run after a partial failure.
+    # Note: a failed admin-app-check still causes this job to be SKIPPED (not failed).
+    # Configure branch-protection required checks to block merges on skipped jobs.
+    if: needs.admin-app-check.result == 'success' && needs.admin-app-check.outputs.exists == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: cd admin && bun install --frozen-lockfile
+
+      - name: Run Prettier check
+        run: cd admin && bunx prettier --check "**/*.{ts,svelte,js,json,css,md}"
+
+  # ─── Dependency Audit ──────────────────────────────────────────────────────
+  # Audits admin app npm/bun dependencies for known CVEs.
+  # Guarded: skipped entirely until admin/package.json exists (Story 4.1).
+  dependency-audit:
+    name: Dependency Audit (bun)
+    runs-on: ubuntu-latest
+    needs: admin-app-check
+    if: needs.admin-app-check.result == 'success' && needs.admin-app-check.outputs.exists == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: cd admin && bun install --frozen-lockfile
+
+      - name: Run bun audit
+        run: cd admin && bun audit
+
+  # ─── Language Checks (ESLint + tsc + svelte-check) ─────────────────────────
+  # Type-checks and lints the admin SvelteKit app.
+  # Guarded: skipped entirely until admin/package.json exists (Story 4.1).
+  language-checks:
+    name: Language Checks (ESLint + tsc + svelte-check)
+    runs-on: ubuntu-latest
+    needs: admin-app-check
+    if: needs.admin-app-check.result == 'success' && needs.admin-app-check.outputs.exists == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: cd admin && bun install --frozen-lockfile
+
+      - name: Run ESLint
+        run: cd admin && bunx eslint .
+
+      - name: Run TypeScript type check
+        run: cd admin && bunx tsc --noEmit
+
+      - name: Run svelte-check
+        run: cd admin && bunx svelte-check
