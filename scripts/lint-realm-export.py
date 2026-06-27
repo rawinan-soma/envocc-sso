@@ -4,8 +4,13 @@
 Checks performed:
   1. JSON is parseable.
   2. Required baseline fields are present: realm, enabled, bruteForceProtected,
-     accessTokenLifespan.
-  3. No key material embedded: privateKey/certificate values >= 64 chars,
+     accessTokenLifespan, revokeRefreshToken, refreshTokenMaxReuse.
+  3. Value validation (Story 2.4 — AC6/AR8), type-strict so a string/float/bool
+     cannot fail the check open:
+     - accessTokenLifespan: integer <= 900 s (NFR2a: 15-minute hard ceiling)
+     - revokeRefreshToken == true (FR9: family revocation on replay)
+     - refreshTokenMaxReuse == integer 0 (FR9: rotate on every use)
+  4. No key material embedded: privateKey/certificate values >= 64 chars,
      clientSecret/secret values >= 8 chars — in either the plain string form
      ("privateKey": "...") or the array form ("privateKey": ["..."]) that
      Keycloak actually emits for KeyProvider config — anywhere in the document
@@ -44,6 +49,8 @@ REQUIRED_FIELDS = [
     "enabled",
     "bruteForceProtected",
     "accessTokenLifespan",
+    "revokeRefreshToken",
+    "refreshTokenMaxReuse",
 ]
 
 # Value-level boolean checks (Story 2.1 — closes deferred gap from Story 1.5 review).
@@ -59,6 +66,9 @@ REQUIRED_VALUES: list[tuple[str, object]] = [
     ("bruteForceProtected", True),
     ("enabled", True),
 ]
+
+# NFR2a: access/ID tokens must not exceed 15 minutes (900 seconds).
+MAX_ACCESS_TOKEN_LIFESPAN = 900
 
 # Key-material thresholds mirror gitleaks rules for defense-in-depth.
 # Keycloak emits these both as plain strings ("privateKey": "...") and as
@@ -253,7 +263,42 @@ def main():
                 f"This is a value-level check — presence alone is not sufficient."
             )
 
-    # ── Step 5: Scan for embedded key material ─────────────────────────────────
+    # ── Step 5: Value-validate security-critical lifetime fields (Story 2.4) ────
+    # Each check runs only when the field is present — a missing field is already
+    # reported by Step 4, so guarding here avoids a redundant second error.
+    # Type handling is strict: these fields must hold the JSON type Keycloak
+    # expects (integer seconds / boolean), so a string, float, or boolean where
+    # an integer is required is rejected rather than silently coerced. Note that
+    # `bool` subclasses `int` in Python, so `isinstance(x, bool)` is excluded
+    # explicitly to stop `true`/`false` slipping through the integer checks.
+    if "accessTokenLifespan" in data:
+        atl = data["accessTokenLifespan"]
+        if not isinstance(atl, int) or isinstance(atl, bool):
+            errors.append(
+                "accessTokenLifespan must be an integer number of seconds, "
+                f"got {atl!r}."
+            )
+        elif atl > MAX_ACCESS_TOKEN_LIFESPAN:
+            errors.append(
+                f"accessTokenLifespan {atl}s exceeds NFR2a 15-minute ceiling "
+                f"({MAX_ACCESS_TOKEN_LIFESPAN}s max)."
+            )
+
+    # `is not True` correctly rejects null, 0, 1, and false — only the boolean
+    # `true` singleton passes (JSON null → Python None).
+    if "revokeRefreshToken" in data and data["revokeRefreshToken"] is not True:
+        errors.append(
+            "revokeRefreshToken must be true (FR9: family revocation on replay)."
+        )
+
+    if "refreshTokenMaxReuse" in data:
+        rtmr = data["refreshTokenMaxReuse"]
+        if not isinstance(rtmr, int) or isinstance(rtmr, bool) or rtmr != 0:
+            errors.append(
+                "refreshTokenMaxReuse must be 0 (FR9: rotate on every use)."
+            )
+
+    # ── Step 6: Scan for embedded key material (defense-in-depth vs gitleaks) ──
     for json_path, field_name, value_len in find_key_material(data):
         errors.append(
             f"Key material detected at {json_path}: "

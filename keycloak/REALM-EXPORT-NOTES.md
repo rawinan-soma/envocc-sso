@@ -174,3 +174,108 @@ curl -sf http://localhost:8080/realms/envocc/.well-known/openid-configuration | 
 | Import silently skipped | Same as above | Same fix |
 | `kc.sh export` fails with "server already running" | Keycloak server process is active | Use Admin UI export or run `docker compose stop keycloak` first |
 | gitleaks finds a secret | Exported file contains key material | Follow Step 4 to strip the fields, then re-run Step 5 |
+
+---
+
+## Story 2.4 — Session, Lifetimes & Refresh Token Rotation
+
+This section documents the session/lifetime and refresh token rotation configuration
+added in Story 2.4, covering FR7, FR8, FR9, FR10, FR45, and NFR2a.
+
+> **Note on documentation placement:** JSON does not support comments. All realm config
+> rationale and documentation belongs here in `REALM-EXPORT-NOTES.md`, which is on the
+> gitleaks path allowlist (`.gitleaks.toml`). Do NOT add `"_comment"` or any
+> pseudo-comment key to `realm-export.json` — Keycloak stores unknown top-level keys in
+> its database and may emit them on export, causing diff noise.
+
+### Session and Lifetime Field Reference
+
+The following fields in `keycloak/realm-export.json` govern session and token lifetimes:
+
+| Field | Value | Required by | Rationale |
+|---|---|---|---|
+| `ssoSessionIdleTimeout` | `1800` (30 min) | FR8 — idle timeout | Session expires after 30 minutes of inactivity; balances security with usability for a staff portal. |
+| `ssoSessionMaxLifespan` | `36000` (10 h) | FR8 — absolute timeout | One working day; forces re-authentication after a full shift even if the user remains active. |
+| `accessTokenLifespan` | `300` (5 min) | NFR2a — token ceiling | Access and ID tokens expire in 5 minutes, well within the 15-minute hard ceiling (900 s) required by NFR2a. |
+| `revokeRefreshToken` | `true` | FR9 — family revocation | Enables Keycloak's refresh token family tracking. When a refresh token is used, the old one is immediately invalidated. If a previously-invalidated token is replayed, Keycloak revokes the **entire token family** and forces re-authentication, defeating refresh token theft. |
+| `refreshTokenMaxReuse` | `0` | FR9 — rotate on use | Each refresh token is single-use only (0 = no reuse allowed). Combined with `revokeRefreshToken: true`, every token exchange issues a fresh refresh token and invalidates the old one. |
+
+**Together, `revokeRefreshToken: true` and `refreshTokenMaxReuse: 0` implement FR9:**
+"Refresh tokens rotate on every use, and replay of any token in a family revokes the
+entire family." Both fields default to `false`/`0` in Keycloak if absent — omitting them
+silently leaves refresh tokens non-rotating and vulnerable to replay.
+
+### FR45 — Session Fixation Protection (Keycloak 26.x Built-In)
+
+Keycloak 26.x **regenerates the session ID on every authentication-state transition**
+as a non-configurable, built-in security property (FR45):
+
+- After successful password authentication → new `AUTH_SESSION_ID` and `KEYCLOAK_SESSION` cookie values
+- After successful MFA (TOTP) verification → new cookie values again
+
+This behavior cannot be disabled and requires no `realm-export.json` configuration.
+The server-side session record is maintained in Keycloak's PostgreSQL database (the
+`keycloak` DB) — also the default behavior.
+
+**Reference:** Keycloak 26.x Server Administration Guide, section "Sessions":
+`https://www.keycloak.org/docs/latest/server_admin/#_timeouts`
+
+**Manual verification procedure (TS-241f):**
+See the always-skip test `[P2][TS-241f]` in `tests/integration/realm-import.bats` for
+step-by-step instructions to verify session-ID regeneration via browser developer tools
+or a cookie-jar HTTP client.
+
+### RP-Initiated Logout — End Session Endpoint (FR10)
+
+Keycloak 26.x publishes the End Session endpoint at:
+
+```
+/realms/envocc/protocol/openid-connect/logout
+```
+
+This endpoint is listed in `.well-known/openid-configuration` as `end_session_endpoint`
+and is available by default — no realm configuration is required to enable it.
+
+**How an RP uses RP-initiated logout:**
+1. Construct a request to the End Session endpoint with:
+   - `id_token_hint` — the ID token from the current session (strongly recommended)
+   - `post_logout_redirect_uri` — must exactly match a URI registered in the client's `postLogoutRedirectUris`
+   - `state` — optional, passed through to the redirect
+2. Keycloak terminates the SSO session, revokes refresh token families, and redirects.
+3. If no `id_token_hint` is provided, Keycloak shows its default "You are logged out" page.
+
+The default "You are logged out" page is acceptable as a placeholder until Story 2.5
+implements the branded "Signed out" theme surface (UX-DR3).
+
+### Per-Client Logout Configuration
+
+When registering any OIDC client in `realm-export.json`, set the following client-level
+fields to enable proper RP-initiated logout:
+
+```json
+{
+  "clientId": "<client-id>",
+  "frontchannelLogout": false,
+  "attributes": {
+    "post.logout.redirect.uris": "https://app.example.com/signed-out",
+    "backchannel.logout.session.required": "true"
+  }
+}
+```
+
+| Field | Value | Rationale |
+|---|---|---|
+| `frontchannelLogout` | `false` | Use back-channel logout (preferred for confidential clients — no browser redirect on logout). |
+| `post.logout.redirect.uris` | Exact registered URIs | Keycloak validates the `post_logout_redirect_uri` in an RP-initiated logout request against this list. Wildcards are not accepted. A redirect to an unregistered URI will be rejected. |
+| `backchannel.logout.session.required` | `"true"` | Ensures the Keycloak session is invalidated when a back-channel logout notification is received. |
+
+**Per-story integration notes:**
+- **Story 2.2** (OIDC PKCE login — admin-app client): when the admin-app client is
+  registered, it MUST set `post.logout.redirect.uris` to the admin app's signed-out
+  route (e.g. `http://localhost:5173/signed-out` for local dev,
+  `https://admin.envocc.internal/signed-out` for production).
+- **Story 5.3** (OIDC client management UI): exposes per-client logout config
+  (`post.logout.redirect.uris`, `frontchannelLogout`) to System Admins via the admin UI.
+- **UX-DR3 — Branded signed-out surface**: the Keycloak "Signed out" theme page is
+  styled in Story 2.5. Until then, the default "You are logged out" page is acceptable
+  as a placeholder.
