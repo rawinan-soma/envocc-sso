@@ -12,8 +12,7 @@
  *
  * Run:  node --test tests/theme/login-theme.test.mjs
  *
- * TDD Phase: RED — all tests are it() scaffolds.
- * Remove `it.skip` → `it` as each story task is implemented to activate the corresponding suite.
+ * TDD Phase: RED — all tests use plain it() and will fail until story implementation files are created.
  */
 
 import { describe, it, before } from 'node:test';
@@ -39,22 +38,44 @@ const DOCKERFILE    = path.join(PROJECT_ROOT, 'keycloak', 'Dockerfile');
 
 // ---------------------------------------------------------------------------
 // Read static content once before any test runs.
+// READ-ONLY after before() — never mutate in tests.
 // ---------------------------------------------------------------------------
 
-let css = '';
-let msgProps = '';
-let loginFtl = '';
+let css         = '';
+let themeProps  = '';
+let msgProps    = '';
+let loginFtl    = '';
 let loginOtpFtl = '';
-let realmJson = '';
-let dockerfile = '';
+let realmJson   = '';
+let dockerfile  = '';
+
+// Pre-extracted snippets (computed in before() after files are loaded).
+// Use these in tests rather than re-extracting inline.
+let bannerBlock              = ''; // .anti-phishing-banner { ... } rule block from login.css
+let loginFtlBannerSnippet    = ''; // ~800 chars from anti-phishing-banner in login.ftl
+let loginOtpFtlBannerSnippet = ''; // ~800 chars from anti-phishing-banner in login-otp.ftl
 
 before(() => {
-  css        = fs.existsSync(LOGIN_CSS)     ? fs.readFileSync(LOGIN_CSS, 'utf-8')     : '';
-  msgProps   = fs.existsSync(MESSAGES_EN)   ? fs.readFileSync(MESSAGES_EN, 'utf-8')   : '';
-  loginFtl   = fs.existsSync(LOGIN_FTL)     ? fs.readFileSync(LOGIN_FTL, 'utf-8')     : '';
+  css         = fs.existsSync(LOGIN_CSS)     ? fs.readFileSync(LOGIN_CSS, 'utf-8')     : '';
+  themeProps  = fs.existsSync(THEME_PROPS)   ? fs.readFileSync(THEME_PROPS, 'utf-8')   : '';
+  msgProps    = fs.existsSync(MESSAGES_EN)   ? fs.readFileSync(MESSAGES_EN, 'utf-8')   : '';
+  loginFtl    = fs.existsSync(LOGIN_FTL)     ? fs.readFileSync(LOGIN_FTL, 'utf-8')     : '';
   loginOtpFtl = fs.existsSync(LOGIN_OTP_FTL) ? fs.readFileSync(LOGIN_OTP_FTL, 'utf-8') : '';
-  realmJson  = fs.existsSync(REALM_EXPORT)  ? fs.readFileSync(REALM_EXPORT, 'utf-8')  : '';
-  dockerfile = fs.existsSync(DOCKERFILE)    ? fs.readFileSync(DOCKERFILE, 'utf-8')    : '';
+  realmJson   = fs.existsSync(REALM_EXPORT)  ? fs.readFileSync(REALM_EXPORT, 'utf-8')  : '';
+  dockerfile  = fs.existsSync(DOCKERFILE)    ? fs.readFileSync(DOCKERFILE, 'utf-8')    : '';
+
+  // Pre-extract reusable snippets to avoid repeated inline regex/slice in tests.
+  bannerBlock = css.match(/\.anti-phishing-banner\s*\{([^}]+)\}/s)?.[1] ?? '';
+
+  const loginFtlBannerIdx = loginFtl.indexOf('anti-phishing-banner');
+  loginFtlBannerSnippet    = loginFtlBannerIdx !== -1
+    ? loginFtl.slice(loginFtlBannerIdx, loginFtlBannerIdx + 800)
+    : '';
+
+  const loginOtpFtlBannerIdx = loginOtpFtl.indexOf('anti-phishing-banner');
+  loginOtpFtlBannerSnippet   = loginOtpFtlBannerIdx !== -1
+    ? loginOtpFtl.slice(loginOtpFtlBannerIdx, loginOtpFtlBannerIdx + 800)
+    : '';
 });
 
 // ---------------------------------------------------------------------------
@@ -77,14 +98,12 @@ describe('AC6 — Theme directory structure exists', () => {
   });
 
   it('theme.properties declares parent=keycloak', () => {
-    const content = fs.readFileSync(THEME_PROPS, 'utf-8');
-    assert.match(content, /^\s*parent\s*=\s*keycloak\s*$/m,
+    assert.match(themeProps, /^\s*parent\s*=\s*keycloak\s*$/m,
       'Expected theme.properties to contain: parent=keycloak');
   });
 
   it('theme.properties declares styles=css/login.css', () => {
-    const content = fs.readFileSync(THEME_PROPS, 'utf-8');
-    assert.match(content, /^\s*styles\s*=\s*css\/login\.css\s*$/m,
+    assert.match(themeProps, /^\s*styles\s*=\s*css\/login\.css\s*$/m,
       'Expected theme.properties to contain: styles=css/login.css');
   });
 
@@ -298,20 +317,17 @@ describe('AC1 — login.css anti-phishing banner uses info color tokens', () => 
   });
 
   it('.anti-phishing-banner uses var(--color-info-bg) for background', () => {
-    // Extract the .anti-phishing-banner rule block and verify token usage
-    const bannerBlock = css.match(/\.anti-phishing-banner\s*\{([^}]+)\}/s)?.[1] ?? '';
+    // bannerBlock is pre-extracted in before() — .anti-phishing-banner { ... } rule block.
     assert.match(bannerBlock, /var\(--color-info-bg\)/,
       'Expected .anti-phishing-banner to use var(--color-info-bg) for background');
   });
 
   it('.anti-phishing-banner uses var(--color-info-border) for border', () => {
-    const bannerBlock = css.match(/\.anti-phishing-banner\s*\{([^}]+)\}/s)?.[1] ?? '';
     assert.match(bannerBlock, /var\(--color-info-border\)/,
       'Expected .anti-phishing-banner to use var(--color-info-border) for border');
   });
 
   it('.anti-phishing-banner uses var(--color-info-fg) for text color', () => {
-    const bannerBlock = css.match(/\.anti-phishing-banner\s*\{([^}]+)\}/s)?.[1] ?? '';
     assert.match(bannerBlock, /var\(--color-info-fg\)/,
       'Expected .anti-phishing-banner to use var(--color-info-fg) for text color');
   });
@@ -367,34 +383,26 @@ describe('AC3 — login.ftl has pinned non-dismissible anti-phishing banner', ()
   });
 
   it('login.ftl anti-phishing banner has no close/dismiss button', () => {
-    // Extract the banner block and assert it has no button or dismiss trigger.
-    // We check that within N characters after the banner class there is no close/dismiss element.
-    const bannerIdx = loginFtl.indexOf('anti-phishing-banner');
-    assert.notStrictEqual(bannerIdx, -1, 'anti-phishing-banner not found in login.ftl');
-    // Look for dismiss/close in the next 500 chars after the banner div opening tag
-    const snippet = loginFtl.slice(bannerIdx, bannerIdx + 500);
-    const hasDismiss = /dismiss|close|btn-close|type="button"/.test(snippet);
+    // loginFtlBannerSnippet is pre-extracted in before() — ~800 chars from anti-phishing-banner.
+    assert.ok(loginFtlBannerSnippet, 'anti-phishing-banner class not found in login.ftl');
+    const hasDismiss = /dismiss|close|btn-close|type="button"/.test(loginFtlBannerSnippet);
     assert.ok(!hasDismiss,
       'Expected anti-phishing banner in login.ftl to have no dismiss/close button');
   });
 
   it('login.ftl anti-phishing banner has aria-live="polite"', () => {
     // Per dev notes: aria-live="polite" on the container
-    const bannerIdx = loginFtl.indexOf('anti-phishing-banner');
-    assert.notStrictEqual(bannerIdx, -1, 'anti-phishing-banner not found in login.ftl');
-    const snippet = loginFtl.slice(bannerIdx, bannerIdx + 300);
-    assert.match(snippet, /aria-live="polite"/,
+    assert.ok(loginFtlBannerSnippet, 'anti-phishing-banner class not found in login.ftl');
+    assert.match(loginFtlBannerSnippet, /aria-live="polite"/,
       'Expected anti-phishing banner to have aria-live="polite"');
   });
 
   it('login.ftl anti-phishing banner includes an info SVG icon (not icon-only — paired with text)', () => {
-    const bannerIdx = loginFtl.indexOf('anti-phishing-banner');
-    assert.notStrictEqual(bannerIdx, -1, 'anti-phishing-banner not found in login.ftl');
-    const snippet = loginFtl.slice(bannerIdx, bannerIdx + 600);
-    assert.match(snippet, /<svg/,
+    assert.ok(loginFtlBannerSnippet, 'anti-phishing-banner class not found in login.ftl');
+    assert.match(loginFtlBannerSnippet, /<svg/,
       'Expected anti-phishing banner to include an SVG info icon');
     // Icon must be aria-hidden (decorative — text carries the content)
-    assert.match(snippet, /aria-hidden="true"/,
+    assert.match(loginFtlBannerSnippet, /aria-hidden="true"/,
       'Expected SVG icon to be aria-hidden="true" (text carries the message)');
   });
 });
@@ -420,10 +428,9 @@ describe('AC3 — login-otp.ftl has pinned non-dismissible anti-phishing banner'
   });
 
   it('login-otp.ftl anti-phishing banner has no close/dismiss button', () => {
-    const bannerIdx = loginOtpFtl.indexOf('anti-phishing-banner');
-    assert.notStrictEqual(bannerIdx, -1, 'anti-phishing-banner not found in login-otp.ftl');
-    const snippet = loginOtpFtl.slice(bannerIdx, bannerIdx + 500);
-    const hasDismiss = /dismiss|close|btn-close|type="button"/.test(snippet);
+    // loginOtpFtlBannerSnippet is pre-extracted in before().
+    assert.ok(loginOtpFtlBannerSnippet, 'anti-phishing-banner class not found in login-otp.ftl');
+    const hasDismiss = /dismiss|close|btn-close|type="button"/.test(loginOtpFtlBannerSnippet);
     assert.ok(!hasDismiss,
       'Expected anti-phishing banner in login-otp.ftl to have no dismiss/close button');
   });
@@ -486,6 +493,10 @@ describe('AC4 — messages_en.properties has all required string keys', () => {
 // AC4 — No hardcoded English strings in FreeMarker templates
 // ---------------------------------------------------------------------------
 
+// Context window for forbidden-literal detection in FTL templates.
+const CONTEXT_LOOKBACK  = 20; // chars before the literal to check for msg( or ${ prefix
+const CONTEXT_LOOKAHEAD = 5;  // chars after the literal end for surrounding context
+
 describe('AC4 — login.ftl has no hardcoded English UI strings (uses ${msg(...)})', () => {
   // Hard-coded strings to check for: key phrases that MUST come from messages, not literals.
   const FORBIDDEN_LITERALS = [
@@ -508,8 +519,8 @@ describe('AC4 — login.ftl has no hardcoded English UI strings (uses ${msg(...)
       // Simple check: literal must NOT appear as a free text node (not preceded by ${msg or msg( or =").
       const idx = stripped.indexOf(literal);
       if (idx === -1) return; // not present — good
-      // Check surrounding context: look back 20 chars for msg indicator
-      const ctx = stripped.slice(Math.max(0, idx - 20), idx + literal.length + 5);
+      // Check surrounding context for msg( or ${ prefix indicating a template expression.
+      const ctx = stripped.slice(Math.max(0, idx - CONTEXT_LOOKBACK), idx + literal.length + CONTEXT_LOOKAHEAD);
       const inMsg = ctx.includes('msg(') || ctx.includes('${') || ctx.includes('="');
       assert.ok(inMsg,
         `Expected "${literal}" in login.ftl to come from \${msg(...)} — found possible hardcoded literal`);

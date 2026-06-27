@@ -15,18 +15,17 @@
 #   AC7 — No-JS: login.ftl uses <form method="post">
 #
 # Test IDs:
-#   TS-251a–h  AC6: Theme structure and wiring
+#   TS-251a–i  AC6: Theme structure and wiring
 #   TS-252a–b  AC2: No conflicting CSP in realm config
 #   TS-253a–d  AC1: CSS variable usage in login.css
-#   TS-254a–c  AC3: Anti-phishing banner in login.ftl
+#   TS-254a–d  AC3: Anti-phishing banner in login.ftl (TS-254d: aria-live)
 #   TS-255a–b  AC3: Anti-phishing banner in login-otp.ftl
 #   TS-256a–c  AC4: messages_en.properties required keys
 #   TS-257a–b  AC4: No hardcoded strings in .ftl templates
-#   TS-258a–b  AC5: WCAG focus ring and persistent labels
+#   TS-258a,b1,b2  AC5: WCAG focus ring and persistent labels (b1: username, b2: password)
 #   TS-259a–b  AC7: No-JS POST form
 #
-# TDD Phase: RED — all tests marked `skip`.
-# Remove `skip` for each test when the corresponding task is implemented.
+# TDD Phase: RED — tests will fail until story implementation files are created.
 #
 # Run (no stack required):
 #   BATS_LIB_PATH="$(pwd)/tests/lib" bats tests/unit/theme-config.bats
@@ -81,7 +80,7 @@ teardown() {
 @test "[P0][TS-251g] keycloak/realm-export.json sets loginTheme: envocc" {
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
-  run grep -q '"loginTheme"[[:space:]]*:[[:space:]]*"envocc"' "${PROJECT_ROOT}/keycloak/realm-export.json"
+  run grep '"loginTheme"[[:space:]]*:[[:space:]]*"envocc"' "${PROJECT_ROOT}/keycloak/realm-export.json"
   assert_success
 }
 
@@ -206,10 +205,17 @@ print('OK: contentSecurityPolicy is absent or empty')
   assert_success
 }
 
-@test "[P0][TS-254c] login.ftl anti-phishing banner has role=\"alert\" and aria-live=\"polite\"" {
+@test "[P0][TS-254c] login.ftl anti-phishing banner has role=\"alert\"" {
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   run grep 'role="alert"' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl"
+  assert_success
+}
+
+@test "[P0][TS-254d] login.ftl anti-phishing banner has aria-live=\"polite\"" {
+  assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
+
+  run grep 'aria-live="polite"' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl"
   assert_success
 }
 
@@ -243,18 +249,44 @@ print('OK: contentSecurityPolicy is absent or empty')
   assert_success
 }
 
-@test "[P0][TS-256b] messages_en.properties defines all required UI string keys" {
-  assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties" ]
+@test "[P0][TS-256b1] messages_en.properties defines loginTitle" {
+  run grep -E "^loginTitle\s*=" "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
+  assert_success
+}
 
-  local props="${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
-  run grep -E "^loginTitle\s*=" "${props}"; assert_success
-  run grep -E "^doLogIn\s*=" "${props}"; assert_success
-  run grep -E "^doForgotPassword\s*=" "${props}"; assert_success
-  run grep -E "^loginTotpTitle\s*=" "${props}"; assert_success
-  run grep -E "^loginTotpOneTime\s*=" "${props}"; assert_success
-  run grep -E "^doSubmit\s*=" "${props}"; assert_success
-  run grep -E "^loginWithThaiD\s*=" "${props}"; assert_success
-  run grep -E "^backToLogin\s*=" "${props}"; assert_success
+@test "[P0][TS-256b2] messages_en.properties defines doLogIn" {
+  run grep -E "^doLogIn\s*=" "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
+  assert_success
+}
+
+@test "[P0][TS-256b3] messages_en.properties defines doForgotPassword" {
+  run grep -E "^doForgotPassword\s*=" "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
+  assert_success
+}
+
+@test "[P0][TS-256b4] messages_en.properties defines loginTotpTitle" {
+  run grep -E "^loginTotpTitle\s*=" "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
+  assert_success
+}
+
+@test "[P0][TS-256b5] messages_en.properties defines loginTotpOneTime" {
+  run grep -E "^loginTotpOneTime\s*=" "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
+  assert_success
+}
+
+@test "[P0][TS-256b6] messages_en.properties defines doSubmit" {
+  run grep -E "^doSubmit\s*=" "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
+  assert_success
+}
+
+@test "[P0][TS-256b7] messages_en.properties defines loginWithThaiD" {
+  run grep -E "^loginWithThaiD\s*=" "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
+  assert_success
+}
+
+@test "[P0][TS-256b8] messages_en.properties defines backToLogin" {
+  run grep -E "^backToLogin\s*=" "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
+  assert_success
 }
 
 @test "[P1][TS-256c] messages_en.properties overrides error messages to UX-voice copy" {
@@ -297,11 +329,15 @@ print('OK: contentSecurityPolicy is absent or empty')
   assert_success
 }
 
-@test "[P1][TS-258b] login.ftl has <label for=\"username\"> and <label for=\"password\"> (no placeholder-only labels)" {
+@test "[P1][TS-258b1] login.ftl has <label for=\"username\"> (no placeholder-only label)" {
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   run grep 'for="username"' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl"
   assert_success
+}
+
+@test "[P1][TS-258b2] login.ftl has <label for=\"password\"> (no placeholder-only label)" {
+  assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   run grep 'for="password"' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl"
   assert_success
