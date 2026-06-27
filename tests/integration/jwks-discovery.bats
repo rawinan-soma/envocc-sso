@@ -283,7 +283,6 @@ sys.exit(0)
 PYEOF
 
   assert_success
-  rm -f /tmp/discovery-response-$$.json
 }
 
 # ---------------------------------------------------------------------------
