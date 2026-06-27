@@ -3,9 +3,18 @@
 This document describes how to export and maintain `keycloak/realm-export.json` as a
 version-controlled, secret-free baseline configuration.
 
-> **Scope (Story 1.2 baseline):** this file captures only the baseline realm settings.
-> Full OIDC clients, realm roles, MFA required actions, ThaiD identity provider,
-> and password policy are added in Epic 2 stories (2.1–2.9).
+> **Scope (updated Story 2.1):** this file now includes the Declarative User Profile
+> configuration (minimal attribute set: `username`, `email`, `firstName`, `lastName`)
+> and the `test-ropc-client` (integration tests only — see warning below).
+> Full realm roles, MFA required actions, ThaiD identity provider, and password policy
+> are added in Epic 2 stories (2.2–2.9).
+>
+> **WARNING — test-ropc-client:** The `test-ropc-client` in `realm-export.json` is
+> a **test-only** client used exclusively for integration tests (TS-210d pending-state
+> verification). It MUST NOT be deployed to any non-development environment. Its `secret`
+> field is intentionally zeroed (`""`) in the exported JSON — populate it from
+> `KC_TEST_ROPC_CLIENT_SECRET` in `.env` (never hardcode). Remove this client entirely
+> before any production deployment.
 
 ---
 
@@ -59,9 +68,11 @@ Apply the desired change via **Realm Settings** (or clients, roles, etc.).
 1. In the Admin UI: select the `envocc` realm.
 2. Go to **Realm Settings** → **Action** dropdown (top-right) → **Export**.
 3. On the export dialog:
-   - Uncheck **Export clients** if no clients are defined (baseline: none).
-   - Uncheck **Export groups and roles** if no groups/roles are defined (baseline: none).
+   - Check **Export clients** to include `test-ropc-client` (Story 2.1+).
+   - Uncheck **Export groups and roles** if no groups/roles are defined.
    - Click **Export**.
+   - After export: zero out the `secret` field under `test-ropc-client` in the JSON
+     (the export will contain the live secret — strip it before committing per Step 4).
 4. Save the downloaded file as `keycloak/realm-export.json` (overwrite existing).
 
 ### Step 3 — Alternative: CLI export (requires stopped Keycloak)

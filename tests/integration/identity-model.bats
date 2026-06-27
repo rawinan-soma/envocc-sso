@@ -22,9 +22,6 @@
 #   TS-210d [P2] Pending state blocks login — ROPC token endpoint returns HTTP 400
 #   TS-210e [P2] No PDPA §26 attributes on freshly created user (clean-creation invariant)
 #
-# RED PHASE: All tests are scaffolded with skip "RED PHASE — ..." and will be
-# activated task-by-task during implementation (TDD green phase).
-#
 # IMPORTANT: All tests in this file require a live Keycloak stack.
 # They are skipped unless the INTEGRATION environment variable is set.
 # To run: INTEGRATION=1 bats tests/integration/identity-model.bats
@@ -103,8 +100,6 @@ teardown() {
 # Activate when: Task 3.2 — after realm user-profile config is applied (Task 1).
 # ---------------------------------------------------------------------------
 @test "[P2][TS-210a] Stable sub — same user returns same UUID across calls; UUID not recycled after deletion" {
-  skip "RED PHASE — activate for Task 3.2 (realm user-profile + test-ropc-client from Task 1 required)"
-
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token — check KC_BOOTSTRAP_ADMIN_* in .env"
 
@@ -181,8 +176,6 @@ teardown() {
 # Activate when: Task 3.3 — after duplicateEmailsAllowed:false verified in realm (Task 1.8).
 # ---------------------------------------------------------------------------
 @test "[P2][TS-210b] Email uniqueness enforced — duplicate email POST returns HTTP 409 Conflict" {
-  skip "RED PHASE — activate for Task 3.3 (duplicateEmailsAllowed:false in realm required; verified by Task 1.8)"
-
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
@@ -225,8 +218,6 @@ teardown() {
 # Activate when: Task 3.4 — after Declarative User Profile config applied (Task 1.3/1.4).
 # ---------------------------------------------------------------------------
 @test "[P2][TS-210c] Data minimization — no PDPA §26 sensitive fields in user attributes after creation" {
-  skip "RED PHASE — activate for Task 3.4 (Declarative User Profile config from Task 1.3/1.4 required)"
-
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
@@ -305,8 +296,6 @@ PYEOF
 # KC_TEST_ROPC_CLIENT_SECRET set in .env.example (Task 1.6).
 # ---------------------------------------------------------------------------
 @test "[P2][TS-210d] Pending state blocks login — ROPC token endpoint returns HTTP 400 for emailVerified:false user" {
-  skip "RED PHASE — activate for Task 3.5 (requires test-ropc-client from Task 1.5 and KC_TEST_ROPC_CLIENT_SECRET from Task 1.6)"
-
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
@@ -379,8 +368,6 @@ PYEOF
 # Activate when: Task 3.6 — after Declarative User Profile default config applied (Task 1.3/1.4).
 # ---------------------------------------------------------------------------
 @test "[P2][TS-210e] No PDPA §26 attributes on freshly created user — clean-creation invariant" {
-  skip "RED PHASE — activate for Task 3.6 (Declarative User Profile config from Task 1.3/1.4 required)"
-
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
