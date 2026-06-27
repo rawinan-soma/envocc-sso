@@ -274,9 +274,8 @@ teardown() {
 # TS-220d [P1] — Redirect URI with extra path rejected (AC3)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220d] Auth request with extra-path redirect URI is rejected with HTTP 400" {
-  local pkce_out verifier challenge
+  local pkce_out challenge
   pkce_out=$(pkce_generate)
-  verifier=$(echo "${pkce_out}" | head -1)
   challenge=$(echo "${pkce_out}" | tail -1)
 
   # extra path appended to the registered redirect_uri
@@ -293,9 +292,8 @@ teardown() {
 # TS-220e [P1] — Wrong-host redirect URI rejected (AC3)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220e] Auth request with wrong-host redirect URI is rejected with HTTP 400" {
-  local pkce_out verifier challenge
+  local pkce_out challenge
   pkce_out=$(pkce_generate)
-  verifier=$(echo "${pkce_out}" | head -1)
   challenge=$(echo "${pkce_out}" | tail -1)
 
   run curl --max-time 15 \

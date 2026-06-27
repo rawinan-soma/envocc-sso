@@ -237,6 +237,7 @@ run_lint() {
 # Smoke test: the updated lint script must pass against the updated file.
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220q] lint-realm-export.py exits 0 against the real keycloak/realm-export.json after Story 2.2 changes" {
-  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py"
+  # Pass the path explicitly so this test is CWD-independent (works from any directory).
+  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${PROJECT_ROOT}/keycloak/realm-export.json"
   assert_success
 }
