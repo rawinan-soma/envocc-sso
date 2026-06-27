@@ -1,5 +1,6 @@
 <#import "template.ftl" as layout>
-<@layout.registrationLayout displayInfo=otpLogin.userOtpCredentials?? && otpLogin.userOtpCredentials?size gt 1; section>
+<#-- displayMessage: suppress global alert when there is already an inline field error (avoids duplicate error messages) -->
+<@layout.registrationLayout displayMessage=!messagesPerField.existsError('totp') displayInfo=otpLogin.userOtpCredentials?? && otpLogin.userOtpCredentials?size gt 1; section>
     <#if section = "header">
         ${msg("loginTotpTitle")}
     <#elseif section = "form">
@@ -14,23 +15,24 @@
                 <span>${msg("antiphishingBanner")}</span>
             </div>
 
-            <#if otpLogin.userOtpCredentials?? && otpLogin.userOtpCredentials?size gt 1>
-                <div id="kc-otp-credentials">
-                    <#list otpLogin.userOtpCredentials as otpCredential>
-                        <div class="${properties.kcSelectOTPListItemClass!}">
-                            <input id="kc-otp-credential-${otpCredential?index}"
-                                   class="${properties.kcSelectOTPListItemHeaderClass!}"
-                                   type="radio"
-                                   name="selectedCredentialId"
-                                   value="${otpCredential.id}"
-                                   <#if otpCredential.id == otpLogin.selectedCredentialId>checked</#if>>
-                            <label for="kc-otp-credential-${otpCredential?index}">${otpCredential.userLabel}</label>
-                        </div>
-                    </#list>
-                </div>
-            </#if>
-
             <form id="kc-otp-login-form" action="${url.loginAction}" method="post">
+
+                <#-- Credential selector: inside the form so selectedCredentialId is included in POST body -->
+                <#if otpLogin.userOtpCredentials?? && otpLogin.userOtpCredentials?size gt 1>
+                    <div id="kc-otp-credentials">
+                        <#list otpLogin.userOtpCredentials as otpCredential>
+                            <div class="${properties.kcSelectOTPListItemClass!}">
+                                <input id="kc-otp-credential-${otpCredential?index}"
+                                       class="${properties.kcSelectOTPListItemHeaderClass!}"
+                                       type="radio"
+                                       name="selectedCredentialId"
+                                       value="${otpCredential.id}"
+                                       <#if otpCredential.id == otpLogin.selectedCredentialId>checked</#if>>
+                                <label for="kc-otp-credential-${otpCredential?index}">${otpCredential.userLabel!}</label>
+                            </div>
+                        </#list>
+                    </div>
+                </#if>
                 <div class="${properties.kcFormGroupClass!}">
                     <div class="${properties.kcLabelWrapperClass!}">
                         <label for="totp" class="${properties.kcLabelClass!}">${msg("loginTotpOneTime")}</label>
@@ -43,7 +45,7 @@
                                class="${properties.kcInputClass!}"
                                autofocus
                                inputmode="numeric"
-                               aria-invalid="<#if messagesPerField.existsError('totp')>true</#if>"
+                               aria-invalid="<#if messagesPerField.existsError('totp')>true<#else>false</#if>"
                                <#if messagesPerField.existsError('totp')>aria-describedby="input-error-otp-code"</#if>
                         />
 

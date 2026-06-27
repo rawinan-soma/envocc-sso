@@ -35,7 +35,7 @@
                                    type="text"
                                    autofocus
                                    autocomplete="username"
-                                   aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
+                                   aria-invalid="<#if messagesPerField.existsError('username','password')>true<#else>false</#if>"
                                    <#if messagesPerField.existsError('username','password')>aria-describedby="input-error"</#if>
                             />
 
@@ -58,7 +58,7 @@
                                    name="password"
                                    type="password"
                                    autocomplete="current-password"
-                                   aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
+                                   aria-invalid="<#if messagesPerField.existsError('username','password')>true<#else>false</#if>"
                                    <#if messagesPerField.existsError('username','password')>aria-describedby="input-error"</#if>
                             />
                         </div>
