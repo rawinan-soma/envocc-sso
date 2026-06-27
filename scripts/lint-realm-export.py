@@ -299,7 +299,56 @@ def main():
             for msg in lint_clients(clients):
                 errors.append(msg)
 
-    # ── Step 8: Report and exit ────────────────────────────────────────────────
+    # ── Step 8 (Story 2.3): Assert RSA key provider component present (AC9) ────
+    components = data.get("components")
+    if not isinstance(components, dict):
+        errors.append(
+            "Missing 'components' key in realm-export.json. "
+            "An RSA key provider component is required for config-as-code compliance (AC7, AC9). "
+            "Add a 'components' section with an 'org.keycloak.keys.KeyProvider' entry."
+        )
+    else:
+        key_providers = components.get("org.keycloak.keys.KeyProvider")
+        if not isinstance(key_providers, list) or len(key_providers) == 0:
+            errors.append(
+                "No 'org.keycloak.keys.KeyProvider' entries found under 'components' in realm-export.json. "
+                "At least one RSA key provider is required for deterministic token signing (AC7, AC9). "
+                "Add an 'rsa-generated' provider with keySize=2048, active=true, enabled=true."
+            )
+        else:
+            has_active_rsa = False
+            for idx, entry in enumerate(key_providers):
+                entry_path = f"$.components.org.keycloak.keys.KeyProvider[{idx}]"
+                # Guard: a malformed export may contain a non-object entry
+                # (e.g. a bare string/number). Skip it gracefully instead of
+                # raising an AttributeError traceback.
+                if not isinstance(entry, dict):
+                    continue
+
+                config = entry.get("config", {})
+                if not isinstance(config, dict):
+                    config = {}
+
+                # Identify an RSA signing provider that is both active and enabled.
+                # Config values in a Keycloak export are arrays of strings.
+                provider_id = entry.get("providerId", "")
+                is_rsa = isinstance(provider_id, str) and provider_id.startswith("rsa")
+                active = "true" in [str(v).lower() for v in config.get("active", [])]
+                enabled = "true" in [str(v).lower() for v in config.get("enabled", [])]
+                if is_rsa and active and enabled:
+                    has_active_rsa = True
+                # Note: key-material scanning (clientSecret, privateKey, etc.) inside
+                # components config is already handled recursively by find_key_material()
+                # in Step 5 above; no duplicate check needed here.
+
+            if not has_active_rsa:
+                errors.append(
+                    "No active RSA key provider found under 'components.org.keycloak.keys.KeyProvider'. "
+                    "At least one provider with providerId starting 'rsa', active=true and enabled=true "
+                    "is required so the realm publishes an RS256 signing key (AC2, AC7, AC9)."
+                )
+
+    # ── Step 9: Report and exit ────────────────────────────────────────────────
     if errors:
         print("realm-export.json FAILED lint:", file=sys.stderr)
         for err in errors:

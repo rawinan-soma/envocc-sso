@@ -23,6 +23,37 @@
   "accessCodeLifespanLogin": 1800,
   "defaultSignatureAlgorithm": "RS256",
   "internationalizationEnabled": false,
+  "clientScopes": [
+    {
+      "id": "email-claims-scope",
+      "name": "email-claims",
+      "description": "Includes email as the work-email reconciliation claim in ID and access tokens",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "id": "email-mapper",
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "email",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "email",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": ["email-claims"],
+  "defaultOptionalClientScopes": [],
   "clients": [
     {
       "clientId": "test-oidc-client",
@@ -48,6 +79,20 @@
   "roles": {},
   "groups": [],
   "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "name": "rsa-generated",
+        "providerId": "rsa-generated",
+        "subComponents": {},
+        "config": {
+          "keySize": ["2048"],
+          "enabled": ["true"],
+          "active": ["true"],
+          "priority": ["100"]
+        }
+      }
+    ],
     "org.keycloak.userprofile.UserProfileProvider": [
       {
         "id": "declarative-user-profile",
