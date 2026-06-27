@@ -1,0 +1,142 @@
+/* ======================================================================
+ * EnvOcc SSO — Keycloak Login Theme (Deep Sea)
+ * Story 2.5: Branded Deep Sea login theme (top-level, anti-phishing)
+ *
+ * Import design tokens first, then apply CSS variable overrides.
+ * No raw hex values — all values reference CSS variables from the shared
+ * token file. Only rgba() for shadows is acceptable (intentional per spec).
+ * ====================================================================== */
+
+@import url("../design-tokens/deep-sea.css");
+
+/* ── Page background ──────────────────────────────────────────────────── */
+body,
+.login-pf {
+  background: var(--color-background) !important;
+  font-family: var(--font-family);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+  color: var(--color-text-primary);
+}
+
+/* ── Auth card ────────────────────────────────────────────────────────── */
+.card-pf,
+.login-pf-page .card-pf {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  max-width: var(--spacing-auth-card-width);
+  box-shadow: 0 8px 26px rgba(14, 92, 83, 0.10);
+  margin: 0 auto;
+}
+
+/* ── Typography ───────────────────────────────────────────────────────── */
+h1,
+#kc-page-title {
+  font-size: var(--font-h1-size);
+  font-weight: var(--font-h1-weight, 700);
+  color: var(--color-text-primary);
+}
+
+h2 {
+  font-size: var(--font-h2-size);
+}
+
+/* ── Wordmark / seal in auth card header ─────────────────────────────── */
+#kc-header-wrapper,
+.kc-logo-text {
+  font-family: var(--font-family);
+  font-size: var(--font-wordmark-size);
+  font-weight: var(--font-wordmark-weight);
+  color: var(--color-primary-foreground);
+  background: var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  display: inline-block;
+  letter-spacing: var(--font-wordmark-letter-spacing, 0.2px);
+}
+
+/* ── Text inputs ──────────────────────────────────────────────────────── */
+input[type="text"],
+input[type="password"],
+input[type="email"] {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-family);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(19, 122, 110, 0.15);
+  outline: none;
+}
+
+/* ── Focus rings (WCAG AA — keyboard accessibility) ──────────────────── */
+:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Inputs need a focus-visible rule at matching specificity so the keyboard
+ * focus ring is not suppressed by the input[type=...]:focus { outline: none }
+ * rule above (which is intended only for pointer focus). */
+input[type="text"]:focus-visible,
+input[type="password"]:focus-visible,
+input[type="email"]:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Primary button (Sign in / Verify) ───────────────────────────────── */
+.btn-primary,
+#kc-login {
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border-radius: var(--radius-md);
+  border-color: var(--color-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-body-size);
+}
+
+.btn-primary:hover,
+#kc-login:hover {
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: var(--color-primary-foreground);
+}
+
+/* ── Link buttons (Forgot password) ──────────────────────────────────── */
+#kc-form-options a,
+.kc-forgot-password a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+/* ── Error messages ───────────────────────────────────────────────────── */
+.alert-error,
+.kc-feedback-text,
+.pf-v5-c-alert--inline {
+  background-color: var(--color-error-bg);
+  color: var(--color-error-fg);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+/* ── Anti-phishing banner ─────────────────────────────────────────────── */
+.anti-phishing-banner {
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  color: var(--color-info-fg);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
