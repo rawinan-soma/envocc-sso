@@ -158,6 +158,44 @@ print(t, end='')
 }
 
 # ---------------------------------------------------------------------------
+# fetch_realm_json_to_tmpfile <admin_token>
+# Fetch the live Keycloak 'envocc' realm JSON to a fresh temp file.
+# Prints the temp-file path to stdout; exits non-zero on curl failure
+# (with an error message on stderr so the caller's `fail` is self-contained).
+#
+# Companion to get_admin_token — call after obtaining a token.
+#
+# Usage:
+#   local token realm_tmpfile
+#   token=$(get_admin_token)              || fail "Could not obtain admin token"
+#   realm_tmpfile=$(fetch_realm_json_to_tmpfile "${token}") \
+#                                         || fail "Could not fetch realm JSON"
+#   run python3 - "${realm_tmpfile}" <<'PYEOF'
+#   ...
+#   PYEOF
+#   assert_success
+#   rm -f "${realm_tmpfile}"
+# ---------------------------------------------------------------------------
+fetch_realm_json_to_tmpfile() {
+  local token="${1}"
+  local tmpfile
+  tmpfile=$(mktemp)
+
+  local curl_exit=0
+  curl -sf --max-time 10 \
+    -H "Authorization: Bearer ${token}" \
+    "http://localhost:8080/admin/realms/envocc" > "${tmpfile}" \
+    || curl_exit=$?
+
+  if [[ "${curl_exit}" -ne 0 ]]; then
+    rm -f "${tmpfile}"
+    echo "fetch_realm_json_to_tmpfile: curl failed (exit ${curl_exit}) — is Keycloak running?" >&2
+    return 1
+  fi
+  echo "${tmpfile}"
+}
+
+# ---------------------------------------------------------------------------
 # compose_service_field <service_name> <python_expression>
 # Parses compose.yaml and evaluates <python_expression> with `svc` bound to
 # the named service's dict. Prints the evaluated result to stdout.

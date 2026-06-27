@@ -117,6 +117,7 @@ print(json.dumps(d))
 " > "${fixture}"
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
   assert_failure
+  assert_output --partial "revokeRefreshToken"
   rm -f "${fixture}"
 }
 
@@ -134,5 +135,6 @@ print(json.dumps(d))
 " > "${fixture}"
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
   assert_failure
+  assert_output --partial "refreshTokenMaxReuse"
   rm -f "${fixture}"
 }
