@@ -81,7 +81,7 @@ teardown() {
     "${jwks_url}" \
     -o /tmp/jwks-response-$$.json \
     -w "%{http_code}" \
-    2>/dev/null || echo "000")
+    2>/dev/null)
 
   if [[ "${http_status}" != "200" ]]; then
     fail "JWKS endpoint ${jwks_url} returned HTTP ${http_status} — expected 200. Is Keycloak running?"
@@ -118,7 +118,6 @@ sys.exit(0)
 PYEOF
 
   assert_success
-  rm -f /tmp/jwks-response-$$.json
 }
 
 # ---------------------------------------------------------------------------
@@ -137,7 +136,7 @@ PYEOF
     "${jwks_url}" \
     -o /tmp/jwks-response-$$.json \
     -w "%{http_code}" \
-    2>/dev/null || echo "000")
+    2>/dev/null)
 
   if [[ "${http_status}" != "200" ]]; then
     fail "JWKS endpoint ${jwks_url} returned HTTP ${http_status} — expected 200. Is Keycloak running?"
@@ -198,7 +197,6 @@ sys.exit(0)
 PYEOF
 
   assert_success
-  rm -f /tmp/jwks-response-$$.json
 }
 
 # ---------------------------------------------------------------------------
@@ -222,7 +220,7 @@ PYEOF
     "${discovery_url}" \
     -o /tmp/discovery-response-$$.json \
     -w "%{http_code}" \
-    2>/dev/null || echo "000")
+    2>/dev/null)
 
   if [[ "${http_status}" != "200" ]]; then
     fail "Discovery endpoint ${discovery_url} returned HTTP ${http_status} — expected 200"
@@ -334,7 +332,7 @@ print(encoded, end='')
     "${KC_DIRECT_URL}/realms/envocc/protocol/openid-connect/userinfo" \
     -o /dev/null \
     -w "%{http_code}" \
-    2>/dev/null || echo "000")
+    2>/dev/null)
 
   if [[ "${http_status}" != "401" ]]; then
     fail "Expected HTTP 401 for alg:none token at userinfo endpoint, got: ${http_status}. Keycloak must reject unsigned JWTs."

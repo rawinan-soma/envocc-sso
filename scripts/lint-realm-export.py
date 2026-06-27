@@ -337,21 +337,9 @@ def main():
                 enabled = "true" in [str(v).lower() for v in config.get("enabled", [])]
                 if is_rsa and active and enabled:
                     has_active_rsa = True
-
-                # Defense-in-depth: assert no clientSecret values inside components entries.
-                # privateKey/certificate are generated at runtime and are NOT stored in
-                # realm-export.json config-as-code; only clientSecret is checked here.
-                for cfg_key, cfg_val in config.items():
-                    if cfg_key == "clientSecret":
-                        for sval in _string_values(cfg_val):
-                            if len(sval) >= KEY_MATERIAL_THRESHOLDS["clientSecret"]:
-                                errors.append(
-                                    f"Key material (clientSecret) detected inside components entry at "
-                                    f"{entry_path}.config.{cfg_key}: "
-                                    f"length {len(sval)} meets or exceeds threshold "
-                                    f"({KEY_MATERIAL_THRESHOLDS['clientSecret']} chars). "
-                                    "Client secrets must not be stored in realm-export.json."
-                                )
+                # Note: key-material scanning (clientSecret, privateKey, etc.) inside
+                # components config is already handled recursively by find_key_material()
+                # in Step 5 above; no duplicate check needed here.
 
             if not has_active_rsa:
                 errors.append(

@@ -60,6 +60,9 @@ KC_TEST_PASSWORD="${KC_TEST_PASSWORD:-TestUser!Pass1}"
 
 # get_envocc_test_token is defined in tests/helpers/common.bash (loaded above).
 
+# File-scope variable so teardown() can clean up regardless of test outcome.
+_TEST_ID_TOKEN_FILE=""
+
 # ---------------------------------------------------------------------------
 # Per-test setup: guard against runs without INTEGRATION flag
 # ---------------------------------------------------------------------------
@@ -70,6 +73,15 @@ setup() {
 }
 
 # ---------------------------------------------------------------------------
+# Per-test teardown: always remove the token temp file, including on
+# failure paths where the inline cleanup after assert_success is skipped.
+# ---------------------------------------------------------------------------
+teardown() {
+  [[ -n "${_TEST_ID_TOKEN_FILE:-}" ]] && rm -f "${_TEST_ID_TOKEN_FILE}"
+  _TEST_ID_TOKEN_FILE=""
+}
+
+# ---------------------------------------------------------------------------
 # TS-231a [P0] — ID token header `alg` is RS256 (AC1, AC6)
 # Verifies that Keycloak signs ID tokens with RS256 (asymmetric signing).
 # This is both a positive assertion (alg=RS256) and a negative assertion
@@ -77,14 +89,13 @@ setup() {
 # ---------------------------------------------------------------------------
 @test "[P0][TS-231a] ID token header alg field is RS256" {
 
-  local nonce="ts-231a-$(date +%s)"
-  local id_token_file
-  id_token_file=$(mktemp)
+  local nonce="ts-231a-$(date +%s)-$$"
+  _TEST_ID_TOKEN_FILE=$(mktemp)
 
-  get_envocc_test_token "${nonce}" > "${id_token_file}" \
-    || { rm -f "${id_token_file}"; fail "Could not obtain ID token — check test client and user setup"; }
+  get_envocc_test_token "${nonce}" > "${_TEST_ID_TOKEN_FILE}" \
+    || fail "Could not obtain ID token — check test client and user setup"
 
-  run python3 - "${id_token_file}" <<'PYEOF'
+  run python3 - "${_TEST_ID_TOKEN_FILE}" <<'PYEOF'
 import sys, base64, json
 
 with open(sys.argv[1]) as f:
@@ -114,7 +125,6 @@ sys.exit(0)
 PYEOF
 
   assert_success
-  rm -f "${id_token_file}"
 }
 
 # ---------------------------------------------------------------------------
@@ -130,14 +140,13 @@ PYEOF
 # ---------------------------------------------------------------------------
 @test "[P0][TS-231b] ID token payload contains all required claims: sub email iss aud exp iat nonce" {
 
-  local nonce="ts-231b-$(date +%s)"
-  local id_token_file
-  id_token_file=$(mktemp)
+  local nonce="ts-231b-$(date +%s)-$$"
+  _TEST_ID_TOKEN_FILE=$(mktemp)
 
-  get_envocc_test_token "${nonce}" > "${id_token_file}" \
-    || { rm -f "${id_token_file}"; fail "Could not obtain ID token — check test client and user setup"; }
+  get_envocc_test_token "${nonce}" > "${_TEST_ID_TOKEN_FILE}" \
+    || fail "Could not obtain ID token — check test client and user setup"
 
-  run python3 - "${id_token_file}" "${nonce}" <<'PYEOF'
+  run python3 - "${_TEST_ID_TOKEN_FILE}" "${nonce}" <<'PYEOF'
 import sys, base64, json
 
 with open(sys.argv[1]) as f:
@@ -189,7 +198,6 @@ sys.exit(0)
 PYEOF
 
   assert_success
-  rm -f "${id_token_file}"
 }
 
 # ---------------------------------------------------------------------------
@@ -200,14 +208,13 @@ PYEOF
 # ---------------------------------------------------------------------------
 @test "[P0][TS-231c] ID token lifetime exp minus iat does not exceed 900 seconds" {
 
-  local nonce="ts-231c-$(date +%s)"
-  local id_token_file
-  id_token_file=$(mktemp)
+  local nonce="ts-231c-$(date +%s)-$$"
+  _TEST_ID_TOKEN_FILE=$(mktemp)
 
-  get_envocc_test_token "${nonce}" > "${id_token_file}" \
-    || { rm -f "${id_token_file}"; fail "Could not obtain ID token"; }
+  get_envocc_test_token "${nonce}" > "${_TEST_ID_TOKEN_FILE}" \
+    || fail "Could not obtain ID token"
 
-  run python3 - "${id_token_file}" <<'PYEOF'
+  run python3 - "${_TEST_ID_TOKEN_FILE}" <<'PYEOF'
 import sys, base64, json
 
 with open(sys.argv[1]) as f:
@@ -241,7 +248,6 @@ sys.exit(0)
 PYEOF
 
   assert_success
-  rm -f "${id_token_file}"
 }
 
 # ---------------------------------------------------------------------------
@@ -289,7 +295,7 @@ print(encoded, end='')
     "${KC_DIRECT_URL}/realms/envocc/protocol/openid-connect/userinfo" \
     -o /dev/null \
     -w "%{http_code}" \
-    2>/dev/null || echo "000")
+    2>/dev/null)
 
   # Keycloak must return HTTP 401; any other status is a failure
   if [[ "${http_status}" != "401" ]]; then

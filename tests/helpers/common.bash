@@ -143,7 +143,11 @@ get_envocc_test_token() {
 
   echo "${response}" | python3 -c "
 import json, sys
-d = json.load(sys.stdin)
+try:
+    d = json.load(sys.stdin)
+except json.JSONDecodeError as e:
+    print(f'get_envocc_test_token: Keycloak response is not valid JSON (HTML error page or proxy error?): {e}', file=sys.stderr)
+    sys.exit(1)
 t = d.get('id_token', '')
 if not t:
     err = d.get('error_description', d.get('error', 'unknown error'))

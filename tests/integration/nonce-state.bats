@@ -58,6 +58,9 @@ KC_TEST_PASSWORD="${KC_TEST_PASSWORD:-TestUser!Pass1}"
 
 # get_envocc_test_token is defined in tests/helpers/common.bash (loaded above).
 
+# File-scope variable so teardown() can clean up regardless of test outcome.
+_TEST_ID_TOKEN_FILE=""
+
 # ---------------------------------------------------------------------------
 # Per-test setup: guard against runs without INTEGRATION flag
 # ---------------------------------------------------------------------------
@@ -65,6 +68,15 @@ setup() {
   if [[ -z "${INTEGRATION}" ]]; then
     skip "Integration tests skipped — set INTEGRATION=1 and ensure stack is running"
   fi
+}
+
+# ---------------------------------------------------------------------------
+# Per-test teardown: always remove the token temp file, including on
+# failure paths where the inline cleanup after assert_success is skipped.
+# ---------------------------------------------------------------------------
+teardown() {
+  [[ -n "${_TEST_ID_TOKEN_FILE:-}" ]] && rm -f "${_TEST_ID_TOKEN_FILE}"
+  _TEST_ID_TOKEN_FILE=""
 }
 
 # ---------------------------------------------------------------------------
@@ -84,13 +96,12 @@ setup() {
   # date +%s (seconds) + $$ (PID) is portable across macOS BSD date and Linux.
   local sent_nonce="ts-233a-$(date +%s)-$$"
 
-  local id_token_file
-  id_token_file=$(mktemp)
+  _TEST_ID_TOKEN_FILE=$(mktemp)
 
-  get_envocc_test_token "${sent_nonce}" > "${id_token_file}" \
-    || { rm -f "${id_token_file}"; fail "Could not obtain ID token — check test client and user setup"; }
+  get_envocc_test_token "${sent_nonce}" > "${_TEST_ID_TOKEN_FILE}" \
+    || fail "Could not obtain ID token — check test client and user setup"
 
-  run python3 - "${id_token_file}" "${sent_nonce}" <<'PYEOF'
+  run python3 - "${_TEST_ID_TOKEN_FILE}" "${sent_nonce}" <<'PYEOF'
 import sys, base64, json
 
 with open(sys.argv[1]) as f:
@@ -141,7 +152,6 @@ sys.exit(0)
 PYEOF
 
   assert_success
-  rm -f "${id_token_file}"
 }
 
 # ---------------------------------------------------------------------------
@@ -168,13 +178,12 @@ PYEOF
   # date +%s + $$ is portable (macOS BSD date and Linux); %N (nanoseconds) is Linux-only.
   local sent_nonce="ts-233b-$(date +%s)-$$"
 
-  local id_token_file
-  id_token_file=$(mktemp)
+  _TEST_ID_TOKEN_FILE=$(mktemp)
 
-  get_envocc_test_token "${sent_nonce}" > "${id_token_file}" \
-    || { rm -f "${id_token_file}"; fail "Could not obtain ID token — check test client and user setup"; }
+  get_envocc_test_token "${sent_nonce}" > "${_TEST_ID_TOKEN_FILE}" \
+    || fail "Could not obtain ID token — check test client and user setup"
 
-  run python3 - "${id_token_file}" "${sent_nonce}" <<'PYEOF'
+  run python3 - "${_TEST_ID_TOKEN_FILE}" "${sent_nonce}" <<'PYEOF'
 import sys, base64, json
 
 with open(sys.argv[1]) as f:
@@ -265,5 +274,4 @@ sys.exit(0)
 PYEOF
 
   assert_success
-  rm -f "${id_token_file}"
 }
