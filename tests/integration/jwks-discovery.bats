@@ -124,8 +124,16 @@ PYEOF
 
   local jwks_url="${KC_DIRECT_URL}/realms/envocc/protocol/openid-connect/certs"
 
-  curl -k -s --max-time 15 "${jwks_url}" -o /tmp/jwks-response-$$.json 2>/dev/null \
-    || { fail "curl failed — is Keycloak reachable at ${KC_DIRECT_URL}?"; }
+  local http_status
+  http_status=$(curl -k -s --max-time 15 \
+    "${jwks_url}" \
+    -o /tmp/jwks-response-$$.json \
+    -w "%{http_code}" \
+    2>/dev/null || echo "000")
+
+  if [[ "${http_status}" != "200" ]]; then
+    fail "JWKS endpoint ${jwks_url} returned HTTP ${http_status} — expected 200. Is Keycloak running?"
+  fi
 
   run python3 - /tmp/jwks-response-$$.json <<'PYEOF'
 import json, sys

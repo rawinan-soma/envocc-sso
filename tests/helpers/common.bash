@@ -94,6 +94,59 @@ print(t)
 }
 
 # ---------------------------------------------------------------------------
+# get_envocc_test_token [nonce]
+# Obtain an ID token from the envocc realm using the Resource Owner Password
+# Credentials grant on the test-only client. Prints the raw ID token string.
+#
+# NOTE: ROPC grant is used here only for automated integration testing.
+#       Production clients must use Authorization Code + PKCE (Story 2.2).
+#       The test client must have "Direct Access Grants" enabled in Keycloak.
+#
+# The nonce parameter is passed as the OAuth2 `nonce` request parameter so
+# Keycloak embeds it in the returned ID token — enabling AC1/AC3 nonce tests.
+#
+# Requires environment variables (set defaults in each calling test file):
+#   KC_DIRECT_URL         — Keycloak base URL  (default: http://localhost:8080)
+#   KC_TEST_CLIENT_ID     — test-only OIDC client ID
+#   KC_TEST_CLIENT_SECRET — test-only OIDC client secret
+#   KC_TEST_USER          — test user username
+#   KC_TEST_PASSWORD      — test user password
+#
+# The default nonce uses `date +%s` (portable: works on macOS BSD date and
+# Linux) combined with the shell PID to guarantee uniqueness within a run.
+# ---------------------------------------------------------------------------
+get_envocc_test_token() {
+  local nonce="${1:-test-nonce-$(date +%s)-$$}"
+
+  local response
+  response=$(curl -sf --max-time 15 \
+    -d "client_id=${KC_TEST_CLIENT_ID}" \
+    -d "client_secret=${KC_TEST_CLIENT_SECRET}" \
+    -d "username=${KC_TEST_USER}" \
+    -d "password=${KC_TEST_PASSWORD}" \
+    -d "grant_type=password" \
+    -d "scope=openid email" \
+    -d "nonce=${nonce}" \
+    "${KC_DIRECT_URL}/realms/envocc/protocol/openid-connect/token") \
+    || {
+      echo "get_envocc_test_token: curl failed — is Keycloak reachable at ${KC_DIRECT_URL}?" >&2
+      echo "  Ensure INTEGRATION=1, stack is running, and test client '${KC_TEST_CLIENT_ID}' is registered." >&2
+      return 1
+    }
+
+  echo "${response}" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+t = d.get('id_token', '')
+if not t:
+    err = d.get('error_description', d.get('error', 'unknown error'))
+    print(f'get_envocc_test_token: no id_token in response — {err}', file=sys.stderr)
+    sys.exit(1)
+print(t, end='')
+"
+}
+
+# ---------------------------------------------------------------------------
 # compose_service_field <service_name> <python_expression>
 # Parses compose.yaml and evaluates <python_expression> with `svc` bound to
 # the named service's dict. Prints the evaluated result to stdout.

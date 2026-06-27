@@ -56,49 +56,7 @@ KC_TEST_CLIENT_SECRET="${KC_TEST_CLIENT_SECRET:-test-secret-change-me}"
 KC_TEST_USER="${KC_TEST_USER:-testuser@envocc.go.th}"
 KC_TEST_PASSWORD="${KC_TEST_PASSWORD:-TestUser!Pass1}"
 
-# ---------------------------------------------------------------------------
-# get_envocc_test_token [nonce]
-# Obtain an ID token from the envocc realm using the Resource Owner Password
-# Credentials grant on the test-only client. Prints the raw ID token string.
-#
-# NOTE: ROPC grant is used here only for automated integration testing.
-#       Production clients must use Authorization Code + PKCE (Story 2.2).
-#       The test client must have "Direct Access Grants" enabled in Keycloak.
-#
-# The nonce parameter is passed as the OAuth2 `nonce` request parameter so
-# Keycloak embeds it in the returned ID token — this is the server-side
-# behavior under test.
-# ---------------------------------------------------------------------------
-get_envocc_test_token() {
-  local nonce="${1:-test-nonce-$(date +%s%N)}"
-
-  local response
-  response=$(curl -sf --max-time 15 \
-    -d "client_id=${KC_TEST_CLIENT_ID}" \
-    -d "client_secret=${KC_TEST_CLIENT_SECRET}" \
-    -d "username=${KC_TEST_USER}" \
-    -d "password=${KC_TEST_PASSWORD}" \
-    -d "grant_type=password" \
-    -d "scope=openid email" \
-    -d "nonce=${nonce}" \
-    "${KC_DIRECT_URL}/realms/envocc/protocol/openid-connect/token") \
-    || {
-      echo "get_envocc_test_token: curl failed — is Keycloak reachable at ${KC_DIRECT_URL}?" >&2
-      echo "  Ensure INTEGRATION=1, stack is running, and test client '${KC_TEST_CLIENT_ID}' is registered." >&2
-      return 1
-    }
-
-  echo "${response}" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-t = d.get('id_token', '')
-if not t:
-    err = d.get('error_description', d.get('error', 'unknown error'))
-    print(f'get_envocc_test_token: no id_token in response — {err}', file=sys.stderr)
-    sys.exit(1)
-print(t, end='')
-"
-}
+# get_envocc_test_token is defined in tests/helpers/common.bash (loaded above).
 
 # ---------------------------------------------------------------------------
 # Per-test setup: guard against runs without INTEGRATION flag
@@ -122,8 +80,9 @@ setup() {
 # ---------------------------------------------------------------------------
 @test "[P1][TS-233a] ID token contains nonce claim matching the value sent in the auth request" {
 
-  # Generate a unique nonce for this test run — must survive in the token
-  local sent_nonce="ts-233a-$(date +%s%N)"
+  # Generate a unique nonce for this test run — must survive in the token.
+  # date +%s (seconds) + $$ (PID) is portable across macOS BSD date and Linux.
+  local sent_nonce="ts-233a-$(date +%s)-$$"
 
   local id_token_file
   id_token_file=$(mktemp)
@@ -206,7 +165,8 @@ PYEOF
 # ---------------------------------------------------------------------------
 @test "[P1][TS-233b] Replaying an ID token with the same nonce is detected by client-side nonce validation" {
 
-  local sent_nonce="ts-233b-$(date +%s%N)"
+  # date +%s + $$ is portable (macOS BSD date and Linux); %N (nanoseconds) is Linux-only.
+  local sent_nonce="ts-233b-$(date +%s)-$$"
 
   local id_token_file
   id_token_file=$(mktemp)
