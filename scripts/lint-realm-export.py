@@ -316,24 +316,49 @@ def main():
                 "Add an 'rsa-generated' provider with keySize=2048, active=true, enabled=true."
             )
         else:
-            # Defense-in-depth: assert no clientSecret values inside components entries.
-            # privateKey/certificate are generated at runtime and are NOT stored in
-            # realm-export.json config-as-code; only clientSecret is checked here.
+            has_active_rsa = False
             for idx, entry in enumerate(key_providers):
                 entry_path = f"$.components.org.keycloak.keys.KeyProvider[{idx}]"
+                # Guard: a malformed export may contain a non-object entry
+                # (e.g. a bare string/number). Skip it gracefully instead of
+                # raising an AttributeError traceback.
+                if not isinstance(entry, dict):
+                    continue
+
                 config = entry.get("config", {})
-                if isinstance(config, dict):
-                    for cfg_key, cfg_val in config.items():
-                        if cfg_key == "clientSecret":
-                            for sval in _string_values(cfg_val):
-                                if len(sval) >= KEY_MATERIAL_THRESHOLDS["clientSecret"]:
-                                    errors.append(
-                                        f"Key material (clientSecret) detected inside components entry at "
-                                        f"{entry_path}.config.{cfg_key}: "
-                                        f"length {len(sval)} meets or exceeds threshold "
-                                        f"({KEY_MATERIAL_THRESHOLDS['clientSecret']} chars). "
-                                        "Client secrets must not be stored in realm-export.json."
-                                    )
+                if not isinstance(config, dict):
+                    config = {}
+
+                # Identify an RSA signing provider that is both active and enabled.
+                # Config values in a Keycloak export are arrays of strings.
+                provider_id = entry.get("providerId", "")
+                is_rsa = isinstance(provider_id, str) and provider_id.startswith("rsa")
+                active = "true" in [str(v).lower() for v in config.get("active", [])]
+                enabled = "true" in [str(v).lower() for v in config.get("enabled", [])]
+                if is_rsa and active and enabled:
+                    has_active_rsa = True
+
+                # Defense-in-depth: assert no clientSecret values inside components entries.
+                # privateKey/certificate are generated at runtime and are NOT stored in
+                # realm-export.json config-as-code; only clientSecret is checked here.
+                for cfg_key, cfg_val in config.items():
+                    if cfg_key == "clientSecret":
+                        for sval in _string_values(cfg_val):
+                            if len(sval) >= KEY_MATERIAL_THRESHOLDS["clientSecret"]:
+                                errors.append(
+                                    f"Key material (clientSecret) detected inside components entry at "
+                                    f"{entry_path}.config.{cfg_key}: "
+                                    f"length {len(sval)} meets or exceeds threshold "
+                                    f"({KEY_MATERIAL_THRESHOLDS['clientSecret']} chars). "
+                                    "Client secrets must not be stored in realm-export.json."
+                                )
+
+            if not has_active_rsa:
+                errors.append(
+                    "No active RSA key provider found under 'components.org.keycloak.keys.KeyProvider'. "
+                    "At least one provider with providerId starting 'rsa', active=true and enabled=true "
+                    "is required so the realm publishes an RS256 signing key (AC2, AC7, AC9)."
+                )
 
     # ── Step 9: Report and exit ────────────────────────────────────────────────
     if errors:

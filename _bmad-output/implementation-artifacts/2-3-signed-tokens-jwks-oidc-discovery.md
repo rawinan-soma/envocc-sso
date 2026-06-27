@@ -4,7 +4,7 @@ baseline_commit: 854ff93a2e35a8cfe3b048b956b71aa759e38a00
 
 # Story 2.3: Signed Tokens, JWKS & OIDC Discovery
 
-Status: review
+Status: done
 
 ## Story
 
@@ -400,3 +400,25 @@ claude-sonnet-4-6 (dev-story implementation, 2026-06-27)
 ### Change Log
 
 - 2026-06-27: Story 2.3 implementation complete — added RSA key provider component to realm-export.json, email-claims client scope, extended lint-realm-export.py with key provider check, activated all 12 ATDD integration tests. Status: review.
+- 2026-06-27: Code review (Step 5) complete — 6 patches applied, 5 items deferred, 3 dismissed as noise. Status: done.
+
+### Review Findings (code review 2026-06-27)
+
+Adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor). Patches applied; deferred items recorded in `deferred-work.md`.
+
+Patches applied:
+
+- [x] [Review][Patch] `get_envocc_test_token` used `curl -sf`, hiding HTTP-error bodies so every auth rejection was misreported as a connection failure [tests/helpers/common.bash] — switched to `curl -s` so Keycloak's `error_description` surfaces.
+- [x] [Review][Patch] realm-lint asserted RSA key-provider *presence* only; an inactive/disabled or non-RSA provider passed while publishing no signing key [scripts/lint-realm-export.py] — now requires a provider with `providerId` starting `rsa`, `active=true`, `enabled=true`.
+- [x] [Review][Patch] A non-dict KeyProvider entry crashed the linter with an uncaught `AttributeError` traceback [scripts/lint-realm-export.py] — added `isinstance` guards for entry and config.
+- [x] [Review][Patch] TS-232a `curl … | tail -1 || echo "000"` — the pipe masked curl's exit code so the `000` fallback never fired and the status could be empty [tests/integration/jwks-discovery.bats] — rewrote to the working TS-232b pattern.
+- [x] [Review][Patch] Predictable `/tmp/{jwks,discovery}-response-$$.json` leaked on assertion-failure paths (inline `rm` after `assert_success` unreachable) [tests/integration/jwks-discovery.bats] — added `teardown()` that always removes them.
+- [x] [Review][Patch] Comment overstated nonce uniqueness as guaranteed [tests/helpers/common.bash] — corrected wording (1s resolution + constant PID; each test compares its own nonce).
+
+Deferred (see `deferred-work.md`):
+
+- [x] [Review][Defer] ROPC integration tests require an unprovisioned test client + test user (HIGH) [tests/helpers/common.bash; keycloak/realm-export.json] — deferred; documented external setup, provisioning belongs in a test-setup script, not the production realm export.
+- [x] [Review][Defer] Default `KC_DIRECT_URL` targets unpublished port 8080 [tests/integration/*.bats] — deferred; test-environment config.
+- [x] [Review][Defer] Integration tests not wired into the CI gate [.github/] — deferred; needs a compose stack + provisioning in CI (epic-level follow-up).
+- [x] [Review][Defer] AC7 active/passive key overlap not realized — single key at priority 100 [keycloak/realm-export.json] — deferred; documented design decision (overlap is added at rotation time).
+- [x] [Review][Defer] `defaultDefaultClientScopes: ["email-claims"]` may drop Keycloak's standard default scopes [keycloak/realm-export.json] — deferred; verify on first client registration (no clients exist yet).

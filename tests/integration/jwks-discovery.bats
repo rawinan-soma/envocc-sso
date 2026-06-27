@@ -58,6 +58,14 @@ setup() {
 }
 
 # ---------------------------------------------------------------------------
+# Per-test teardown: always remove the response temp files, including on the
+# failure paths where the inline `rm` after assert_success is never reached.
+# ---------------------------------------------------------------------------
+teardown() {
+  rm -f "/tmp/jwks-response-$$.json" "/tmp/discovery-response-$$.json"
+}
+
+# ---------------------------------------------------------------------------
 # TS-232a [P0] — JWKS endpoint returns valid JSON with at least one RSA signing key (AC2)
 # Verifies that the JWKS endpoint responds with HTTP 200 and a JSON body
 # containing at least one key entry with a `kid` field.
@@ -68,12 +76,12 @@ setup() {
 
   local jwks_url="${KC_DIRECT_URL}/realms/envocc/protocol/openid-connect/certs"
 
-  local response_body http_status
+  local http_status
   http_status=$(curl -k -s --max-time 15 \
     "${jwks_url}" \
-    -w "\n%{http_code}" \
     -o /tmp/jwks-response-$$.json \
-    2>/dev/null | tail -1 || echo "000")
+    -w "%{http_code}" \
+    2>/dev/null || echo "000")
 
   if [[ "${http_status}" != "200" ]]; then
     fail "JWKS endpoint ${jwks_url} returned HTTP ${http_status} — expected 200. Is Keycloak running?"

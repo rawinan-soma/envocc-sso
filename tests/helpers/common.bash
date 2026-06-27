@@ -113,13 +113,20 @@ print(t)
 #   KC_TEST_PASSWORD      — test user password
 #
 # The default nonce uses `date +%s` (portable: works on macOS BSD date and
-# Linux) combined with the shell PID to guarantee uniqueness within a run.
+# Linux) combined with the shell PID. This is sufficiently distinct per run;
+# it is not a strict uniqueness guarantee (1-second resolution + constant PID),
+# but each test only compares its own sent nonce against the echoed token claim.
 # ---------------------------------------------------------------------------
 get_envocc_test_token() {
   local nonce="${1:-test-nonce-$(date +%s)-$$}"
 
+  # NOTE: intentionally NOT using curl -f here. With -f, curl discards the
+  # response body on HTTP 4xx/5xx, so the Keycloak `error_description` below
+  # would never surface and every auth rejection would be misreported as a
+  # connection failure. Without -f, curl exits non-zero only on a genuine
+  # network/timeout error; HTTP error responses flow through to the parser.
   local response
-  response=$(curl -sf --max-time 15 \
+  response=$(curl -s --max-time 15 \
     -d "client_id=${KC_TEST_CLIENT_ID}" \
     -d "client_secret=${KC_TEST_CLIENT_SECRET}" \
     -d "username=${KC_TEST_USER}" \
