@@ -1,5 +1,5 @@
 # Story Dependency Graph
-_Last updated: 2026-06-27T13:00:00Z_
+_Last updated: 2026-06-27T08:15:00Z_
 
 ## Stories
 
@@ -10,11 +10,11 @@ _Last updated: 2026-06-27T13:00:00Z_
 | 1.3 | 1 | Nginx security edge | done | #4 | #46 | merged | 1.1 | ✅ Yes (done) |
 | 1.4 | 1 | Shared Deep Sea design-token stylesheet | done | #5 | #44 | merged | none | ✅ Yes (done) |
 | 1.5 | 1 | Agentic-build / CI security gate | done | #6 | #47 | merged | 1.2, 1.3, 1.4 | ✅ Yes (done) |
-| 2.1 | 2 | Canonical identity model & lifecycle states | backlog | #7 | — | — | epic 1 complete | ✅ Yes |
-| 2.2 | 2 | OIDC Authorization Code + PKCE login | backlog | #8 | — | — | epic 1 complete | ✅ Yes |
-| 2.3 | 2 | Signed tokens, JWKS & OIDC discovery | backlog | #9 | — | — | epic 1 complete | ✅ Yes |
-| 2.4 | 2 | SSO session, lifetimes & RP-initiated logout | backlog | #10 | — | — | epic 1 complete | ✅ Yes |
-| 2.5 | 2 | Branded Deep Sea login theme | backlog | #11 | — | — | epic 1 complete, 1.4 | ✅ Yes |
+| 2.1 | 2 | Canonical identity model & lifecycle states | atdd-done | #7 | — | — | epic 1 complete | ✅ Yes |
+| 2.2 | 2 | OIDC Authorization Code + PKCE login | ready-for-dev | #8 | — | — | epic 1 complete | ✅ Yes |
+| 2.3 | 2 | Signed tokens, JWKS & OIDC discovery | ready-for-dev | #9 | — | — | epic 1 complete | ✅ Yes |
+| 2.4 | 2 | SSO session, lifetimes & RP-initiated logout | atdd-done | #10 | — | — | epic 1 complete | ✅ Yes |
+| 2.5 | 2 | Branded Deep Sea login theme | ready-for-dev | #11 | — | — | epic 1 complete, 1.4 | ✅ Yes |
 | 2.6 | 2 | TOTP MFA enforcement & verification hardening | backlog | #12 | — | — | epic 1 complete, 2.2 | ❌ No (2.2 not merged) |
 | 2.7 | 2 | Brute-force protection & enumeration-resistant responses | backlog | #13 | — | — | epic 1 complete, 2.2 | ❌ No (2.2 not merged) |
 | 2.8 | 2 | Disable blocks authentication & revokes sessions | backlog | #14 | — | — | epic 1 complete, 2.2 | ❌ No (2.2 not merged) |

@@ -19,9 +19,9 @@ name: CI
 
 on:
   push:
-    branches: ["main", "develop", "story-*"]
+    branches: ["main", "story-*", "epic-*"]
   pull_request:
-    branches: ["main", "develop"]
+    branches: ["main", "epic-*", "story-*"]
 
 # Single source of truth for the gitleaks version used by all jobs.
 # Bump here to upgrade both the secret-scan gate and the realm-export check.
