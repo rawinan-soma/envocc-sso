@@ -17,3 +17,7 @@ Items surfaced during reviews that are real but intentionally not actioned in th
 ## Deferred from: code review of story-1.2 (2026-06-25)
 
 - **CI workflow branch triggers do not match the project branch model** [.github/workflows/ci.yml] — Triggers are `push: [main, develop, story-*]` / `pull_request: [main, develop]`, but the actual Git Flow is `main`/`dev`/`epic-N` (no `develop`, no `story-*` push branches; integration happens on `epic-N`). A PR from `epic-1` → `dev` would not match, so the `gitleaks` and `realm-export-check` gates (the AC2 enforcement) may never run on the real merge path. Pre-existing from Story 1.1, out of scope for this diff. Reconcile branch names (`develop`→`dev`, add `epic-*`) when the CI security gate is finalized in Story 1.5.
+
+## Deferred from: code review of story-2.1 (2026-06-27)
+
+- **`test-ropc-client` (ROPC/direct-access grant) ships in the shared realm export with no enforced production removal** [keycloak/realm-export.json] — The client is documented as test-only (warnings in `REALM-EXPORT-NOTES.md` and `IDENTITY-MODEL.md`, secret zeroed), but nothing mechanically prevents it from being imported into a non-dev environment, where a confidential ROPC client is a credential-stuffing surface. Out of scope for Story 2.1 (identity model); address during the production-hardening / deployment pass — e.g. a separate prod realm export, or a lint rule that rejects `directAccessGrantsEnabled` clients in production exports.

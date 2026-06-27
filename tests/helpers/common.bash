@@ -142,6 +142,46 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
+# check_no_pdpa_sensitive_attrs <user_json_file>
+# Runs a Python check against the given user JSON file, exiting non-zero
+# and printing a diagnostic message if any PDPA §26 sensitive field is found
+# in the user's 'attributes' map.
+#
+# Single source of truth for the PDPA §26 forbidden attribute list — update
+# here if the data-minimisation requirements (FR23/NFR12) change.
+#
+# Usage (in BATS tests):
+#   run check_no_pdpa_sensitive_attrs "${user_tmpfile}"
+#   assert_success
+# ---------------------------------------------------------------------------
+check_no_pdpa_sensitive_attrs() {
+  local user_file="${1}"
+  python3 - "${user_file}" <<'PYEOF'
+import json, sys
+
+with open(sys.argv[1]) as f:
+    user = json.load(f)
+
+# PDPA §26 sensitive data categories forbidden from user attribute storage.
+# National ID / PID for ThaiD is stored ONLY in the identity broker link — not here.
+sensitive_fields = [
+    'nationalId', 'pid', 'citizenId', 'dateOfBirth', 'gender',
+    'ethnicity', 'religion', 'healthInfo', 'biometric', 'criminalRecord',
+    'politicalOpinion', 'sexualOrientation', 'tradeUnion', 'geneticData',
+]
+
+attrs = user.get('attributes', {})
+found = [f for f in sensitive_fields if f in attrs]
+
+if found:
+    print(f'PDPA §26 violation: sensitive fields found in user attributes: {found}')
+    sys.exit(1)
+
+sys.exit(0)
+PYEOF
+}
+
+# ---------------------------------------------------------------------------
 # env_setup
 # Copy .env.example -> .env if no real .env exists (CI / clean checkout).
 # ---------------------------------------------------------------------------

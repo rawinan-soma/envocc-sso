@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""lint-realm-export.py — Validate keycloak/realm-export.json for story 1.5.
+"""lint-realm-export.py — Validate keycloak/realm-export.json for story 1.5 / 2.1.
 
 Checks performed:
   1. JSON is parseable.
@@ -10,6 +10,13 @@ Checks performed:
      ("privateKey": "...") or the array form ("privateKey": ["..."]) that
      Keycloak actually emits for KeyProvider config — anywhere in the document
      (mirrors .gitleaks.toml rules).
+  4. Value-level checks (Story 2.1 — closes deferred gap from Story 1.5 review):
+     - duplicateEmailsAllowed must be boolean false (not merely present)
+     - registrationAllowed must be boolean false (not merely present)
+     - loginWithEmailAllowed must be boolean true (email reconciliation key, FR22)
+     - bruteForceProtected must be boolean true (brute-force protection cannot be disabled)
+     - enabled must be boolean true (realm must be enabled)
+     Each value must be the exact boolean type — a JSON integer 0/1 does not pass.
 
 Exit codes:
   0 — all checks passed
@@ -30,6 +37,20 @@ REQUIRED_FIELDS = [
     "enabled",
     "bruteForceProtected",
     "accessTokenLifespan",
+]
+
+# Value-level boolean checks (Story 2.1 — closes deferred gap from Story 1.5 review).
+# Each entry is (field_name, expected_value).  The field must exist AND hold the
+# exact expected value — presence-only checks are insufficient for security-critical
+# settings like duplicateEmailsAllowed and registrationAllowed.
+# bruteForceProtected and enabled are also checked here (not just in REQUIRED_FIELDS)
+# so that a wrong value (e.g. bruteForceProtected: false) is caught, not just absence.
+REQUIRED_VALUES: list[tuple[str, object]] = [
+    ("duplicateEmailsAllowed", False),
+    ("registrationAllowed", False),
+    ("loginWithEmailAllowed", True),
+    ("bruteForceProtected", True),
+    ("enabled", True),
 ]
 
 # Key-material thresholds mirror gitleaks rules for defense-in-depth.
@@ -123,6 +144,29 @@ def main():
         if field not in data:
             errors.append(
                 f"Missing required field '{field}' in realm-export.json top-level object."
+            )
+
+    # ── Step 4b: Assert value-level security settings (Story 2.1) ─────────────
+    # Presence-only checks are insufficient — a field set to the wrong value is
+    # as dangerous as a missing field.  These checks mirror the realm AC requirements:
+    #   - duplicateEmailsAllowed: false  → enforces email uniqueness (FR22, AC1)
+    #   - registrationAllowed: false     → disables public self-registration (scope boundary)
+    #   - loginWithEmailAllowed: true    → email is the reconciliation key (FR22, AC1)
+    #   - bruteForceProtected: true      → brute-force protection must not be disabled
+    #   - enabled: true                  → realm must be enabled
+    # The type check rejects JSON integers (0/1) and strings ("false") that would
+    # otherwise satisfy a loose `!=` comparison because Python treats 0 == False.
+    for field, expected in REQUIRED_VALUES:
+        if field not in data:
+            errors.append(
+                f"Missing required field '{field}' in realm-export.json top-level object "
+                f"(expected value: {expected!r})."
+            )
+        elif not isinstance(data[field], bool) or data[field] != expected:
+            errors.append(
+                f"Security misconfiguration: '{field}' must be boolean {expected!r} but got "
+                f"{data[field]!r} ({type(data[field]).__name__}) in realm-export.json. "
+                f"This is a value-level check — presence alone is not sufficient."
             )
 
     # ── Step 5: Scan for embedded key material ─────────────────────────────────
