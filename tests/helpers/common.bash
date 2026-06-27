@@ -179,7 +179,10 @@ print(t, end='')
 fetch_realm_json_to_tmpfile() {
   local token="${1}"
   local tmpfile
-  tmpfile=$(mktemp)
+  tmpfile=$(mktemp) || {
+    echo "fetch_realm_json_to_tmpfile: mktemp failed — TMPDIR unwritable or out of space?" >&2
+    return 1
+  }
 
   local curl_exit=0
   curl -sf --max-time 10 \
@@ -192,6 +195,16 @@ fetch_realm_json_to_tmpfile() {
     echo "fetch_realm_json_to_tmpfile: curl failed (exit ${curl_exit}) — is Keycloak running?" >&2
     return 1
   fi
+
+  # Guard against a 200 response with an empty/truncated body (e.g. a connection
+  # dropped after headers) — otherwise the caller's json.load raises an opaque
+  # JSONDecodeError. Confirm the payload is non-empty, parseable JSON.
+  if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "${tmpfile}" 2>/dev/null; then
+    rm -f "${tmpfile}"
+    echo "fetch_realm_json_to_tmpfile: realm JSON empty or unparseable — incomplete response body" >&2
+    return 1
+  fi
+
   echo "${tmpfile}"
 }
 

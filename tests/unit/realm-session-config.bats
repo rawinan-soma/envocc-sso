@@ -14,6 +14,8 @@
 #   TS-240d [P0] Lint exits 1 when refreshTokenMaxReuse: 1
 #   TS-240e [P0] Lint exits 1 when revokeRefreshToken is missing
 #   TS-240f [P0] Lint exits 1 when refreshTokenMaxReuse is missing
+#   TS-240g [P0] Lint exits 1 when accessTokenLifespan is a non-integer over the ceiling
+#   TS-240h [P0] Lint exits 1 when refreshTokenMaxReuse is boolean false (False == 0 trap)
 #
 # Run: BATS_LIB_PATH=$(pwd)/tests/lib bats tests/unit/realm-session-config.bats
 
@@ -81,7 +83,9 @@ print(json.dumps(d))
 " > "${fixture}"
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
   assert_failure
-  assert_output --partial "FR9"
+  # Match the field-specific message, not just "FR9" (which both refresh-token
+  # error strings contain) — confirms the revokeRefreshToken check is what fired.
+  assert_output --partial "revokeRefreshToken must be true"
   rm -f "${fixture}"
 }
 
@@ -99,7 +103,9 @@ print(json.dumps(d))
 " > "${fixture}"
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
   assert_failure
-  assert_output --partial "FR9"
+  # Match the field-specific message, not just "FR9" — confirms the
+  # refreshTokenMaxReuse check is what fired (both FR9 strings share "FR9").
+  assert_output --partial "refreshTokenMaxReuse must be 0"
   rm -f "${fixture}"
 }
 
@@ -136,5 +142,47 @@ print(json.dumps(d))
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
   assert_failure
   assert_output --partial "refreshTokenMaxReuse"
+  rm -f "${fixture}"
+}
+
+# ---------------------------------------------------------------------------
+# TS-240g [P0] — Lint exits 1 when accessTokenLifespan is a non-integer that
+# would otherwise bypass the NFR2a ceiling (string/float/bool fail open if the
+# check only guards on `isinstance(int)`). Regression for the type-confusion gap.
+# ---------------------------------------------------------------------------
+@test "[P0][TS-240g] Lint exits 1 when accessTokenLifespan is a non-integer over the ceiling" {
+  local fixture
+  fixture=$(mktemp)
+  # 1200.0 (float) and "1200" (string) are both over the 900s ceiling but are
+  # not Python ints — the ceiling must still reject them, not fail open.
+  echo "${VALID_FIXTURE}" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+d['accessTokenLifespan'] = 1200.0
+print(json.dumps(d))
+" > "${fixture}"
+  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
+  assert_failure
+  assert_output --partial "accessTokenLifespan"
+  rm -f "${fixture}"
+}
+
+# ---------------------------------------------------------------------------
+# TS-240h [P0] — Lint exits 1 when refreshTokenMaxReuse is boolean false.
+# Python's `False == 0` would let a JSON `false` pass a naive `!= 0` check;
+# the type-strict guard must reject it. Regression for the type-confusion gap.
+# ---------------------------------------------------------------------------
+@test "[P0][TS-240h] Lint exits 1 when refreshTokenMaxReuse is boolean false" {
+  local fixture
+  fixture=$(mktemp)
+  echo "${VALID_FIXTURE}" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+d['refreshTokenMaxReuse'] = False
+print(json.dumps(d))
+" > "${fixture}"
+  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
+  assert_failure
+  assert_output --partial "refreshTokenMaxReuse must be 0"
   rm -f "${fixture}"
 }

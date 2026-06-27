@@ -4,7 +4,7 @@ baseline_commit: 1fb0e6c
 
 # Story 2.4: SSO Session, Lifetimes & RP-Initiated Logout
 
-Status: review
+Status: done
 
 ## Story
 
@@ -102,6 +102,21 @@ Then it validates `accessTokenLifespan ≤ 900`, `revokeRefreshToken == true`, a
   - [x] 7.2: Run `gitleaks protect --staged --redact` on staged changes — must exit 0 (no secrets)
   - [x] 7.3: Run `semgrep scan --config auto --error` — must exit 0
   - [x] 7.4: Push branch; confirm all CI jobs pass (realm-lint, sast, gitleaks)
+
+### Review Findings
+
+Code review 2026-06-27 (Blind Hunter + Edge Case Hunter + Acceptance Auditor). All accepted findings applied in commit on this branch.
+
+- [x] [Review][Patch] accessTokenLifespan ceiling failed open for non-integer values (string/float/bool bypassed `isinstance(int)` guard) [scripts/lint-realm-export.py] — now type-strict: rejects non-int and bool, then enforces the 900s NFR2a ceiling. Regression test TS-240g added.
+- [x] [Review][Patch] refreshTokenMaxReuse accepted boolean `false`/`0.0` via Python `False == 0` trap [scripts/lint-realm-export.py] — now type-strict integer-0 check. Regression test TS-240h added.
+- [x] [Review][Patch] Value checks ran unconditionally, contradicting the "only validate if present" comment and double-reporting on missing fields [scripts/lint-realm-export.py] — all three checks now guard on field presence; comments corrected.
+- [x] [Review][Patch] fetch_realm_json_to_tmpfile returned an empty/truncated 200-body as success (opaque downstream JSONDecodeError) [tests/helpers/common.bash] — added a JSON-validity guard that fails fast.
+- [x] [Review][Patch] fetch_realm_json_to_tmpfile did not handle `mktemp` failure [tests/helpers/common.bash] — added `|| return 1` guard with diagnostic.
+- [x] [Review][Patch] TS-240c/TS-240d asserted only `--partial "FR9"` (both refresh-token messages share "FR9", so neither test pinned the field) [tests/unit/realm-session-config.bats] — tightened to field-specific message assertions.
+- [x] [Review][Patch] Lint step-numbering drift (duplicate Step 5, jump to Step 7) and stale docstring [scripts/lint-realm-export.py] — renumbered (added Step 6 header) and docstring updated for type-strictness.
+- [x] [Review][Patch] File List doc drift — story listed realm-import.bats/common.bash as unchanged though the diff modifies them [this story file] — File List corrected.
+
+Dismissed as noise / by-design / out-of-scope: TS-241e 200/302-only assertion (deliberate reachability check on pinned KC 26.x); tmpfile retained on assertion failure (intentional per spec — kept for diagnosis); no lower-bound on accessTokenLifespan (outside AC6 scope); AC2 ID-token note (Keycloak ID token inherits access lifespan); Task 7.4 CI verification (not auditable from a static diff).
 
 ## Dev Notes
 
@@ -425,7 +440,8 @@ No blockers encountered. All AC satisfied via realm config + lint hardening + BA
 - `scripts/lint-realm-export.py` — modified: added `revokeRefreshToken` and `refreshTokenMaxReuse` to REQUIRED_FIELDS; added value-validation block (Step 5); updated docstring
 - `keycloak/REALM-EXPORT-NOTES.md` — modified: appended Story 2.4 section (session/lifetime rationale, FR45 docs, RP-initiated logout, per-client logout config)
 - `tests/unit/realm-session-config.bats` — modified: removed RED PHASE skip annotations from all 6 tests (TS-240a through TS-240f); tests now active and passing
-- `tests/integration/realm-import.bats` — pre-existing ATDD scaffold (no changes in this step): TS-241a through TS-241f added, TS-201d extended
+- `tests/integration/realm-import.bats` — modified: TS-241a through TS-241f added (ATDD scaffold); TS-201d extended with revokeRefreshToken/refreshTokenMaxReuse checks and refactored to use the shared `fetch_realm_json_to_tmpfile` helper
+- `tests/helpers/common.bash` — modified: added `fetch_realm_json_to_tmpfile` helper (DRY extraction from TS-201d; fetches live realm JSON to a temp file with curl/mktemp/JSON-validity guards)
 
 ## Change Log
 

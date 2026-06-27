@@ -5,10 +5,11 @@ Checks performed:
   1. JSON is parseable.
   2. Required baseline fields are present: realm, enabled, bruteForceProtected,
      accessTokenLifespan, revokeRefreshToken, refreshTokenMaxReuse.
-  3. Value validation (Story 2.4 — AC6/AR8):
-     - accessTokenLifespan <= 900 s (NFR2a: 15-minute hard ceiling)
+  3. Value validation (Story 2.4 — AC6/AR8), type-strict so a string/float/bool
+     cannot fail the check open:
+     - accessTokenLifespan: integer <= 900 s (NFR2a: 15-minute hard ceiling)
      - revokeRefreshToken == true (FR9: family revocation on replay)
-     - refreshTokenMaxReuse == 0 (FR9: rotate on every use)
+     - refreshTokenMaxReuse == integer 0 (FR9: rotate on every use)
   4. No key material embedded: privateKey/certificate values >= 64 chars,
      clientSecret/secret values >= 8 chars — in either the plain string form
      ("privateKey": "...") or the array form ("privateKey": ["..."]) that
@@ -262,30 +263,42 @@ def main():
                 f"This is a value-level check — presence alone is not sufficient."
             )
 
-    # ── Step 4c: Value-validate security-critical lifetime fields (Story 2.4) ───
-    # Only validate if the field is present — presence failures are already
-    # caught by Step 4. The isinstance guard on accessTokenLifespan prevents a
-    # crash if the field holds a non-integer value (the presence check above has
-    # already flagged that case). For revokeRefreshToken, `is not True` correctly
-    # rejects null, 0, False, and absent values (JSON null → Python None).
-    atl = data.get("accessTokenLifespan")
-    if isinstance(atl, int) and atl > MAX_ACCESS_TOKEN_LIFESPAN:
-        errors.append(
-            f"accessTokenLifespan {atl}s exceeds NFR2a 15-minute ceiling "
-            f"({MAX_ACCESS_TOKEN_LIFESPAN}s max)."
-        )
+    # ── Step 5: Value-validate security-critical lifetime fields (Story 2.4) ────
+    # Each check runs only when the field is present — a missing field is already
+    # reported by Step 4, so guarding here avoids a redundant second error.
+    # Type handling is strict: these fields must hold the JSON type Keycloak
+    # expects (integer seconds / boolean), so a string, float, or boolean where
+    # an integer is required is rejected rather than silently coerced. Note that
+    # `bool` subclasses `int` in Python, so `isinstance(x, bool)` is excluded
+    # explicitly to stop `true`/`false` slipping through the integer checks.
+    if "accessTokenLifespan" in data:
+        atl = data["accessTokenLifespan"]
+        if not isinstance(atl, int) or isinstance(atl, bool):
+            errors.append(
+                "accessTokenLifespan must be an integer number of seconds, "
+                f"got {atl!r}."
+            )
+        elif atl > MAX_ACCESS_TOKEN_LIFESPAN:
+            errors.append(
+                f"accessTokenLifespan {atl}s exceeds NFR2a 15-minute ceiling "
+                f"({MAX_ACCESS_TOKEN_LIFESPAN}s max)."
+            )
 
-    if data.get("revokeRefreshToken") is not True:
+    # `is not True` correctly rejects null, 0, 1, and false — only the boolean
+    # `true` singleton passes (JSON null → Python None).
+    if "revokeRefreshToken" in data and data["revokeRefreshToken"] is not True:
         errors.append(
             "revokeRefreshToken must be true (FR9: family revocation on replay)."
         )
 
-    if data.get("refreshTokenMaxReuse") != 0:
-        errors.append(
-            "refreshTokenMaxReuse must be 0 (FR9: rotate on every use)."
-        )
+    if "refreshTokenMaxReuse" in data:
+        rtmr = data["refreshTokenMaxReuse"]
+        if not isinstance(rtmr, int) or isinstance(rtmr, bool) or rtmr != 0:
+            errors.append(
+                "refreshTokenMaxReuse must be 0 (FR9: rotate on every use)."
+            )
 
-    # ── Step 5: Scan for embedded key material ─────────────────────────────────
+    # ── Step 6: Scan for embedded key material (defense-in-depth vs gitleaks) ──
     for json_path, field_name, value_len in find_key_material(data):
         errors.append(
             f"Key material detected at {json_path}: "
