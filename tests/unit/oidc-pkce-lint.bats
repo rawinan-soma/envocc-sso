@@ -17,8 +17,7 @@
 # Run: bats tests/unit/oidc-pkce-lint.bats
 # No live Keycloak stack required. Tests use ephemeral temp JSON files.
 #
-# Red-phase scaffolds: each @test starts with skip "RED PHASE — ..."
-# Activate by removing the skip line when implementing the corresponding Task.
+# These tests are active (green phase) and run with no special env required.
 
 bats_load_library 'bats-support'
 bats_load_library 'bats-assert'
@@ -29,10 +28,13 @@ load '../helpers/common'
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Write a JSON string to a temp file; echo the path
+# Write a JSON string to a temp file; echo the path.
+# NB: keep the X's trailing — BSD/macOS mktemp will not randomise a template
+# when a suffix (e.g. ".json") follows the X run, producing a literal,
+# non-unique filename that collides across runs.
 write_realm_json() {
   local tmpfile
-  tmpfile=$(mktemp /tmp/realm-export-test-XXXXXX.json)
+  tmpfile=$(mktemp "${TMPDIR:-/tmp}/realm-export-test-XXXXXX")
   printf '%s' "${1}" > "${tmpfile}"
   echo "${tmpfile}"
 }
@@ -230,6 +232,70 @@ run_lint() {
   rm -f "${tmpfile}"
   assert_failure
   assert_output --partial "identifiable-bad-client"
+}
+
+# ---------------------------------------------------------------------------
+# TS-220r [P1] — lint rejects a zero / non-positive accessCodeLifespan (AC4)
+# Regression: an upper-bound-only check let 0 and negative values pass.
+# ---------------------------------------------------------------------------
+@test "[P1][TS-220r] lint-realm-export.py exits 1 when accessCodeLifespan is 0" {
+  local tmpfile
+  tmpfile=$(write_realm_json \
+    '{"realm":"envocc","enabled":true,"bruteForceProtected":true,"accessTokenLifespan":900,"accessCodeLifespan":0}')
+  run_lint "${tmpfile}"
+  rm -f "${tmpfile}"
+  assert_failure
+  assert_output --partial "accessCodeLifespan"
+}
+
+# ---------------------------------------------------------------------------
+# TS-220s [P1] — lint rejects a boolean accessCodeLifespan (AC4)
+# Regression: Python bool is an int subclass, so `true` was read as 1 second.
+# ---------------------------------------------------------------------------
+@test "[P1][TS-220s] lint-realm-export.py exits 1 when accessCodeLifespan is a boolean" {
+  local tmpfile
+  tmpfile=$(write_realm_json \
+    '{"realm":"envocc","enabled":true,"bruteForceProtected":true,"accessTokenLifespan":900,"accessCodeLifespan":true}')
+  run_lint "${tmpfile}"
+  rm -f "${tmpfile}"
+  assert_failure
+  assert_output --partial "accessCodeLifespan"
+}
+
+# ---------------------------------------------------------------------------
+# TS-220t [P1] — lint rejects a public client with directAccessGrantsEnabled absent (AC1)
+# Regression: Keycloak default is true, so absence must be flagged, not skipped.
+# ---------------------------------------------------------------------------
+@test "[P1][TS-220t] lint-realm-export.py exits 1 when directAccessGrantsEnabled is absent on a client" {
+  local tmpfile
+  tmpfile=$(write_realm_json '{
+    "realm":"envocc","enabled":true,"bruteForceProtected":true,
+    "accessTokenLifespan":900,"accessCodeLifespan":60,
+    "clients":[{
+      "clientId":"absent-ropc-client",
+      "implicitFlowEnabled":false,
+      "publicClient":true,
+      "attributes":{"pkce.code.challenge.method":"S256"}
+    }]
+  }')
+  run_lint "${tmpfile}"
+  rm -f "${tmpfile}"
+  assert_failure
+  assert_output --partial "directAccessGrantsEnabled"
+}
+
+# ---------------------------------------------------------------------------
+# TS-220u [P1] — lint rejects a non-array clients value (AC1)
+# Regression: a `clients` object silently skipped all per-client checks.
+# ---------------------------------------------------------------------------
+@test "[P1][TS-220u] lint-realm-export.py exits 1 when clients is a JSON object, not an array" {
+  local tmpfile
+  tmpfile=$(write_realm_json \
+    '{"realm":"envocc","enabled":true,"bruteForceProtected":true,"accessTokenLifespan":900,"accessCodeLifespan":60,"clients":{}}')
+  run_lint "${tmpfile}"
+  rm -f "${tmpfile}"
+  assert_failure
+  assert_output --partial "clients"
 }
 
 # ---------------------------------------------------------------------------

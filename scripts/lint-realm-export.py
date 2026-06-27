@@ -132,28 +132,33 @@ def lint_clients(clients):
         client_id = client.get("clientId", f"<unknown client at index {idx}>")
 
         # ── Check 5: implicitFlowEnabled must not be true ────────────────────
-        if client.get("implicitFlowEnabled") is True:
+        # Anything other than an explicit `false` (or absence, which Keycloak
+        # defaults to false) is a violation — this also catches non-canonical
+        # truthy values such as `1` or `"true"` that identity checks would miss.
+        implicit = client.get("implicitFlowEnabled", False)
+        if implicit is not False:
             client_errors.append(
                 (
                     client_id,
-                    f"[{client_id}] implicitFlowEnabled is true — "
+                    f"[{client_id}] implicitFlowEnabled is {implicit!r} — "
                     "Implicit grant must be disabled (set to false or omit).",
                 )
             )
 
         # ── Check 6: directAccessGrantsEnabled must not be true ─────────────
-        # Keycloak default is true — absence is NOT safe; must be explicitly false.
-        if client.get("directAccessGrantsEnabled") is not False:
-            # Only flag if it is explicitly true or absent (default-true danger).
-            if client.get("directAccessGrantsEnabled", True) is True:
-                client_errors.append(
-                    (
-                        client_id,
-                        f"[{client_id}] directAccessGrantsEnabled is true or absent — "
-                        "ROPC must be explicitly disabled (set to false). "
-                        "Keycloak default is true.",
-                    )
+        # Keycloak default is true — absence is NOT safe; it must be explicitly
+        # false. Flag absence and any non-false value (including truthy non-bool
+        # values like `1` or `"true"`).
+        ropc = client.get("directAccessGrantsEnabled", "<absent>")
+        if ropc is not False:
+            client_errors.append(
+                (
+                    client_id,
+                    f"[{client_id}] directAccessGrantsEnabled is {ropc!r} — "
+                    "ROPC must be explicitly disabled (set to false). "
+                    "Keycloak default is true.",
                 )
+            )
 
         # ── Check 7: public clients must have PKCE S256 enforced ─────────────
         if client.get("publicClient") is True:
@@ -261,17 +266,33 @@ def main():
         )
     else:
         lifespan = data["accessCodeLifespan"]
-        if not isinstance(lifespan, (int, float)) or lifespan > ACCESS_CODE_LIFESPAN_MAX:
+        # bool is a subclass of int in Python — reject it explicitly so a JSON
+        # `true`/`false` is not silently treated as a 1/0-second lifespan.
+        # Require a positive integer in [1, ACCESS_CODE_LIFESPAN_MAX]; a zero,
+        # negative, float, NaN, or boolean value is a misconfiguration.
+        if (
+            not isinstance(lifespan, int)
+            or isinstance(lifespan, bool)
+            or lifespan < 1
+            or lifespan > ACCESS_CODE_LIFESPAN_MAX
+        ):
             errors.append(
                 f"accessCodeLifespan is {lifespan!r} — "
-                f"value must be a number <= {ACCESS_CODE_LIFESPAN_MAX} seconds (AC4/FR47)."
+                f"value must be an integer between 1 and {ACCESS_CODE_LIFESPAN_MAX} "
+                "seconds (AC4/FR47)."
             )
 
     # ── Step 7 (Story 2.2): Per-client security checks ────────────────────────
     clients = data.get("clients")
     if clients is not None:
-        for _client_id, msg in lint_clients(clients):
-            errors.append(msg)
+        if not isinstance(clients, list):
+            errors.append(
+                f"'clients' must be a JSON array, got {type(clients).__name__} — "
+                "per-client security checks cannot be performed."
+            )
+        else:
+            for _client_id, msg in lint_clients(clients):
+                errors.append(msg)
 
     # ── Step 8: Report and exit ────────────────────────────────────────────────
     if errors:

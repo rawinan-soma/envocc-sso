@@ -27,8 +27,8 @@
 #   2. .env with KC_BOOTSTRAP_ADMIN_USERNAME / KC_BOOTSTRAP_ADMIN_PASSWORD set
 #   3. BATS_LIB_PATH=$(pwd)/tests/lib or bats-support/bats-assert installed system-wide
 #
-# Red-phase scaffolds: each @test starts with skip "RED PHASE — ..."
-# Activate by removing the skip line when the corresponding task is implemented.
+# These tests are active (green phase). Non-integration runs are skipped via the
+# INTEGRATION guard in setup(); set INTEGRATION=1 with a live stack to run them.
 
 bats_load_library 'bats-support'
 bats_load_library 'bats-assert'
@@ -67,8 +67,10 @@ acquire_auth_code() {
   local verifier="${1}" challenge="${2}" email="${3}" password="${4}"
   local session_jar state tmphtml
   state="state-$$-${RANDOM}"
-  session_jar=$(mktemp /tmp/kc-sess-XXXXXX.jar)
-  tmphtml=$(mktemp /tmp/kc-login-XXXXXX.html)
+  # NB: keep the X's trailing — BSD/macOS mktemp does not randomise a template
+  # when characters (e.g. a ".jar" suffix) follow the X run.
+  session_jar=$(mktemp "${TMPDIR:-/tmp}/kc-sess-XXXXXX")
+  tmphtml=$(mktemp "${TMPDIR:-/tmp}/kc-login-XXXXXX")
 
   # Step 1: Initiate auth flow → receive login form
   curl -sf --max-time 15 \
@@ -77,16 +79,18 @@ acquire_auth_code() {
     "${AUTH_ENDPOINT}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=openid&code_challenge=${challenge}&code_challenge_method=S256&state=${state}" \
     || { rm -f "${session_jar}" "${tmphtml}"; return 1; }
 
-  # Extract form action URL from login page
+  # Extract the login form action URL. Prefer the form that POSTs to Keycloak's
+  # login-actions/authenticate endpoint so we do not accidentally pick up an
+  # earlier form on the page (locale selector, social/IdP buttons, etc.).
   local form_action
   form_action=$(python3 -c "
 import re, sys
 html = open('${tmphtml}').read()
-m = re.search(r'action=\"([^\"]+)\"', html)
-if m:
-    print(m.group(1).replace('&amp;', '&'))
-else:
+actions = [m.replace('&amp;', '&') for m in re.findall(r'action=\"([^\"]+)\"', html)]
+if not actions:
     sys.exit(1)
+auth = [a for a in actions if 'login-actions/authenticate' in a or 'authenticate' in a]
+print((auth or actions)[0])
 ") || { rm -f "${session_jar}" "${tmphtml}"; return 1; }
 
   # Step 2: Submit credentials; follow redirect to get auth code in Location
@@ -121,6 +125,8 @@ sys.exit(1)
 # Suite-level setup
 # ---------------------------------------------------------------------------
 setup_suite() {
+  # Only touch .env when actually running integration tests.
+  [[ -z "${INTEGRATION}" ]] && return 0
   env_setup
 }
 
@@ -179,11 +185,22 @@ print(d[0]['id'] if d else '')
 # Per-test teardown: delete test user
 # ---------------------------------------------------------------------------
 teardown() {
-  if [[ -z "${INTEGRATION}" || -z "${TEST_USER_ID}" ]]; then
+  if [[ -z "${INTEGRATION}" ]]; then
     return 0
   fi
   local admin_token
   admin_token=$(get_admin_token 2>/dev/null) || return 0
+
+  # If the post-create ID lookup failed in setup(), recover the ID by email so
+  # the user is not orphaned in the realm.
+  if [[ -z "${TEST_USER_ID}" && -n "${TEST_USER_EMAIL}" ]]; then
+    TEST_USER_ID=$(curl -sf --max-time 15 \
+      "${KC_BASE}/admin/realms/${REALM}/users?email=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "${TEST_USER_EMAIL}")" \
+      -H "Authorization: Bearer ${admin_token}" \
+      | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null) || true
+  fi
+
+  [[ -z "${TEST_USER_ID}" ]] && return 0
   curl -sf --max-time 15 \
     -X DELETE "${KC_BASE}/admin/realms/${REALM}/users/${TEST_USER_ID}" \
     -H "Authorization: Bearer ${admin_token}" \
