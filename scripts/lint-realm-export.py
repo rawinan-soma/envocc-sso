@@ -4,8 +4,12 @@
 Checks performed:
   1. JSON is parseable.
   2. Required baseline fields are present: realm, enabled, bruteForceProtected,
-     accessTokenLifespan.
-  3. No key material embedded: privateKey/certificate values >= 64 chars,
+     accessTokenLifespan, revokeRefreshToken, refreshTokenMaxReuse.
+  3. Value validation (Story 2.4 — AC6/AR8):
+     - accessTokenLifespan <= 900 s (NFR2a: 15-minute hard ceiling)
+     - revokeRefreshToken == true (FR9: family revocation on replay)
+     - refreshTokenMaxReuse == 0 (FR9: rotate on every use)
+  4. No key material embedded: privateKey/certificate values >= 64 chars,
      clientSecret/secret values >= 8 chars — in either the plain string form
      ("privateKey": "...") or the array form ("privateKey": ["..."]) that
      Keycloak actually emits for KeyProvider config — anywhere in the document
@@ -44,6 +48,8 @@ REQUIRED_FIELDS = [
     "enabled",
     "bruteForceProtected",
     "accessTokenLifespan",
+    "revokeRefreshToken",
+    "refreshTokenMaxReuse",
 ]
 
 # Value-level boolean checks (Story 2.1 — closes deferred gap from Story 1.5 review).
@@ -59,6 +65,9 @@ REQUIRED_VALUES: list[tuple[str, object]] = [
     ("bruteForceProtected", True),
     ("enabled", True),
 ]
+
+# NFR2a: access/ID tokens must not exceed 15 minutes (900 seconds).
+MAX_ACCESS_TOKEN_LIFESPAN = 900
 
 # Key-material thresholds mirror gitleaks rules for defense-in-depth.
 # Keycloak emits these both as plain strings ("privateKey": "...") and as
@@ -252,6 +261,29 @@ def main():
                 f"{data[field]!r} ({type(data[field]).__name__}) in realm-export.json. "
                 f"This is a value-level check — presence alone is not sufficient."
             )
+
+    # ── Step 4c: Value-validate security-critical lifetime fields (Story 2.4) ───
+    # Only validate if the field is present — presence failures are already
+    # caught by Step 4. The isinstance guard on accessTokenLifespan prevents a
+    # crash if the field holds a non-integer value (the presence check above has
+    # already flagged that case). For revokeRefreshToken, `is not True` correctly
+    # rejects null, 0, False, and absent values (JSON null → Python None).
+    atl = data.get("accessTokenLifespan")
+    if isinstance(atl, int) and atl > MAX_ACCESS_TOKEN_LIFESPAN:
+        errors.append(
+            f"accessTokenLifespan {atl}s exceeds NFR2a 15-minute ceiling "
+            f"({MAX_ACCESS_TOKEN_LIFESPAN}s max)."
+        )
+
+    if data.get("revokeRefreshToken") is not True:
+        errors.append(
+            "revokeRefreshToken must be true (FR9: family revocation on replay)."
+        )
+
+    if data.get("refreshTokenMaxReuse") != 0:
+        errors.append(
+            "refreshTokenMaxReuse must be 0 (FR9: rotate on every use)."
+        )
 
     # ── Step 5: Scan for embedded key material ─────────────────────────────────
     for json_path, field_name, value_len in find_key_material(data):
