@@ -4,7 +4,7 @@ baseline_commit: 1fb0e6ccbcc15a27c8583cbd4133bf54567c684d
 
 # Story 2.2: OIDC Authorization Code + PKCE Login (Hosted Credentials)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -403,6 +403,22 @@ claude-sonnet-4-6 (Claude Code — bmad-dev-story workflow, 2026-06-27)
 - `tests/integration/oidc-pkce-flow.bats` — activated RED PHASE tests; added `firstName`/`lastName`/`requiredActions` to test user creation
 - `tests/unit/oidc-pkce-lint.bats` — activated all RED PHASE tests (Tasks 3.1–3.5 lint checks)
 
+### Review Findings
+
+Code review (Step 5, 2026-06-27) — adversarial layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor. Acceptance Auditor confirmed all 4 ACs and 6 tasks implemented. All patch findings applied (commit `b9174fa`); 1 dismissed as noise.
+
+- [x] [Review][Patch] BSD/macOS `mktemp` templates with a suffix after the X's do not randomise → literal, colliding, predictable temp files [tests/integration/oidc-pkce-flow.bats, tests/unit/oidc-pkce-lint.bats] — fixed (trailing X's, honour `$TMPDIR`)
+- [x] [Review][Patch] `accessCodeLifespan` lint accepted bool / 0 / negative / float / NaN (upper-bound-only, bool-is-int) [scripts/lint-realm-export.py] — fixed (require positive int 1..60)
+- [x] [Review][Patch] Non-array `clients` value silently skipped all per-client security checks [scripts/lint-realm-export.py] — fixed (emit error on non-list)
+- [x] [Review][Patch] `implicitFlowEnabled` / `directAccessGrantsEnabled` used `is True` identity checks; non-bool truthy values (`1`, `"true"`) bypassed; redundant ROPC branch [scripts/lint-realm-export.py] — fixed (flag any non-false/absent value)
+- [x] [Review][Patch] `acquire_auth_code` grabbed the first `action=` on the page; could POST to a non-login form [tests/integration/oidc-pkce-flow.bats] — fixed (prefer login-actions/authenticate)
+- [x] [Review][Patch] Test user orphaned if post-create ID lookup failed [tests/integration/oidc-pkce-flow.bats teardown] — fixed (recover id by email)
+- [x] [Review][Patch] `setup_suite` ran `env_setup` before the INTEGRATION guard [tests/integration/oidc-pkce-flow.bats] — fixed (guard added)
+- [x] [Review][Patch] Stale "RED PHASE skip" header comments (tests are active) [both bats files] — fixed
+- [x] [Review][Patch] Added regression tests TS-220r/s/t/u covering the hardened lint checks [tests/unit/oidc-pkce-lint.bats] — 15/15 unit tests pass
+- Dismissed (noise): static `redirect_uri` passed unencoded in test curls — values contain no reserved characters; exact-match tests rely on the literal value.
+
 ## Change Log
 
+- 2026-06-27: Code review (Step 5) — applied 8 hardening patches + 4 regression tests. Lint script: positive-int accessCodeLifespan, non-array clients rejected, truthy-value-safe implicit/ROPC checks. BATS: portable mktemp, robust form/teardown, INTEGRATION-guarded setup_suite. All 15 unit tests pass; integration tests load+skip cleanly; realm-lint/semgrep/gitleaks gates green. Status → done.
 - 2026-06-27: Story 2.2 implementation complete. Added `accessCodeLifespan: 60` + 2 related code lifespans to realm. Registered `test-oidc-client` with PKCE S256 enforcement, disabled Implicit/ROPC. Extended lint script with per-client security checks. Activated 8 integration tests (all P0/P1 scenarios) + 11 unit tests. All pass. Status → review.
