@@ -192,21 +192,30 @@ teardown() {
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
   # Create first user with a unique test email
-  local http_status
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+  # Capture UUID from the POST Location header immediately — guarantees a teardown
+  # cleanup handle even if a subsequent GET-by-email fails (confirmed leak path: if
+  # GET fails, _TS210B_USER_ID stays "", teardown skips, test-dupe@envocc.local leaks
+  # and poisons the next run with a 409 on the first POST).
+  local http_status post_loc_file b_loc
+  post_loc_file=$(mktemp)
+  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
     -X POST \
     -H "Authorization: Bearer ${token}" \
     -H "Content-Type: application/json" \
     -d '{"username":"ts210b-first@envocc.local","email":"test-dupe@envocc.local","enabled":true,"emailVerified":true,"firstName":"First","lastName":"Dupe"}' \
     "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || fail "Could not create first test user TS-210b (got HTTP ${http_status})"
-
-  # Record UUID of first user for teardown cleanup
-  local get_response
-  get_response=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/users?email=test-dupe@envocc.local&exact=true")
-  _TS210B_USER_ID=$(echo "${get_response}" | python3 -c "import json,sys; users=json.load(sys.stdin); print(users[0]['id'] if users else '')")
+  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create first test user TS-210b (got HTTP ${http_status})"; }
+  b_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
+  rm -f "${post_loc_file}"
+  _TS210B_USER_ID="${b_loc##*/}"
+  # Fallback: if Location header was absent or unparseable, recover UUID via GET-by-email
+  if [[ -z "${_TS210B_USER_ID}" ]]; then
+    local fallback_resp
+    fallback_resp=$(curl -sf --max-time 10 \
+      -H "Authorization: Bearer ${token}" \
+      "http://localhost:8080/admin/realms/envocc/users?email=test-dupe@envocc.local&exact=true") || true
+    _TS210B_USER_ID=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+  fi
 
   # Attempt to create a second user with the same email — must return HTTP 409 Conflict
   local dupe_status
@@ -234,22 +243,28 @@ teardown() {
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
   # Create user with only the four allowed fields (minimal attribute set)
-  local http_status
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+  # Capture UUID from Location header immediately for teardown cleanup.
+  local http_status post_loc_file user_id c_loc
+  post_loc_file=$(mktemp)
+  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
     -X POST \
     -H "Authorization: Bearer ${token}" \
     -H "Content-Type: application/json" \
     -d '{"username":"ts210c@envocc.local","email":"ts210c@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"DataMin"}' \
     "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || fail "Could not create test user TS-210c (got HTTP ${http_status})"
-
-  # Get user ID for full fetch and teardown
-  local get_response user_id
-  get_response=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/users?email=ts210c@envocc.local&exact=true")
-  user_id=$(echo "${get_response}" | python3 -c "import json,sys; users=json.load(sys.stdin); print(users[0]['id'] if users else '')")
-  [[ -n "${user_id}" ]] || fail "User TS-210c not found after creation"
+  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-210c (got HTTP ${http_status})"; }
+  c_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
+  rm -f "${post_loc_file}"
+  user_id="${c_loc##*/}"
+  # Fallback: if Location header was absent or unparseable, recover UUID via GET-by-email
+  if [[ -z "${user_id}" ]]; then
+    local fallback_resp
+    fallback_resp=$(curl -sf --max-time 10 \
+      -H "Authorization: Bearer ${token}" \
+      "http://localhost:8080/admin/realms/envocc/users?email=ts210c@envocc.local&exact=true") || true
+    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+  fi
+  [[ -n "${user_id}" ]] || fail "User TS-210c UUID not found after creation"
   _TS210C_USER_ID="${user_id}"
 
   # Fetch full user object via GET /users/{id}
@@ -294,22 +309,28 @@ teardown() {
   #   enabled: true  — user exists
   #   emailVerified: false — activation not completed
   #   requiredActions: [VERIFY_EMAIL] — Keycloak enforces email verification before login
-  local http_status
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+  # Capture UUID from Location header immediately for password reset and teardown.
+  local http_status post_loc_file user_id d_loc
+  post_loc_file=$(mktemp)
+  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
     -X POST \
     -H "Authorization: Bearer ${token}" \
     -H "Content-Type: application/json" \
     -d '{"username":"ts210d@envocc.local","email":"ts210d@envocc.local","enabled":true,"emailVerified":false,"requiredActions":["VERIFY_EMAIL"],"firstName":"Test","lastName":"Pending"}' \
     "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || fail "Could not create pending test user TS-210d (got HTTP ${http_status})"
-
-  # Get user ID for password reset and teardown
-  local get_response user_id
-  get_response=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/users?email=ts210d@envocc.local&exact=true")
-  user_id=$(echo "${get_response}" | python3 -c "import json,sys; users=json.load(sys.stdin); print(users[0]['id'] if users else '')")
-  [[ -n "${user_id}" ]] || fail "Pending user TS-210d not found after creation"
+  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create pending test user TS-210d (got HTTP ${http_status})"; }
+  d_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
+  rm -f "${post_loc_file}"
+  user_id="${d_loc##*/}"
+  # Fallback: if Location header was absent or unparseable, recover UUID via GET-by-email
+  if [[ -z "${user_id}" ]]; then
+    local fallback_resp
+    fallback_resp=$(curl -sf --max-time 10 \
+      -H "Authorization: Bearer ${token}" \
+      "http://localhost:8080/admin/realms/envocc/users?email=ts210d@envocc.local&exact=true") || true
+    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+  fi
+  [[ -n "${user_id}" ]] || fail "Pending user TS-210d UUID not found after creation"
   _TS210D_USER_ID="${user_id}"
 
   # Set a non-temporary password on the pending user.
@@ -385,22 +406,28 @@ teardown() {
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
   # Create user using ONLY the four allowed fields: username, email, firstName, lastName
-  local http_status
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+  # Capture UUID from Location header immediately for teardown cleanup.
+  local http_status post_loc_file user_id e_loc
+  post_loc_file=$(mktemp)
+  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
     -X POST \
     -H "Authorization: Bearer ${token}" \
     -H "Content-Type: application/json" \
     -d '{"username":"ts210e@envocc.local","email":"ts210e@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"CleanCreate"}' \
     "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || fail "Could not create test user TS-210e (got HTTP ${http_status})"
-
-  # Get user ID for full fetch and teardown
-  local get_response user_id
-  get_response=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/users?email=ts210e@envocc.local&exact=true")
-  user_id=$(echo "${get_response}" | python3 -c "import json,sys; users=json.load(sys.stdin); print(users[0]['id'] if users else '')")
-  [[ -n "${user_id}" ]] || fail "User TS-210e not found after creation"
+  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-210e (got HTTP ${http_status})"; }
+  e_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
+  rm -f "${post_loc_file}"
+  user_id="${e_loc##*/}"
+  # Fallback: if Location header was absent or unparseable, recover UUID via GET-by-email
+  if [[ -z "${user_id}" ]]; then
+    local fallback_resp
+    fallback_resp=$(curl -sf --max-time 10 \
+      -H "Authorization: Bearer ${token}" \
+      "http://localhost:8080/admin/realms/envocc/users?email=ts210e@envocc.local&exact=true") || true
+    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+  fi
+  [[ -n "${user_id}" ]] || fail "User TS-210e UUID not found after creation"
   _TS210E_USER_ID="${user_id}"
 
   # Fetch full user object

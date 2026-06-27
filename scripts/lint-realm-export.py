@@ -14,6 +14,8 @@ Checks performed:
      - duplicateEmailsAllowed must be boolean false (not merely present)
      - registrationAllowed must be boolean false (not merely present)
      - loginWithEmailAllowed must be boolean true (email reconciliation key, FR22)
+     - bruteForceProtected must be boolean true (brute-force protection cannot be disabled)
+     - enabled must be boolean true (realm must be enabled)
      Each value must be the exact boolean type — a JSON integer 0/1 does not pass.
 
 Exit codes:
@@ -41,10 +43,14 @@ REQUIRED_FIELDS = [
 # Each entry is (field_name, expected_value).  The field must exist AND hold the
 # exact expected value — presence-only checks are insufficient for security-critical
 # settings like duplicateEmailsAllowed and registrationAllowed.
+# bruteForceProtected and enabled are also checked here (not just in REQUIRED_FIELDS)
+# so that a wrong value (e.g. bruteForceProtected: false) is caught, not just absence.
 REQUIRED_VALUES: list[tuple[str, object]] = [
     ("duplicateEmailsAllowed", False),
     ("registrationAllowed", False),
     ("loginWithEmailAllowed", True),
+    ("bruteForceProtected", True),
+    ("enabled", True),
 ]
 
 # Key-material thresholds mirror gitleaks rules for defense-in-depth.
@@ -146,6 +152,8 @@ def main():
     #   - duplicateEmailsAllowed: false  → enforces email uniqueness (FR22, AC1)
     #   - registrationAllowed: false     → disables public self-registration (scope boundary)
     #   - loginWithEmailAllowed: true    → email is the reconciliation key (FR22, AC1)
+    #   - bruteForceProtected: true      → brute-force protection must not be disabled
+    #   - enabled: true                  → realm must be enabled
     # The type check rejects JSON integers (0/1) and strings ("false") that would
     # otherwise satisfy a loose `!=` comparison because Python treats 0 == False.
     for field, expected in REQUIRED_VALUES:
