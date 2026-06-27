@@ -2,6 +2,7 @@
   "realm": "envocc",
   "enabled": true,
   "displayName": "EnvOcc SSO",
+  "loginTheme": "envocc",
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "registrationAllowed": false,

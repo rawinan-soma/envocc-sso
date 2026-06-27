@@ -49,34 +49,28 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "[P0][TS-251a] keycloak/themes/envocc/login/theme.properties exists" {
-  skip "theme directory not yet created (Task 1)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/theme.properties" ]
 }
 
 @test "[P0][TS-251b] theme.properties declares parent=keycloak" {
-  skip "theme.properties not yet created (Task 1)"
   run grep -E "^parent\s*=\s*keycloak" "${PROJECT_ROOT}/keycloak/themes/envocc/login/theme.properties"
   assert_success
 }
 
 @test "[P0][TS-251c] theme.properties declares styles=css/login.css" {
-  skip "theme.properties not yet created (Task 1)"
   run grep -E "^styles\s*=\s*css/login\.css" "${PROJECT_ROOT}/keycloak/themes/envocc/login/theme.properties"
   assert_success
 }
 
 @test "[P0][TS-251d] keycloak/themes/envocc/login/resources/css/login.css exists" {
-  skip "login.css not yet created (Task 2)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/resources/css/login.css" ]
 }
 
 @test "[P0][TS-251e] keycloak/themes/envocc/login/resources/design-tokens/deep-sea.css exists (keycloak-internal token copy)" {
-  skip "design-tokens copy not yet created inside theme directory (Task 1.4)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/resources/design-tokens/deep-sea.css" ]
 }
 
 @test "[P0][TS-251f] keycloak/themes/envocc/login/messages/messages_en.properties exists" {
-  skip "messages file not yet created (Task 4)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties" ]
 }
 
@@ -85,7 +79,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "[P0][TS-251g] keycloak/realm-export.json sets loginTheme: envocc" {
-  skip "loginTheme not yet set in realm-export.json (Task 5.2)"
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
   run grep -q '"loginTheme"[[:space:]]*:[[:space:]]*"envocc"' "${PROJECT_ROOT}/keycloak/realm-export.json"
@@ -93,7 +86,6 @@ teardown() {
 }
 
 @test "[P0][TS-251h] keycloak/Dockerfile contains COPY themes/envocc directive" {
-  skip "Dockerfile not yet updated with theme COPY (Task 5.1)"
   assert [ -f "${PROJECT_ROOT}/keycloak/Dockerfile" ]
 
   run grep -E "COPY\s+themes/envocc\s+/opt/keycloak/themes/envocc" "${PROJECT_ROOT}/keycloak/Dockerfile"
@@ -101,7 +93,6 @@ teardown() {
 }
 
 @test "[P0][TS-251i] COPY themes/envocc appears BEFORE RUN kc.sh build in Dockerfile (Quarkus build-time theme requirement)" {
-  skip "Dockerfile not yet updated with theme COPY (Task 5.1)"
   assert [ -f "${PROJECT_ROOT}/keycloak/Dockerfile" ]
 
   local copy_line build_line
@@ -118,7 +109,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "[P0][TS-252a] realm-export.json browserSecurityHeaders does not contain contentSecurityPolicy with frame-ancestors" {
-  skip "realm-export.json changes not yet verified (Task 5.3)"
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
   # If browserSecurityHeaders.contentSecurityPolicy is set with frame-ancestors, it would
@@ -137,7 +127,6 @@ print('OK: no conflicting frame-ancestors in browserSecurityHeaders')
 }
 
 @test "[P0][TS-252b] realm-export.json browserSecurityHeaders contentSecurityPolicy is absent or empty" {
-  skip "realm-export.json changes not yet verified (Task 5.3)"
   assert [ -f "${PROJECT_ROOT}/keycloak/realm-export.json" ]
 
   run bash -c "python3 -c \"
@@ -159,7 +148,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 # ---------------------------------------------------------------------------
 
 @test "[P0][TS-253a] login.css has no raw hex color values (raw hex outside rgba() not allowed)" {
-  skip "login.css not yet created (Task 2)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/resources/css/login.css" ]
 
   # Strip CSS comments and rgba/rgb() calls, then grep for bare hex.
@@ -177,7 +165,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P0][TS-253b] login.css @imports design-tokens/deep-sea.css" {
-  skip "login.css not yet created (Task 2)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/resources/css/login.css" ]
 
   run grep -E "@import\s+url\(['\"]?\.\./design-tokens/deep-sea\.css" \
@@ -186,7 +173,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P0][TS-253c] login.css defines .anti-phishing-banner rule with info color tokens" {
-  skip "login.css .anti-phishing-banner rule not yet created (Task 6)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/resources/css/login.css" ]
 
   run grep "\.anti-phishing-banner" \
@@ -195,7 +181,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P1][TS-253d] login.css uses var(--color-primary-foreground) for button text (NOT --color-primary-fg)" {
-  skip "login.css button styles not yet created (Task 2.5)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/resources/css/login.css" ]
 
   run grep "var(--color-primary-foreground)" \
@@ -208,7 +193,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 # ---------------------------------------------------------------------------
 
 @test "[P0][TS-254a] login.ftl contains anti-phishing-banner element" {
-  skip "login.ftl not yet created/modified (Task 3.1)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   run grep "anti-phishing-banner" "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl"
@@ -216,7 +200,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P0][TS-254b] login.ftl anti-phishing banner uses \${msg(\"antiphishingBanner\")}" {
-  skip "login.ftl not yet created/modified (Task 3.2)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   run grep 'msg("antiphishingBanner")' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl"
@@ -224,7 +207,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P0][TS-254c] login.ftl anti-phishing banner has role=\"alert\" and aria-live=\"polite\"" {
-  skip "login.ftl not yet created/modified (Task 3.2)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   run grep 'role="alert"' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl"
@@ -236,7 +218,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 # ---------------------------------------------------------------------------
 
 @test "[P0][TS-255a] login-otp.ftl contains anti-phishing-banner element" {
-  skip "login-otp.ftl not yet created/modified (Task 3.3)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login-otp.ftl" ]
 
   run grep "anti-phishing-banner" "${PROJECT_ROOT}/keycloak/themes/envocc/login/login-otp.ftl"
@@ -244,7 +225,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P0][TS-255b] login-otp.ftl anti-phishing banner uses \${msg(\"antiphishingBanner\")}" {
-  skip "login-otp.ftl not yet created/modified (Task 3.3)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login-otp.ftl" ]
 
   run grep 'msg("antiphishingBanner")' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login-otp.ftl"
@@ -256,7 +236,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 # ---------------------------------------------------------------------------
 
 @test "[P0][TS-256a] messages_en.properties defines antiphishingBanner key with correct copy" {
-  skip "messages_en.properties not yet created (Task 4.1)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties" ]
 
   run grep -F "antiphishingBanner=We'll never ask for your verification code by phone, email, or chat." \
@@ -265,7 +244,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P0][TS-256b] messages_en.properties defines all required UI string keys" {
-  skip "messages_en.properties not yet created (Task 4.3)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties" ]
 
   local props="${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
@@ -280,7 +258,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P1][TS-256c] messages_en.properties overrides error messages to UX-voice copy" {
-  skip "messages_en.properties error overrides not yet added (Task 4.3)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties" ]
 
   run grep -F "invalidUserMessage=Incorrect email or password." \
@@ -293,7 +270,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 # ---------------------------------------------------------------------------
 
 @test "[P0][TS-257a] login.ftl contains no hardcoded literal 'Sign in' text node (must use \${msg(...)})" {
-  skip "login.ftl not yet created/modified (Task 3.4)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   # Check for ">Sign in<" text node (not inside an attribute or msg() call)
@@ -303,7 +279,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P0][TS-257b] login.ftl contains no hardcoded literal \"We'll never ask\" text (must use \${msg(...)})" {
-  skip "login.ftl not yet created/modified (Task 3.4)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   # The exact copy must come from messages, not be inline.
@@ -316,7 +291,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 # ---------------------------------------------------------------------------
 
 @test "[P1][TS-258a] login.css defines :focus-visible rule (keyboard focus ring)" {
-  skip "login.css focus ring styles not yet added (Task 2.7)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/resources/css/login.css" ]
 
   run grep ":focus-visible" "${PROJECT_ROOT}/keycloak/themes/envocc/login/resources/css/login.css"
@@ -324,7 +298,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P1][TS-258b] login.ftl has <label for=\"username\"> and <label for=\"password\"> (no placeholder-only labels)" {
-  skip "login.ftl not yet created/modified (Task 3.1)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   run grep 'for="username"' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl"
@@ -339,7 +312,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 # ---------------------------------------------------------------------------
 
 @test "[P0][TS-259a] login.ftl has <form method=\"post\"> (standard POST — no JS required)" {
-  skip "login.ftl not yet created/modified (Task 3.1)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl" ]
 
   run grep -i 'method="post"' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login.ftl"
@@ -347,7 +319,6 @@ print('OK: contentSecurityPolicy is absent or empty')
 }
 
 @test "[P0][TS-259b] login-otp.ftl has <form method=\"post\"> (standard POST — no JS required)" {
-  skip "login-otp.ftl not yet created/modified (Task 3.3)"
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/login-otp.ftl" ]
 
   run grep -i 'method="post"' "${PROJECT_ROOT}/keycloak/themes/envocc/login/login-otp.ftl"

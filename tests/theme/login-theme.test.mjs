@@ -12,7 +12,7 @@
  *
  * Run:  node --test tests/theme/login-theme.test.mjs
  *
- * TDD Phase: RED — all tests are it.skip() scaffolds.
+ * TDD Phase: RED — all tests are it() scaffolds.
  * Remove `it.skip` → `it` as each story task is implemented to activate the corresponding suite.
  */
 
@@ -62,67 +62,67 @@ before(() => {
 // ---------------------------------------------------------------------------
 
 describe('AC6 — Theme directory structure exists', () => {
-  it.skip('keycloak/themes/envocc/login/ directory exists', () => {
+  it('keycloak/themes/envocc/login/ directory exists', () => {
     assert.ok(
       fs.existsSync(THEME_ROOT) && fs.statSync(THEME_ROOT).isDirectory(),
       `Expected ${THEME_ROOT} to be a directory`,
     );
   });
 
-  it.skip('theme.properties exists', () => {
+  it('theme.properties exists', () => {
     assert.ok(
       fs.existsSync(THEME_PROPS),
       `Expected ${THEME_PROPS} to exist`,
     );
   });
 
-  it.skip('theme.properties declares parent=keycloak', () => {
+  it('theme.properties declares parent=keycloak', () => {
     const content = fs.readFileSync(THEME_PROPS, 'utf-8');
     assert.match(content, /^\s*parent\s*=\s*keycloak\s*$/m,
       'Expected theme.properties to contain: parent=keycloak');
   });
 
-  it.skip('theme.properties declares styles=css/login.css', () => {
+  it('theme.properties declares styles=css/login.css', () => {
     const content = fs.readFileSync(THEME_PROPS, 'utf-8');
     assert.match(content, /^\s*styles\s*=\s*css\/login\.css\s*$/m,
       'Expected theme.properties to contain: styles=css/login.css');
   });
 
-  it.skip('keycloak/themes/envocc/login/resources/css/login.css exists', () => {
+  it('keycloak/themes/envocc/login/resources/css/login.css exists', () => {
     assert.ok(fs.existsSync(LOGIN_CSS), `Expected ${LOGIN_CSS} to exist`);
   });
 
-  it.skip('keycloak/themes/envocc/login/resources/design-tokens/deep-sea.css exists (keycloak-internal copy)', () => {
+  it('keycloak/themes/envocc/login/resources/design-tokens/deep-sea.css exists (keycloak-internal copy)', () => {
     assert.ok(
       fs.existsSync(TOKEN_COPY),
       `Expected theme-internal token copy at ${TOKEN_COPY} to exist`,
     );
   });
 
-  it.skip('theme-internal deep-sea.css is not empty', () => {
+  it('theme-internal deep-sea.css is not empty', () => {
     const stat = fs.statSync(TOKEN_COPY);
     assert.ok(stat.size > 0, 'Expected theme-internal deep-sea.css to be non-empty');
   });
 
-  it.skip('keycloak/themes/envocc/login/messages/messages_en.properties exists', () => {
+  it('keycloak/themes/envocc/login/messages/messages_en.properties exists', () => {
     assert.ok(fs.existsSync(MESSAGES_EN), `Expected ${MESSAGES_EN} to exist`);
   });
 
-  it.skip('login.ftl exists', () => {
+  it('login.ftl exists', () => {
     assert.ok(fs.existsSync(LOGIN_FTL), `Expected ${LOGIN_FTL} to exist`);
   });
 
-  it.skip('login-otp.ftl exists', () => {
+  it('login-otp.ftl exists', () => {
     assert.ok(fs.existsSync(LOGIN_OTP_FTL), `Expected ${LOGIN_OTP_FTL} to exist`);
   });
 });
 
 describe('AC6 — realm-export.json wires loginTheme', () => {
-  it.skip('realm-export.json exists', () => {
+  it('realm-export.json exists', () => {
     assert.ok(fs.existsSync(REALM_EXPORT), `Expected ${REALM_EXPORT} to exist`);
   });
 
-  it.skip('realm-export.json sets "loginTheme": "envocc" at realm root', () => {
+  it('realm-export.json sets "loginTheme": "envocc" at realm root', () => {
     const realm = JSON.parse(realmJson);
     assert.strictEqual(
       realm.loginTheme,
@@ -133,11 +133,11 @@ describe('AC6 — realm-export.json wires loginTheme', () => {
 });
 
 describe('AC6 — Dockerfile COPYs theme before kc.sh build', () => {
-  it.skip('keycloak/Dockerfile exists', () => {
+  it('keycloak/Dockerfile exists', () => {
     assert.ok(fs.existsSync(DOCKERFILE), `Expected ${DOCKERFILE} to exist`);
   });
 
-  it.skip('Dockerfile contains COPY themes/envocc directive', () => {
+  it('Dockerfile contains COPY themes/envocc directive', () => {
     assert.match(
       dockerfile,
       /COPY\s+themes\/envocc\s+\/opt\/keycloak\/themes\/envocc/,
@@ -145,7 +145,7 @@ describe('AC6 — Dockerfile COPYs theme before kc.sh build', () => {
     );
   });
 
-  it.skip('COPY themes/envocc appears BEFORE RUN kc.sh build in Dockerfile', () => {
+  it('COPY themes/envocc appears BEFORE RUN kc.sh build in Dockerfile', () => {
     const copyIdx  = dockerfile.search(/COPY\s+themes\/envocc/);
     const buildIdx = dockerfile.search(/RUN\s+.*kc\.sh\s+build/);
     assert.ok(copyIdx !== -1, 'COPY themes/envocc directive not found in Dockerfile');
@@ -162,7 +162,7 @@ describe('AC6 — Dockerfile COPYs theme before kc.sh build', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC2 — realm-export.json does not set conflicting contentSecurityPolicy', () => {
-  it.skip('realm-export.json browserSecurityHeaders does not have a contentSecurityPolicy value', () => {
+  it('realm-export.json browserSecurityHeaders does not have a contentSecurityPolicy value', () => {
     const realm = JSON.parse(realmJson);
     const bsh = realm.browserSecurityHeaders;
     if (!bsh) {
@@ -176,7 +176,7 @@ describe('AC2 — realm-export.json does not set conflicting contentSecurityPoli
     );
   });
 
-  it.skip('realm-export.json browserSecurityHeaders does not duplicate frame-ancestors', () => {
+  it('realm-export.json browserSecurityHeaders does not duplicate frame-ancestors', () => {
     const realm = JSON.parse(realmJson);
     const bsh = realm.browserSecurityHeaders;
     if (!bsh) return; // absent is fine
@@ -193,7 +193,7 @@ describe('AC2 — realm-export.json does not set conflicting contentSecurityPoli
 // ---------------------------------------------------------------------------
 
 describe('AC1 — login.css imports design-tokens/deep-sea.css', () => {
-  it.skip('login.css contains @import for ../design-tokens/deep-sea.css', () => {
+  it('login.css contains @import for ../design-tokens/deep-sea.css', () => {
     assert.match(
       css,
       /@import\s+url\(["']?\.\.\/design-tokens\/deep-sea\.css["']?\)/,
@@ -203,7 +203,7 @@ describe('AC1 — login.css imports design-tokens/deep-sea.css', () => {
 });
 
 describe('AC1 — login.css uses CSS variables for all colors (no raw hex)', () => {
-  it.skip('login.css contains no raw hex color values (raw hex not allowed outside rgba() shadows)', () => {
+  it('login.css contains no raw hex color values (raw hex not allowed outside rgba() shadows)', () => {
     // Allow rgba(r,g,b,a) and rgb() for shadows/overlays — those are intentional per dev notes.
     // Strip CSS comments and rgba/rgb() calls, then check for bare hex.
     const stripped = css
@@ -218,99 +218,99 @@ describe('AC1 — login.css uses CSS variables for all colors (no raw hex)', () 
     );
   });
 
-  it.skip('login.css uses var(--color-primary) for buttons', () => {
+  it('login.css uses var(--color-primary) for buttons', () => {
     assert.match(css, /var\(--color-primary\)/,
       'Expected login.css to reference var(--color-primary)');
   });
 
-  it.skip('login.css uses var(--color-primary-hover) for button hover state', () => {
+  it('login.css uses var(--color-primary-hover) for button hover state', () => {
     assert.match(css, /var\(--color-primary-hover\)/,
       'Expected login.css to reference var(--color-primary-hover)');
   });
 
-  it.skip('login.css uses var(--color-primary-foreground) for button text color', () => {
+  it('login.css uses var(--color-primary-foreground) for button text color', () => {
     assert.match(css, /var\(--color-primary-foreground\)/,
       'Expected login.css to reference var(--color-primary-foreground) — NOT --color-primary-fg');
   });
 
-  it.skip('login.css uses var(--color-background) for page/body background', () => {
+  it('login.css uses var(--color-background) for page/body background', () => {
     assert.match(css, /var\(--color-background\)/,
       'Expected login.css to reference var(--color-background)');
   });
 
-  it.skip('login.css uses var(--color-surface) for auth card background', () => {
+  it('login.css uses var(--color-surface) for auth card background', () => {
     assert.match(css, /var\(--color-surface\)/,
       'Expected login.css to reference var(--color-surface)');
   });
 
-  it.skip('login.css uses var(--color-border) for card/input border', () => {
+  it('login.css uses var(--color-border) for card/input border', () => {
     assert.match(css, /var\(--color-border\)/,
       'Expected login.css to reference var(--color-border)');
   });
 
-  it.skip('login.css uses var(--color-text-primary) for body text', () => {
+  it('login.css uses var(--color-text-primary) for body text', () => {
     assert.match(css, /var\(--color-text-primary\)/,
       'Expected login.css to reference var(--color-text-primary)');
   });
 
-  it.skip('login.css uses var(--color-error-bg) and var(--color-error-fg) for error states', () => {
+  it('login.css uses var(--color-error-bg) and var(--color-error-fg) for error states', () => {
     assert.match(css, /var\(--color-error-bg\)/,
       'Expected login.css to reference var(--color-error-bg)');
     assert.match(css, /var\(--color-error-fg\)/,
       'Expected login.css to reference var(--color-error-fg)');
   });
 
-  it.skip('login.css uses var(--font-family) on body', () => {
+  it('login.css uses var(--font-family) on body', () => {
     assert.match(css, /var\(--font-family\)/,
       'Expected login.css to reference var(--font-family)');
   });
 
-  it.skip('login.css uses var(--font-body-size) for base font size', () => {
+  it('login.css uses var(--font-body-size) for base font size', () => {
     assert.match(css, /var\(--font-body-size\)/,
       'Expected login.css to reference var(--font-body-size)');
   });
 
-  it.skip('login.css uses var(--font-body-line-height) for body line height', () => {
+  it('login.css uses var(--font-body-line-height) for body line height', () => {
     assert.match(css, /var\(--font-body-line-height\)/,
       'Expected login.css to reference var(--font-body-line-height)');
   });
 
-  it.skip('login.css uses var(--radius-md) for inputs and buttons', () => {
+  it('login.css uses var(--radius-md) for inputs and buttons', () => {
     assert.match(css, /var\(--radius-md\)/,
       'Expected login.css to reference var(--radius-md)');
   });
 
-  it.skip('login.css uses var(--radius-lg) for auth card', () => {
+  it('login.css uses var(--radius-lg) for auth card', () => {
     assert.match(css, /var\(--radius-lg\)/,
       'Expected login.css to reference var(--radius-lg)');
   });
 
-  it.skip('login.css uses var(--spacing-auth-card-width) for auth card max-width', () => {
+  it('login.css uses var(--spacing-auth-card-width) for auth card max-width', () => {
     assert.match(css, /var\(--spacing-auth-card-width\)/,
       'Expected login.css to reference var(--spacing-auth-card-width)');
   });
 });
 
 describe('AC1 — login.css anti-phishing banner uses info color tokens', () => {
-  it.skip('login.css has .anti-phishing-banner rule', () => {
+  it('login.css has .anti-phishing-banner rule', () => {
     assert.match(css, /\.anti-phishing-banner/,
       'Expected login.css to define .anti-phishing-banner rule');
   });
 
-  it.skip('.anti-phishing-banner uses var(--color-info-bg) for background', () => {
+  it('.anti-phishing-banner uses var(--color-info-bg) for background', () => {
     // Extract the .anti-phishing-banner rule block and verify token usage
     const bannerBlock = css.match(/\.anti-phishing-banner\s*\{([^}]+)\}/s)?.[1] ?? '';
     assert.match(bannerBlock, /var\(--color-info-bg\)/,
       'Expected .anti-phishing-banner to use var(--color-info-bg) for background');
   });
 
-  it.skip('.anti-phishing-banner uses var(--color-info-border) for border', () => {
+  it('.anti-phishing-banner uses var(--color-info-border) for border', () => {
     const bannerBlock = css.match(/\.anti-phishing-banner\s*\{([^}]+)\}/s)?.[1] ?? '';
     assert.match(bannerBlock, /var\(--color-info-border\)/,
       'Expected .anti-phishing-banner to use var(--color-info-border) for border');
   });
 
-  it.skip('.anti-phishing-banner uses var(--color-info-fg) for text color', () => {
+  it('.anti-phishing-banner uses var(--color-info-fg) for text color', () => {
     const bannerBlock = css.match(/\.anti-phishing-banner\s*\{([^}]+)\}/s)?.[1] ?? '';
     assert.match(bannerBlock, /var\(--color-info-fg\)/,
       'Expected .anti-phishing-banner to use var(--color-info-fg) for text color');
@@ -322,18 +322,18 @@ describe('AC1 — login.css anti-phishing banner uses info color tokens', () => 
 // ---------------------------------------------------------------------------
 
 describe('AC5 — login.css focus rings (WCAG AA)', () => {
-  it.skip('login.css defines :focus-visible rule (not :focus without ring replacement)', () => {
+  it('login.css defines :focus-visible rule (not :focus without ring replacement)', () => {
     assert.match(css, /:focus-visible/,
       'Expected login.css to define :focus-visible rule for keyboard focus ring');
   });
 
-  it.skip('login.css uses var(--color-focus-ring) or var(--color-accent) for focus ring color', () => {
+  it('login.css uses var(--color-focus-ring) or var(--color-accent) for focus ring color', () => {
     const hasFocusRing = /var\(--color-focus-ring\)/.test(css) || /var\(--color-accent\)/.test(css);
     assert.ok(hasFocusRing,
       'Expected login.css to reference var(--color-focus-ring) or var(--color-accent) for keyboard focus');
   });
 
-  it.skip('login.css does not suppress focus without a replacement (no bare outline: none or outline: 0 without :focus-visible override)', () => {
+  it('login.css does not suppress focus without a replacement (no bare outline: none or outline: 0 without :focus-visible override)', () => {
     // A bare "outline: none" or "outline: 0" on * or :focus (not :focus-visible) is a red flag.
     // We look for outline: none not inside a :focus-visible or comment block.
     // Simple heuristic: if outline: none appears, :focus-visible must also appear.
@@ -351,22 +351,22 @@ describe('AC5 — login.css focus rings (WCAG AA)', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC3 — login.ftl has pinned non-dismissible anti-phishing banner', () => {
-  it.skip('login.ftl contains anti-phishing-banner class', () => {
+  it('login.ftl contains anti-phishing-banner class', () => {
     assert.match(loginFtl, /anti-phishing-banner/,
       'Expected login.ftl to contain anti-phishing-banner class');
   });
 
-  it.skip('login.ftl anti-phishing banner has role="alert"', () => {
+  it('login.ftl anti-phishing banner has role="alert"', () => {
     assert.match(loginFtl, /role="alert"/,
       'Expected login.ftl to have role="alert" on the anti-phishing banner');
   });
 
-  it.skip('login.ftl anti-phishing banner uses ${msg("antiphishingBanner")}', () => {
+  it('login.ftl anti-phishing banner uses ${msg("antiphishingBanner")}', () => {
     assert.match(loginFtl, /\$\{msg\("antiphishingBanner"\)\}/,
       'Expected login.ftl to render the banner text via ${msg("antiphishingBanner")}');
   });
 
-  it.skip('login.ftl anti-phishing banner has no close/dismiss button', () => {
+  it('login.ftl anti-phishing banner has no close/dismiss button', () => {
     // Extract the banner block and assert it has no button or dismiss trigger.
     // We check that within N characters after the banner class there is no close/dismiss element.
     const bannerIdx = loginFtl.indexOf('anti-phishing-banner');
@@ -378,7 +378,7 @@ describe('AC3 — login.ftl has pinned non-dismissible anti-phishing banner', ()
       'Expected anti-phishing banner in login.ftl to have no dismiss/close button');
   });
 
-  it.skip('login.ftl anti-phishing banner has aria-live="polite"', () => {
+  it('login.ftl anti-phishing banner has aria-live="polite"', () => {
     // Per dev notes: aria-live="polite" on the container
     const bannerIdx = loginFtl.indexOf('anti-phishing-banner');
     assert.notStrictEqual(bannerIdx, -1, 'anti-phishing-banner not found in login.ftl');
@@ -387,7 +387,7 @@ describe('AC3 — login.ftl has pinned non-dismissible anti-phishing banner', ()
       'Expected anti-phishing banner to have aria-live="polite"');
   });
 
-  it.skip('login.ftl anti-phishing banner includes an info SVG icon (not icon-only — paired with text)', () => {
+  it('login.ftl anti-phishing banner includes an info SVG icon (not icon-only — paired with text)', () => {
     const bannerIdx = loginFtl.indexOf('anti-phishing-banner');
     assert.notStrictEqual(bannerIdx, -1, 'anti-phishing-banner not found in login.ftl');
     const snippet = loginFtl.slice(bannerIdx, bannerIdx + 600);
@@ -404,22 +404,22 @@ describe('AC3 — login.ftl has pinned non-dismissible anti-phishing banner', ()
 // ---------------------------------------------------------------------------
 
 describe('AC3 — login-otp.ftl has pinned non-dismissible anti-phishing banner', () => {
-  it.skip('login-otp.ftl contains anti-phishing-banner class', () => {
+  it('login-otp.ftl contains anti-phishing-banner class', () => {
     assert.match(loginOtpFtl, /anti-phishing-banner/,
       'Expected login-otp.ftl to contain anti-phishing-banner class');
   });
 
-  it.skip('login-otp.ftl anti-phishing banner has role="alert"', () => {
+  it('login-otp.ftl anti-phishing banner has role="alert"', () => {
     assert.match(loginOtpFtl, /role="alert"/,
       'Expected login-otp.ftl to have role="alert" on the anti-phishing banner');
   });
 
-  it.skip('login-otp.ftl anti-phishing banner uses ${msg("antiphishingBanner")}', () => {
+  it('login-otp.ftl anti-phishing banner uses ${msg("antiphishingBanner")}', () => {
     assert.match(loginOtpFtl, /\$\{msg\("antiphishingBanner"\)\}/,
       'Expected login-otp.ftl to render the banner text via ${msg("antiphishingBanner")}');
   });
 
-  it.skip('login-otp.ftl anti-phishing banner has no close/dismiss button', () => {
+  it('login-otp.ftl anti-phishing banner has no close/dismiss button', () => {
     const bannerIdx = loginOtpFtl.indexOf('anti-phishing-banner');
     assert.notStrictEqual(bannerIdx, -1, 'anti-phishing-banner not found in login-otp.ftl');
     const snippet = loginOtpFtl.slice(bannerIdx, bannerIdx + 500);
@@ -447,7 +447,7 @@ describe('AC4 — messages_en.properties has all required string keys', () => {
   ];
 
   for (const key of REQUIRED_KEYS) {
-    it.skip(`messages_en.properties defines "${key}"`, () => {
+    it(`messages_en.properties defines "${key}"`, () => {
       assert.match(
         msgProps,
         new RegExp(`^\\s*${key}\\s*=`, 'm'),
@@ -456,7 +456,7 @@ describe('AC4 — messages_en.properties has all required string keys', () => {
     });
   }
 
-  it.skip('antiphishingBanner value matches the spec copy exactly', () => {
+  it('antiphishingBanner value matches the spec copy exactly', () => {
     const expected = "We'll never ask for your verification code by phone, email, or chat.";
     assert.match(
       msgProps,
@@ -465,7 +465,7 @@ describe('AC4 — messages_en.properties has all required string keys', () => {
     );
   });
 
-  it.skip('invalidUserMessage key is overridden to match UX voice', () => {
+  it('invalidUserMessage key is overridden to match UX voice', () => {
     assert.match(
       msgProps,
       /^invalidUserMessage\s*=\s*Incorrect email or password\./m,
@@ -473,7 +473,7 @@ describe('AC4 — messages_en.properties has all required string keys', () => {
     );
   });
 
-  it.skip('accountDisabledMessage key is overridden to match UX voice', () => {
+  it('accountDisabledMessage key is overridden to match UX voice', () => {
     assert.match(
       msgProps,
       /^accountDisabledMessage\s*=\s*This account is not available\./m,
@@ -500,7 +500,7 @@ describe('AC4 — login.ftl has no hardcoded English UI strings (uses ${msg(...)
   ];
 
   for (const literal of FORBIDDEN_LITERALS) {
-    it.skip(`login.ftl does not contain hardcoded literal: "${literal}"`, () => {
+    it(`login.ftl does not contain hardcoded literal: "${literal}"`, () => {
       // Allow the literal if it appears ONLY inside a ${msg(...)} call or FTL comment.
       // We strip FTL comments <#-- ... -->, then check for bare literal.
       const stripped = loginFtl.replace(/<#--[\s\S]*?-->/g, '');
@@ -518,7 +518,7 @@ describe('AC4 — login.ftl has no hardcoded English UI strings (uses ${msg(...)
 });
 
 describe('AC4 — login-otp.ftl has no hardcoded English UI strings', () => {
-  it.skip('login-otp.ftl does not contain hardcoded "Verify" button text', () => {
+  it('login-otp.ftl does not contain hardcoded "Verify" button text', () => {
     // "Verify" must come from ${msg("doSubmit")}, not be hardcoded
     const stripped = loginOtpFtl.replace(/<#--[\s\S]*?-->/g, '');
     // Check that "Verify" does not appear as a free literal (outside msg/attr context)
@@ -527,7 +527,7 @@ describe('AC4 — login-otp.ftl has no hardcoded English UI strings', () => {
       'Expected login-otp.ftl not to contain hardcoded ">Verify<" — use ${msg("doSubmit")}');
   });
 
-  it.skip('login-otp.ftl does not contain hardcoded "Enter your verification code"', () => {
+  it('login-otp.ftl does not contain hardcoded "Enter your verification code"', () => {
     assert.ok(
       !loginOtpFtl.includes('Enter your verification code'),
       'Expected login-otp.ftl not to hardcode "Enter your verification code" — use ${msg("loginTotpTitle")}',
@@ -540,36 +540,36 @@ describe('AC4 — login-otp.ftl has no hardcoded English UI strings', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC5 — login.ftl has persistent <label> for each <input> (no placeholder-only)', () => {
-  it.skip('login.ftl contains a <label> element for the email/username field', () => {
+  it('login.ftl contains a <label> element for the email/username field', () => {
     // Keycloak base theme uses label for="username" (or id="username")
     assert.match(loginFtl, /<label\s[^>]*for=["']username["']/,
       'Expected login.ftl to have <label for="username"> for the email input');
   });
 
-  it.skip('login.ftl contains a <label> element for the password field', () => {
+  it('login.ftl contains a <label> element for the password field', () => {
     assert.match(loginFtl, /<label\s[^>]*for=["']password["']/,
       'Expected login.ftl to have <label for="password"> for the password input');
   });
 
-  it.skip('login.ftl username/email input has a matching id attribute', () => {
+  it('login.ftl username/email input has a matching id attribute', () => {
     assert.match(loginFtl, /id=["']username["']/,
       'Expected login.ftl to have id="username" on the email/username input');
   });
 
-  it.skip('login.ftl password input has a matching id attribute', () => {
+  it('login.ftl password input has a matching id attribute', () => {
     assert.match(loginFtl, /id=["']password["']/,
       'Expected login.ftl to have id="password" on the password input');
   });
 });
 
 describe('AC5 — login-otp.ftl has persistent <label> for TOTP code input', () => {
-  it.skip('login-otp.ftl contains a <label> element for the TOTP code input', () => {
+  it('login-otp.ftl contains a <label> element for the TOTP code input', () => {
     // Keycloak OTP form typically uses id="totp" or id="otp"
     assert.match(loginOtpFtl, /<label\s[^>]*for=["'](totp|otp)["']/,
       'Expected login-otp.ftl to have <label for="totp"> or <label for="otp">');
   });
 
-  it.skip('login-otp.ftl TOTP input has a matching id attribute (totp or otp)', () => {
+  it('login-otp.ftl TOTP input has a matching id attribute (totp or otp)', () => {
     const hasId = /id=["']totp["']/.test(loginOtpFtl) || /id=["']otp["']/.test(loginOtpFtl);
     assert.ok(hasId, 'Expected login-otp.ftl to have id="totp" or id="otp" on the code input');
   });
@@ -580,24 +580,24 @@ describe('AC5 — login-otp.ftl has persistent <label> for TOTP code input', () 
 // ---------------------------------------------------------------------------
 
 describe('AC7 — login.ftl uses standard HTML POST form (no-JS path)', () => {
-  it.skip('login.ftl has a <form> with method="post"', () => {
+  it('login.ftl has a <form> with method="post"', () => {
     assert.match(loginFtl, /<form\s[^>]*method=["']post["']/i,
       'Expected login.ftl to have <form method="post"> for standard form submission');
   });
 
-  it.skip('login.ftl form has an action attribute (standard POST target)', () => {
+  it('login.ftl form has an action attribute (standard POST target)', () => {
     assert.match(loginFtl, /<form\s[^>]*action=/,
       'Expected login.ftl form to have an action attribute');
   });
 
-  it.skip('login-otp.ftl has a <form> with method="post"', () => {
+  it('login-otp.ftl has a <form> with method="post"', () => {
     assert.match(loginOtpFtl, /<form\s[^>]*method=["']post["']/i,
       'Expected login-otp.ftl to have <form method="post"> for standard form submission');
   });
 });
 
 describe('AC7 — Any <script> tags in templates are additive, not required for core auth', () => {
-  it.skip('login.ftl core form submit does not require inline onclick or onsubmit handlers', () => {
+  it('login.ftl core form submit does not require inline onclick or onsubmit handlers', () => {
     // The form itself (method=post + action) should work without any JS event handler.
     // We check that the <form> tag itself does not have onsubmit= (which would imply JS required).
     const formMatch = loginFtl.match(/<form\s[^>]+>/)?.[0] ?? '';

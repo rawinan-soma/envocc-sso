@@ -1,18 +1,26 @@
 # keycloak/Dockerfile
 # Pinned Keycloak 26.6.3 build for the envocc-sso foundation stack.
 #
-# KC_HEALTH_ENABLED is a BUILD-TIME option in KC 26 (Quarkus).
-# It MUST be passed to `kc.sh build`, NOT set as a compose.yaml env var.
-# Setting it only in compose.yaml environment causes crash-loop on
-# `start --optimized` because the feature was not compiled in.
-#
 # Digest pinned at image resolution time — verify before updating:
 #   docker buildx imagetools inspect quay.io/keycloak/keycloak:26.6.3
 FROM quay.io/keycloak/keycloak:26.6.3@sha256:9b0330756022422149aa6502eb2def8cd47c6e1b000c7c65cdb13e7c0133e992
 
+# Story 2.5: Bake the Deep Sea login theme into the image.
+# Build context = ./keycloak/ — all COPY sources are relative to keycloak/.
+# Themes must be present BEFORE the optimised build step (Quarkus compiles them in).
+# design-tokens/deep-sea.css is inside the theme directory
+# (keycloak/themes/envocc/login/resources/design-tokens/) and is included
+# automatically by the COPY below — NO separate COPY for tokens is needed.
+COPY themes/envocc /opt/keycloak/themes/envocc
+
 # Build the optimised Keycloak distribution:
-#   --db=postgres        pre-compiles Postgres JDBC wiring
+#   --db=postgres          pre-compiles Postgres JDBC wiring
 #   --health-enabled=true  enables /health/ready on management port 9000
+#
+# KC_HEALTH_ENABLED is a BUILD-TIME option in KC 26 (Quarkus).
+# It MUST be passed to `kc.sh build`, NOT set as a compose.yaml env var.
+# Setting it only in compose.yaml environment causes crash-loop on
+# `start --optimized` because the feature was not compiled in.
 #
 # Story 1.2: realm import support is now baked in via COPY + --import-realm.
 # Event-listener providers belong to Story 5.1.
