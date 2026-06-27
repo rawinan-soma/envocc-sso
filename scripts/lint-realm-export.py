@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""lint-realm-export.py — Validate keycloak/realm-export.json for story 1.5 / 2.1.
+"""lint-realm-export.py — Validate keycloak/realm-export.json.
 
 Checks performed:
   1. JSON is parseable.
@@ -17,6 +17,13 @@ Checks performed:
      - bruteForceProtected must be boolean true (brute-force protection cannot be disabled)
      - enabled must be boolean true (realm must be enabled)
      Each value must be the exact boolean type — a JSON integer 0/1 does not pass.
+  5. (Story 2.2) accessCodeLifespan is present AND its value is <= 60 seconds.
+  6. (Story 2.2) Per-client: implicitFlowEnabled is not true (must be false or absent).
+  7. (Story 2.2) Per-client: directAccessGrantsEnabled is not true (Keycloak default
+     is true — must be explicitly false).
+  8. (Story 2.2) Per public client: attributes.pkce.code.challenge.method must be "S256".
+  9. (Story 2.2) Per public client: standardFlowEnabled must be true (Authorization Code
+     flow must be explicitly enabled — it is the only permitted flow for PKCE clients).
 
 Exit codes:
   0 — all checks passed
@@ -66,6 +73,9 @@ KEY_MATERIAL_THRESHOLDS = {
     "secret": 8,
 }
 
+# Maximum allowed authorization code lifetime (Story 2.2, AC4, FR47).
+ACCESS_CODE_LIFESPAN_MAX = 60
+
 
 def _string_values(value):
     """Yield string values held directly by `value`.
@@ -99,6 +109,80 @@ def find_key_material(obj, path="$"):
     elif isinstance(obj, list):
         for idx, item in enumerate(obj):
             yield from find_key_material(item, f"{path}[{idx}]")
+
+
+def lint_clients(clients):
+    """Check per-client Story 2.2 security constraints.
+
+    Returns a list of error message strings.
+    Each message embeds the clientId for debuggability (Task 3.5).
+    """
+    client_errors = []
+
+    if not isinstance(clients, list):
+        return client_errors  # malformed — top-level JSON check covers this
+
+    for idx, client in enumerate(clients):
+        if not isinstance(client, dict):
+            # Skip non-dict entries with a warning (not an error)
+            print(
+                f"WARNING: clients[{idx}] is not a JSON object — skipping per-client checks.",
+                file=sys.stderr,
+            )
+            continue
+
+        client_id = client.get("clientId", f"<unknown client at index {idx}>")
+
+        # ── Check 5: implicitFlowEnabled must not be true ────────────────────
+        # Anything other than an explicit `false` (or absence, which Keycloak
+        # defaults to false) is a violation — this also catches non-canonical
+        # truthy values such as `1` or `"true"` that identity checks would miss.
+        implicit = client.get("implicitFlowEnabled", False)
+        if implicit is not False:
+            client_errors.append(
+                f"[{client_id}] implicitFlowEnabled is {implicit!r} — "
+                "Implicit grant must be disabled (set to false or omit)."
+            )
+
+        # ── Check 6: directAccessGrantsEnabled must not be true ─────────────
+        # Keycloak default is true — absence is NOT safe; it must be explicitly
+        # false. Flag absence and any non-false value (including truthy non-bool
+        # values like `1` or `"true"`).
+        ropc = client.get("directAccessGrantsEnabled", "<absent>")
+        if ropc is not False:
+            client_errors.append(
+                f"[{client_id}] directAccessGrantsEnabled is {ropc!r} — "
+                "ROPC must be explicitly disabled (set to false). "
+                "Keycloak default is true."
+            )
+
+        # ── Check 7 + 8: public clients must have PKCE S256 and standard flow ─
+        if client.get("publicClient") is True:
+            attrs = client.get("attributes")
+            pkce_method = None
+            if isinstance(attrs, dict):
+                pkce_method = attrs.get("pkce.code.challenge.method")
+            if pkce_method != "S256":
+                client_errors.append(
+                    f"[{client_id}] publicClient is true but "
+                    "attributes.pkce.code.challenge.method is not 'S256' "
+                    f"(got: {pkce_method!r}). "
+                    "PKCE S256 must be enforced on all public clients."
+                )
+
+            # ── Check 8: standardFlowEnabled must be true on public PKCE clients ─
+            # Authorization Code flow is the only flow permitted for PKCE clients.
+            # Without standardFlowEnabled: true the client cannot initiate any
+            # auth request, making the PKCE constraint moot.
+            if client.get("standardFlowEnabled") is not True:
+                client_errors.append(
+                    f"[{client_id}] publicClient is true but "
+                    f"standardFlowEnabled is {client.get('standardFlowEnabled', '<absent>')!r} — "
+                    "Authorization Code flow must be explicitly enabled "
+                    "(set to true) on all public PKCE clients."
+                )
+
+    return client_errors
 
 
 def main():
@@ -178,7 +262,44 @@ def main():
             "Remove key material from realm-export.json before committing."
         )
 
-    # ── Step 6: Report and exit ────────────────────────────────────────────────
+    # ── Step 6 (Story 2.2): Assert accessCodeLifespan present and <= 60 ───────
+    if "accessCodeLifespan" not in data:
+        errors.append(
+            "Missing required field 'accessCodeLifespan' — "
+            "authorization code lifetime must be explicitly set "
+            f"(<= {ACCESS_CODE_LIFESPAN_MAX}s, AC4/FR47)."
+        )
+    else:
+        lifespan = data["accessCodeLifespan"]
+        # bool is a subclass of int in Python — reject it explicitly so a JSON
+        # `true`/`false` is not silently treated as a 1/0-second lifespan.
+        # Require a positive integer in [1, ACCESS_CODE_LIFESPAN_MAX]; a zero,
+        # negative, float, NaN, or boolean value is a misconfiguration.
+        if (
+            not isinstance(lifespan, int)
+            or isinstance(lifespan, bool)
+            or lifespan < 1
+            or lifespan > ACCESS_CODE_LIFESPAN_MAX
+        ):
+            errors.append(
+                f"accessCodeLifespan is {lifespan!r} — "
+                f"value must be an integer between 1 and {ACCESS_CODE_LIFESPAN_MAX} "
+                "seconds (AC4/FR47)."
+            )
+
+    # ── Step 7 (Story 2.2): Per-client security checks ────────────────────────
+    clients = data.get("clients")
+    if clients is not None:
+        if not isinstance(clients, list):
+            errors.append(
+                f"'clients' must be a JSON array, got {type(clients).__name__} — "
+                "per-client security checks cannot be performed."
+            )
+        else:
+            for msg in lint_clients(clients):
+                errors.append(msg)
+
+    # ── Step 8: Report and exit ────────────────────────────────────────────────
     if errors:
         print("realm-export.json FAILED lint:", file=sys.stderr)
         for err in errors:
