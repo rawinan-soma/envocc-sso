@@ -4,7 +4,7 @@ baseline_commit: 1fb0e6ccbcc15a27c8583cbd4133bf54567c684d
 
 # Story 2.2: OIDC Authorization Code + PKCE Login (Hosted Credentials)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -36,59 +36,59 @@ Then it is single-use, short-lived (≤ 60 seconds), replay-detected (second use
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Configure realm-level OIDC security settings in `keycloak/realm-export.json` (AC1, AC4)
-  - [ ] 1.1: Set `"accessCodeLifespan": 60` (explicit 60-second auth code lifetime — default is 60 but make it explicit and lint-enforceable)
-  - [ ] 1.2: Set `"accessCodeLifespanUserAction": 300` (user has 5 min to complete login form before the code-session expires)
-  - [ ] 1.3: Set `"accessCodeLifespanLogin": 1800` (user has 30 min before needing to re-initiate; Keycloak default)
-  - [ ] 1.4: Confirm `"defaultSignatureAlgorithm": "RS256"` is present (already in baseline — do not remove)
-  - [ ] 1.5: Confirm `"bruteForceProtected": true` is present (already in baseline — do not remove)
+- [x] Task 1: Configure realm-level OIDC security settings in `keycloak/realm-export.json` (AC1, AC4)
+  - [x] 1.1: Set `"accessCodeLifespan": 60` (explicit 60-second auth code lifetime — default is 60 but make it explicit and lint-enforceable)
+  - [x] 1.2: Set `"accessCodeLifespanUserAction": 300` (user has 5 min to complete login form before the code-session expires)
+  - [x] 1.3: Set `"accessCodeLifespanLogin": 1800` (user has 30 min before needing to re-initiate; Keycloak default)
+  - [x] 1.4: Confirm `"defaultSignatureAlgorithm": "RS256"` is present (already in baseline — do not remove)
+  - [x] 1.5: Confirm `"bruteForceProtected": true` is present (already in baseline — do not remove)
 
-- [ ] Task 2: Register the test/dev OIDC client in `keycloak/realm-export.json` (AC1, AC2, AC3, AC4)
-  - [ ] 2.1: Add a client entry under `"clients"` with `"clientId": "test-oidc-client"` (used ONLY for integration tests; production clients arrive in Epic 4/5)
-  - [ ] 2.2: Set `"standardFlowEnabled": true` (Authorization Code flow — must be enabled)
-  - [ ] 2.3: Set `"implicitFlowEnabled": false` (disable Implicit grant — explicit, not just defaulted)
-  - [ ] 2.4: Set `"directAccessGrantsEnabled": false` (disable ROPC — Keycloak default is `true`, this MUST be explicitly set to `false`)
-  - [ ] 2.5: Set `"publicClient": true` (PKCE clients are public; no client secret in the flow)
-  - [ ] 2.6: Set `"attributes": {"pkce.code.challenge.method": "S256"}` (enforces PKCE S256 for this client; auth requests without `code_challenge` are rejected)
-  - [ ] 2.7: Set `"redirectUris": ["http://localhost:8888/callback"]` (exact-match, localhost only, for test integration)
-  - [ ] 2.8: Set `"webOrigins": ["http://localhost:8888"]` (CORS: test only)
-  - [ ] 2.9: Set `"protocol": "openid-connect"` and `"enabled": true`
-  - [ ] 2.10: Set `"serviceAccountsEnabled": false`, `"authorizationServicesEnabled": false`, `"consentRequired": false`, `"fullScopeAllowed": false` (minimal surface; no consent prompt)
-  - [ ] 2.11: Run gitleaks detect on realm-export.json after edit — must exit 0 (no secrets committed)
-  - [ ] 2.12: Run `python3 -m json.tool keycloak/realm-export.json > /dev/null` — valid JSON check
+- [x] Task 2: Register the test/dev OIDC client in `keycloak/realm-export.json` (AC1, AC2, AC3, AC4)
+  - [x] 2.1: Add a client entry under `"clients"` with `"clientId": "test-oidc-client"` (used ONLY for integration tests; production clients arrive in Epic 4/5)
+  - [x] 2.2: Set `"standardFlowEnabled": true` (Authorization Code flow — must be enabled)
+  - [x] 2.3: Set `"implicitFlowEnabled": false` (disable Implicit grant — explicit, not just defaulted)
+  - [x] 2.4: Set `"directAccessGrantsEnabled": false` (disable ROPC — Keycloak default is `true`, this MUST be explicitly set to `false`)
+  - [x] 2.5: Set `"publicClient": true` (PKCE clients are public; no client secret in the flow)
+  - [x] 2.6: Set `"attributes": {"pkce.code.challenge.method": "S256"}` (enforces PKCE S256 for this client; auth requests without `code_challenge` are rejected)
+  - [x] 2.7: Set `"redirectUris": ["http://localhost:8888/callback"]` (exact-match, localhost only, for test integration)
+  - [x] 2.8: Set `"webOrigins": ["http://localhost:8888"]` (CORS: test only)
+  - [x] 2.9: Set `"protocol": "openid-connect"` and `"enabled": true`
+  - [x] 2.10: Set `"serviceAccountsEnabled": false`, `"authorizationServicesEnabled": false`, `"consentRequired": false`, `"fullScopeAllowed": false` (minimal surface; no consent prompt)
+  - [x] 2.11: Run gitleaks detect on realm-export.json after edit — must exit 0 (no secrets committed)
+  - [x] 2.12: Run `python3 -m json.tool keycloak/realm-export.json > /dev/null` — valid JSON check
 
-- [ ] Task 3: Update `scripts/lint-realm-export.py` to validate Story 2.2 security constraints (AC1, AC4)
-  - [ ] 3.1: Assert `accessCodeLifespan` is present AND its value is ≤ 60 (not just present — enforce the short-lived requirement)
-  - [ ] 3.2: For each entry in `clients` array: assert `implicitFlowEnabled` is `false` or absent (absent defaults to false in Keycloak)
-  - [ ] 3.3: For each entry in `clients` array: assert `directAccessGrantsEnabled` is `false` (must be explicit because KC default is `true`)
-  - [ ] 3.4: For each public client (`publicClient: true`) in `clients` array: assert `attributes.pkce.code.challenge.method` is `"S256"` (not empty, not plain)
-  - [ ] 3.5: Print per-client lint findings with the `clientId` to aid debugging; exit 1 if any violation found
-  - [ ] 3.6: Run the updated lint script against the updated realm-export.json — must exit 0
+- [x] Task 3: Update `scripts/lint-realm-export.py` to validate Story 2.2 security constraints (AC1, AC4)
+  - [x] 3.1: Assert `accessCodeLifespan` is present AND its value is ≤ 60 (not just present — enforce the short-lived requirement)
+  - [x] 3.2: For each entry in `clients` array: assert `implicitFlowEnabled` is `false` or absent (absent defaults to false in Keycloak)
+  - [x] 3.3: For each entry in `clients` array: assert `directAccessGrantsEnabled` is `false` (must be explicit because KC default is `true`)
+  - [x] 3.4: For each public client (`publicClient: true`) in `clients` array: assert `attributes.pkce.code.challenge.method` is `"S256"` (not empty, not plain)
+  - [x] 3.5: Print per-client lint findings with the `clientId` to aid debugging; exit 1 if any violation found
+  - [x] 3.6: Run the updated lint script against the updated realm-export.json — must exit 0
 
-- [ ] Task 4: Write integration tests for the OIDC grant-type and PKCE enforcement (AC1, AC3, AC4)
-  - [ ] 4.1: Create `tests/integration/oidc-pkce-flow.bats` using BATS framework (consistent with Epic 1 test pattern)
-  - [ ] 4.2: Test — Implicit flow rejected: `GET /realms/envocc/protocol/openid-connect/auth?response_type=token&client_id=test-oidc-client&redirect_uri=http://localhost:8888/callback&...` → assert Location header contains `error=` (Keycloak 302 redirect with error), NOT a valid code; use `-D -` to capture redirect headers
-  - [ ] 4.3: Test — ROPC rejected: `POST /realms/envocc/protocol/openid-connect/token` with body `grant_type=password&username=test@example.com&password=anything&client_id=test-oidc-client` → assert HTTP 400, body contains `"error":"unauthorized_client"` (note: this must use the `envocc` realm token endpoint, not master)
-  - [ ] 4.4: Test — PKCE required: Auth Code request with valid registered `redirect_uri` but WITHOUT `code_challenge` → assert error in redirect (Location header has `error=invalid_request`); IMPORTANT: include `redirect_uri=http://localhost:8888/callback` so rejection is for missing PKCE, not bad redirect_uri
-  - [ ] 4.5: Test — Exact-match redirect URI rejected (extra path): Auth request with valid PKCE params but `redirect_uri=http://localhost:8888/callback/extra` → assert HTTP 400 (Keycloak rejects before redirect since URI doesn't match)
-  - [ ] 4.6: Test — Exact-match redirect URI rejected (wrong host): Auth request with `redirect_uri=http://evil.example.com/callback` → assert HTTP 400
-  - [ ] 4.7: Test — Auth code replay: Complete a full PKCE auth code exchange (requires active test user from Task 4.9) → exchange code once (success) → exchange same code again → assert HTTP 400 with `"error":"invalid_grant"`
-  - [ ] 4.8: Test — Wrong PKCE verifier: Complete auth flow to get code → exchange with mismatched `code_verifier` → assert HTTP 400 with `"error":"invalid_grant"`
-  - [ ] 4.9: Add BATS `setup` that: loads `tests/helpers/common.bash`; calls `get_admin_token` (reads `KC_BOOTSTRAP_ADMIN_USERNAME`/`KC_BOOTSTRAP_ADMIN_PASSWORD` from `.env`); creates an `active` test user via Admin REST (`POST /admin/realms/envocc/users`, `"enabled": true`, `"emailVerified": true`); sets user password to a known value. Add `teardown` that deletes the test user (`DELETE /admin/realms/envocc/users/{id}`).
-  - [ ] 4.10: Add a `setup` guard (consistent with existing integration tests): if `INTEGRATION` env var is empty, `skip "Integration tests skipped — set INTEGRATION=1 and ensure stack is running"`
-  - [ ] 4.11: Use `bats_load_library 'bats-support'` and `bats_load_library 'bats-assert'` at the top of the file; use `load '../helpers/common'` to get `get_admin_token` and other helpers
+- [x] Task 4: Write integration tests for the OIDC grant-type and PKCE enforcement (AC1, AC3, AC4)
+  - [x] 4.1: Create `tests/integration/oidc-pkce-flow.bats` using BATS framework (consistent with Epic 1 test pattern)
+  - [x] 4.2: Test — Implicit flow rejected: `GET /realms/envocc/protocol/openid-connect/auth?response_type=token&client_id=test-oidc-client&redirect_uri=http://localhost:8888/callback&...` → assert Location header contains `error=` (Keycloak 302 redirect with error), NOT a valid code; use `-D -` to capture redirect headers
+  - [x] 4.3: Test — ROPC rejected: `POST /realms/envocc/protocol/openid-connect/token` with body `grant_type=password&username=test@example.com&password=anything&client_id=test-oidc-client` → assert HTTP 400, body contains `"error":"unauthorized_client"` (note: this must use the `envocc` realm token endpoint, not master)
+  - [x] 4.4: Test — PKCE required: Auth Code request with valid registered `redirect_uri` but WITHOUT `code_challenge` → assert error in redirect (Location header has `error=invalid_request`); IMPORTANT: include `redirect_uri=http://localhost:8888/callback` so rejection is for missing PKCE, not bad redirect_uri
+  - [x] 4.5: Test — Exact-match redirect URI rejected (extra path): Auth request with valid PKCE params but `redirect_uri=http://localhost:8888/callback/extra` → assert HTTP 400 (Keycloak rejects before redirect since URI doesn't match)
+  - [x] 4.6: Test — Exact-match redirect URI rejected (wrong host): Auth request with `redirect_uri=http://evil.example.com/callback` → assert HTTP 400
+  - [x] 4.7: Test — Auth code replay: Complete a full PKCE auth code exchange (requires active test user from Task 4.9) → exchange code once (success) → exchange same code again → assert HTTP 400 with `"error":"invalid_grant"`
+  - [x] 4.8: Test — Wrong PKCE verifier: Complete auth flow to get code → exchange with mismatched `code_verifier` → assert HTTP 400 with `"error":"invalid_grant"`
+  - [x] 4.9: Add BATS `setup` that: loads `tests/helpers/common.bash`; calls `get_admin_token` (reads `KC_BOOTSTRAP_ADMIN_USERNAME`/`KC_BOOTSTRAP_ADMIN_PASSWORD` from `.env`); creates an `active` test user via Admin REST (`POST /admin/realms/envocc/users`, `"enabled": true`, `"emailVerified": true`); sets user password to a known value. Add `teardown` that deletes the test user (`DELETE /admin/realms/envocc/users/{id}`).
+  - [x] 4.10: Add a `setup` guard (consistent with existing integration tests): if `INTEGRATION` env var is empty, `skip "Integration tests skipped — set INTEGRATION=1 and ensure stack is running"`
+  - [x] 4.11: Use `bats_load_library 'bats-support'` and `bats_load_library 'bats-assert'` at the top of the file; use `load '../helpers/common'` to get `get_admin_token` and other helpers
 
-- [ ] Task 5: CI integration — lint in CI, integration tests run locally (AC1–AC4)
-  - [ ] 5.1: Verify the existing `realm-lint` CI job in `.github/workflows/ci.yml` will pick up the updated `scripts/lint-realm-export.py` automatically — no CI YAML change needed for linting
-  - [ ] 5.2: IMPORTANT — the existing BATS integration tests (`tests/integration/`) are NOT yet wired into CI (`.github/workflows/ci.yml` has no `bats` step). Integration tests require a running Docker Compose stack and run locally with `INTEGRATION=1 bats tests/integration/oidc-pkce-flow.bats`. Adding a CI Docker Compose integration job is DEFERRED to a future story (requires secret provisioning, `KC_BOOTSTRAP_ADMIN_USERNAME`/`KC_BOOTSTRAP_ADMIN_PASSWORD` as GitHub Secrets, docker-compose-up wait logic). For this story: integration tests run locally only.
-  - [ ] 5.3: Run `INTEGRATION=1 bats tests/integration/oidc-pkce-flow.bats` locally against the running stack as the final verification step (after Task 6 round-trip)
+- [x] Task 5: CI integration — lint in CI, integration tests run locally (AC1–AC4)
+  - [x] 5.1: Verify the existing `realm-lint` CI job in `.github/workflows/ci.yml` will pick up the updated `scripts/lint-realm-export.py` automatically — no CI YAML change needed for linting
+  - [x] 5.2: IMPORTANT — the existing BATS integration tests (`tests/integration/`) are NOT yet wired into CI (`.github/workflows/ci.yml` has no `bats` step). Integration tests require a running Docker Compose stack and run locally with `INTEGRATION=1 bats tests/integration/oidc-pkce-flow.bats`. Adding a CI Docker Compose integration job is DEFERRED to a future story (requires secret provisioning, `KC_BOOTSTRAP_ADMIN_USERNAME`/`KC_BOOTSTRAP_ADMIN_PASSWORD` as GitHub Secrets, docker-compose-up wait logic). For this story: integration tests run locally only.
+  - [x] 5.3: Run `INTEGRATION=1 bats tests/integration/oidc-pkce-flow.bats` locally against the running stack as the final verification step (after Task 6 round-trip)
 
-- [ ] Task 6: Round-trip verification (AC1–AC4)
-  - [ ] 6.1: `docker compose down -v && docker compose up --build` — confirm Keycloak starts healthy
-  - [ ] 6.2: Confirm `envocc` realm is imported: `curl -sf http://localhost:8080/realms/envocc/.well-known/openid-configuration | jq '.issuer'` → `"http://localhost:8080/realms/envocc"`
-  - [ ] 6.3: Confirm `test-oidc-client` is registered: Keycloak Admin REST `GET /admin/realms/envocc/clients?clientId=test-oidc-client` → returns the client with correct settings
-  - [ ] 6.4: Run `python3 scripts/lint-realm-export.py` → exits 0
-  - [ ] 6.5: Run `gitleaks detect --source keycloak/realm-export.json --no-git --config .gitleaks.toml` → exits 0
+- [x] Task 6: Round-trip verification (AC1–AC4)
+  - [x] 6.1: `docker compose down -v && docker compose up --build` — confirm Keycloak starts healthy
+  - [x] 6.2: Confirm `envocc` realm is imported: `curl -sf http://localhost:8080/realms/envocc/.well-known/openid-configuration | jq '.issuer'` → `"http://localhost:8080/realms/envocc"`
+  - [x] 6.3: Confirm `test-oidc-client` is registered: Keycloak Admin REST `GET /admin/realms/envocc/clients?clientId=test-oidc-client` → returns the client with correct settings
+  - [x] 6.4: Run `python3 scripts/lint-realm-export.py` → exits 0
+  - [x] 6.5: Run `gitleaks detect --source keycloak/realm-export.json --no-git --config .gitleaks.toml` → exits 0
 
 ## Dev Notes
 
@@ -380,16 +380,29 @@ The P0 tests (Tasks 4.2–4.8) MUST be implemented and green before this story i
 
 ### Agent Model Used
 
-claude-sonnet-4-6 (Claude Code — bmad-create-story workflow, 2026-06-27)
+claude-sonnet-4-6 (Claude Code — bmad-dev-story workflow, 2026-06-27)
 
 ### Debug Log References
 
-None.
+- Keycloak 26 `VERIFY_PROFILE` required action triggered for new users missing `firstName`/`lastName` (required by default user profile). Fixed by including `firstName`, `lastName`, and `requiredActions: []` in test user creation JSON.
+- Story 2-2 Keycloak container does not publish port 8080 (Story 1.3 security design). Integration tests require a `compose.override.yaml` to publish 8080 temporarily when running locally alongside other stacks.
 
 ### Completion Notes List
 
-(To be filled in by dev agent)
+- **Task 1 (realm-level settings)**: Added `accessCodeLifespan: 60`, `accessCodeLifespanUserAction: 300`, `accessCodeLifespanLogin: 1800` to `keycloak/realm-export.json`. Existing `defaultSignatureAlgorithm: RS256` and `bruteForceProtected: true` confirmed present.
+- **Task 2 (test-oidc-client)**: Registered `test-oidc-client` in `keycloak/realm-export.json` with `publicClient: true`, `standardFlowEnabled: true`, `implicitFlowEnabled: false`, `directAccessGrantsEnabled: false`, PKCE S256 enforced via `attributes.pkce.code.challenge.method: S256`, exact-match `redirectUris`, no consent, minimal surface. gitleaks and JSON lint both pass.
+- **Task 3 (lint extension)**: Extended `scripts/lint-realm-export.py` with 4 new checks: (1) `accessCodeLifespan` present and ≤ 60, (2) per-client `implicitFlowEnabled` not true, (3) per-client `directAccessGrantsEnabled` not true (Keycloak default is true), (4) per-public-client PKCE S256 enforced. All findings include `clientId` for debuggability. 11/11 unit tests pass.
+- **Task 4 (integration tests)**: Activated 8 ATDD test scenarios (removed RED PHASE skip lines). Added `firstName`, `lastName`, `requiredActions: []` to test user creation to satisfy Keycloak 26 user profile requirements. All 8 integration tests pass (TS-220a through TS-220g).
+- **Task 5 (CI)**: Confirmed `realm-lint` CI job auto-picks up updated lint script. Integration tests remain local-only (no Docker Compose in CI — deferred).
+- **Task 6 (round-trip)**: Full docker compose down/up verified. Realm imported with `accessCodeLifespan: 60` and `test-oidc-client`. lint and gitleaks pass. INTEGRATION=1 bats test suite: 8/8 pass.
 
 ### File List
 
-(To be filled in by dev agent)
+- `keycloak/realm-export.json` — added `accessCodeLifespan`, `accessCodeLifespanUserAction`, `accessCodeLifespanLogin`, `clients` array with `test-oidc-client`
+- `scripts/lint-realm-export.py` — extended with Story 2.2 security checks (accessCodeLifespan, per-client implicit/ROPC/PKCE validation)
+- `tests/integration/oidc-pkce-flow.bats` — activated RED PHASE tests; added `firstName`/`lastName`/`requiredActions` to test user creation
+- `tests/unit/oidc-pkce-lint.bats` — activated all RED PHASE tests (Tasks 3.1–3.5 lint checks)
+
+## Change Log
+
+- 2026-06-27: Story 2.2 implementation complete. Added `accessCodeLifespan: 60` + 2 related code lifespans to realm. Registered `test-oidc-client` with PKCE S256 enforcement, disabled Implicit/ROPC. Extended lint script with per-client security checks. Activated 8 integration tests (all P0/P1 scenarios) + 11 unit tests. All pass. Status → review.

@@ -151,8 +151,11 @@ setup() {
     -d "{
       \"username\": \"${TEST_USER_EMAIL}\",
       \"email\": \"${TEST_USER_EMAIL}\",
+      \"firstName\": \"Test\",
+      \"lastName\": \"PKCEUser\",
       \"enabled\": true,
       \"emailVerified\": true,
+      \"requiredActions\": [],
       \"credentials\": [{
         \"type\": \"password\",
         \"value\": \"${TEST_USER_PASSWORD}\",
@@ -191,7 +194,6 @@ teardown() {
 # TS-220a [P0] — Implicit grant (response_type=token) rejected (AC1)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220a] Implicit grant (response_type=token) is rejected by envocc realm" {
-  skip "RED PHASE — activate when Task 1 (realm settings) and Task 2 (test-oidc-client: implicitFlowEnabled: false) are implemented"
   # Keycloak with implicitFlowEnabled: false either returns HTTP 400 directly
   # or 302-redirects with error= in the Location header.
   local response_headers
@@ -218,7 +220,6 @@ teardown() {
 # TS-220b [P0] — ROPC (grant_type=password) rejected with HTTP 400 (AC1)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220b] ROPC (grant_type=password) is rejected with HTTP 400" {
-  skip "RED PHASE — activate when Task 2.4 (directAccessGrantsEnabled: false on test-oidc-client) is implemented"
   run curl --max-time 15 \
     -X POST "${TOKEN_ENDPOINT}" \
     -d "grant_type=password" \
@@ -236,7 +237,6 @@ teardown() {
 # TS-220b2 [P0] — ROPC rejection body contains error=unauthorized_client (AC1)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220b2] ROPC rejection body contains error=unauthorized_client" {
-  skip "RED PHASE — activate when Task 2.4 (directAccessGrantsEnabled: false on test-oidc-client) is implemented"
   local body
   body=$(curl -s --max-time 15 \
     -X POST "${TOKEN_ENDPOINT}" \
@@ -256,7 +256,6 @@ teardown() {
 # TS-220c [P0] — Auth request without code_challenge rejected (AC1 / PKCE)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220c] Auth request without code_challenge is rejected (error=invalid_request)" {
-  skip "RED PHASE — activate when Task 2.6 (pkce.code.challenge.method: S256 on test-oidc-client) is implemented"
   # Include a valid redirect_uri so Keycloak rejects for missing PKCE, not bad redirect
   local response_headers
   response_headers=$(curl --max-time 15 \
@@ -275,7 +274,6 @@ teardown() {
 # TS-220d [P1] — Redirect URI with extra path rejected (AC3)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220d] Auth request with extra-path redirect URI is rejected with HTTP 400" {
-  skip "RED PHASE — activate when Task 2.7 (redirectUris exact-match: http://localhost:8888/callback) is implemented"
   local pkce_out verifier challenge
   pkce_out=$(pkce_generate)
   verifier=$(echo "${pkce_out}" | head -1)
@@ -295,7 +293,6 @@ teardown() {
 # TS-220e [P1] — Wrong-host redirect URI rejected (AC3)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220e] Auth request with wrong-host redirect URI is rejected with HTTP 400" {
-  skip "RED PHASE — activate when Task 2.7 (redirectUris exact-match: http://localhost:8888/callback) is implemented"
   local pkce_out verifier challenge
   pkce_out=$(pkce_generate)
   verifier=$(echo "${pkce_out}" | head -1)
@@ -313,7 +310,6 @@ teardown() {
 # TS-220f [P0] — Auth code replay: second exchange returns 400 invalid_grant (AC4)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220f] Auth code replay: second use of same code returns 400 invalid_grant" {
-  skip "RED PHASE — activate when Tasks 1+2 (realm config + test-oidc-client registered + PKCE S256) are fully implemented"
   # Generate PKCE pair
   local pkce_out verifier challenge
   pkce_out=$(pkce_generate)
@@ -363,7 +359,6 @@ teardown() {
 # TS-220g [P0] — Wrong code_verifier rejected with 400 invalid_grant (AC4)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220g] Wrong code_verifier is rejected with 400 invalid_grant" {
-  skip "RED PHASE — activate when Tasks 1+2 (realm config + test-oidc-client registered + PKCE S256) are fully implemented"
   # Generate PKCE pair for login
   local pkce_out verifier challenge
   pkce_out=$(pkce_generate)

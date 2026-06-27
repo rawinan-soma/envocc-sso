@@ -47,7 +47,6 @@ run_lint() {
 # TS-220h [P0] — lint detects absent accessCodeLifespan (AC4)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220h] lint-realm-export.py exits 1 when accessCodeLifespan is absent" {
-  skip "RED PHASE — activate when Task 3.1 (accessCodeLifespan presence + value check) is implemented"
   local tmpfile
   tmpfile=$(write_realm_json \
     '{"realm":"envocc","enabled":true,"bruteForceProtected":true,"accessTokenLifespan":900}')
@@ -61,7 +60,6 @@ run_lint() {
 # TS-220n [P1] — lint detects accessCodeLifespan value > 60 (AC4)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220n] lint-realm-export.py exits 1 when accessCodeLifespan is 120 (> 60)" {
-  skip "RED PHASE — activate when Task 3.1 (accessCodeLifespan value ≤ 60 assertion) is implemented"
   local tmpfile
   tmpfile=$(write_realm_json \
     '{"realm":"envocc","enabled":true,"bruteForceProtected":true,"accessTokenLifespan":900,"accessCodeLifespan":120}')
@@ -75,7 +73,6 @@ run_lint() {
 # TS-220i [P0] — lint detects implicitFlowEnabled: true on client (AC1)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220i] lint-realm-export.py exits 1 when a client has implicitFlowEnabled: true" {
-  skip "RED PHASE — activate when Task 3.2 (per-client implicitFlowEnabled check) is implemented"
   local tmpfile
   tmpfile=$(write_realm_json '{
     "realm":"envocc","enabled":true,"bruteForceProtected":true,
@@ -98,7 +95,6 @@ run_lint() {
 # TS-220j [P0] — lint detects directAccessGrantsEnabled: true on client (AC1)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220j] lint-realm-export.py exits 1 when a client has directAccessGrantsEnabled: true" {
-  skip "RED PHASE — activate when Task 3.3 (per-client directAccessGrantsEnabled check) is implemented"
   local tmpfile
   tmpfile=$(write_realm_json '{
     "realm":"envocc","enabled":true,"bruteForceProtected":true,
@@ -121,7 +117,6 @@ run_lint() {
 # TS-220k [P0] — lint detects missing PKCE S256 on public client (AC1/AC4)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220k] lint-realm-export.py exits 1 when a public client has no pkce.code.challenge.method: S256" {
-  skip "RED PHASE — activate when Task 3.4 (per-public-client PKCE S256 check) is implemented"
   local tmpfile
   tmpfile=$(write_realm_json '{
     "realm":"envocc","enabled":true,"bruteForceProtected":true,
@@ -144,7 +139,6 @@ run_lint() {
 # TS-220k2 [P0] — lint detects absent attributes key on public client (AC1/AC4)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-220k2] lint-realm-export.py exits 1 when a public client has no attributes key at all" {
-  skip "RED PHASE — activate when Task 3.4 (per-public-client PKCE S256 check) is implemented"
   local tmpfile
   tmpfile=$(write_realm_json '{
     "realm":"envocc","enabled":true,"bruteForceProtected":true,
@@ -166,7 +160,6 @@ run_lint() {
 # TS-220l [P1] — lint passes on fully compliant Story 2.2 configuration (AC1, AC4)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220l] lint-realm-export.py exits 0 for valid Story 2.2 realm configuration" {
-  skip "RED PHASE — activate when Tasks 3.1–3.5 (all lint extension checks) are implemented"
   local tmpfile
   tmpfile=$(write_realm_json '{
     "realm":"envocc","enabled":true,"bruteForceProtected":true,
@@ -198,7 +191,6 @@ run_lint() {
 # TS-220m [P1] — lint handles absent clients key gracefully (AC1)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220m] lint-realm-export.py exits 0 when clients key is absent (no clients to check)" {
-  skip "RED PHASE — activate when Task 3 (lint extension) is implemented"
   local tmpfile
   tmpfile=$(write_realm_json \
     '{"realm":"envocc","enabled":true,"bruteForceProtected":true,"accessTokenLifespan":900,"accessCodeLifespan":60}')
@@ -211,7 +203,6 @@ run_lint() {
 # TS-220m2 [P1] — lint handles empty clients array gracefully (AC1)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220m2] lint-realm-export.py exits 0 when clients array is empty" {
-  skip "RED PHASE — activate when Task 3 (lint extension) is implemented"
   local tmpfile
   tmpfile=$(write_realm_json \
     '{"realm":"envocc","enabled":true,"bruteForceProtected":true,"accessTokenLifespan":900,"accessCodeLifespan":60,"clients":[]}')
@@ -224,7 +215,6 @@ run_lint() {
 # TS-220p [P1] — lint reports clientId in per-client violation message (Task 3.5)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220p] lint-realm-export.py includes clientId in per-client violation output" {
-  skip "RED PHASE — activate when Task 3.5 (per-client clientId in error output) is implemented"
   local tmpfile
   tmpfile=$(write_realm_json '{
     "realm":"envocc","enabled":true,"bruteForceProtected":true,
@@ -247,7 +237,6 @@ run_lint() {
 # Smoke test: the updated lint script must pass against the updated file.
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220q] lint-realm-export.py exits 0 against the real keycloak/realm-export.json after Story 2.2 changes" {
-  skip "RED PHASE — activate after Task 2 (realm-export.json updated) and Task 3 (lint extended) are both complete"
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py"
   assert_success
 }

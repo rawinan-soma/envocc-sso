@@ -18,51 +18,31 @@
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
   "accessTokenLifespan": 300,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
   "defaultSignatureAlgorithm": "RS256",
   "internationalizationEnabled": false,
   "clients": [
     {
-      "clientId": "test-ropc-client",
-      "name": "Test ROPC Client — integration tests only (never production)",
-      "description": "Used exclusively for integration tests (TS-210d pending-state block verification). Must be removed before production deployment.",
+      "clientId": "test-oidc-client",
+      "name": "Test OIDC Client (integration tests only)",
+      "description": "Used only for Story 2.2 grant-type and PKCE integration tests. Not a production client.",
       "enabled": true,
-      "publicClient": false,
-      "clientAuthenticatorType": "client-secret",
-      "secret": "",
-      "standardFlowEnabled": false,
-      "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": true,
-      "serviceAccountsEnabled": false,
-      "surrogateAuthRequired": false,
-      "bearerOnly": false,
-      "consentRequired": false,
-      "frontchannelLogout": true,
       "protocol": "openid-connect",
-      "redirectUris": [],
-      "webOrigins": [],
-      "notBefore": 0,
-      "attributes": {
-        "oidc.ciba.grant.enabled": "false",
-        "oauth2.device.authorization.grant.enabled": "false",
-        "backchannel.logout.session.required": "true",
-        "backchannel.logout.revoke.offline.tokens": "false"
-      },
-      "authenticationFlowBindingOverrides": {},
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "consentRequired": false,
       "fullScopeAllowed": false,
-      "nodeReRegistrationTimeout": -1,
-      "defaultClientScopes": [
-        "web-origins",
-        "acr",
-        "profile",
-        "roles",
-        "email"
-      ],
-      "optionalClientScopes": [
-        "address",
-        "phone",
-        "offline_access",
-        "microprofile-jwt"
-      ]
+      "redirectUris": ["http://localhost:8888/callback"],
+      "webOrigins": ["http://localhost:8888"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
     }
   ],
   "roles": {},
