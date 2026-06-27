@@ -299,7 +299,43 @@ def main():
             for msg in lint_clients(clients):
                 errors.append(msg)
 
-    # ── Step 8: Report and exit ────────────────────────────────────────────────
+    # ── Step 8 (Story 2.3): Assert RSA key provider component present (AC9) ────
+    components = data.get("components")
+    if not isinstance(components, dict):
+        errors.append(
+            "Missing 'components' key in realm-export.json. "
+            "An RSA key provider component is required for config-as-code compliance (AC7, AC9). "
+            "Add a 'components' section with an 'org.keycloak.keys.KeyProvider' entry."
+        )
+    else:
+        key_providers = components.get("org.keycloak.keys.KeyProvider")
+        if not isinstance(key_providers, list) or len(key_providers) == 0:
+            errors.append(
+                "No 'org.keycloak.keys.KeyProvider' entries found under 'components' in realm-export.json. "
+                "At least one RSA key provider is required for deterministic token signing (AC7, AC9). "
+                "Add an 'rsa-generated' provider with keySize=2048, active=true, enabled=true."
+            )
+        else:
+            # Defense-in-depth: assert no clientSecret values inside components entries.
+            # privateKey/certificate are generated at runtime and are NOT stored in
+            # realm-export.json config-as-code; only clientSecret is checked here.
+            for idx, entry in enumerate(key_providers):
+                entry_path = f"$.components.org.keycloak.keys.KeyProvider[{idx}]"
+                config = entry.get("config", {})
+                if isinstance(config, dict):
+                    for cfg_key, cfg_val in config.items():
+                        if cfg_key == "clientSecret":
+                            for sval in _string_values(cfg_val):
+                                if len(sval) >= KEY_MATERIAL_THRESHOLDS["clientSecret"]:
+                                    errors.append(
+                                        f"Key material (clientSecret) detected inside components entry at "
+                                        f"{entry_path}.config.{cfg_key}: "
+                                        f"length {len(sval)} meets or exceeds threshold "
+                                        f"({KEY_MATERIAL_THRESHOLDS['clientSecret']} chars). "
+                                        "Client secrets must not be stored in realm-export.json."
+                                    )
+
+    # ── Step 9: Report and exit ────────────────────────────────────────────────
     if errors:
         print("realm-export.json FAILED lint:", file=sys.stderr)
         for err in errors:

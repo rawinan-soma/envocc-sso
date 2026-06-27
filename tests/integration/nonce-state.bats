@@ -121,7 +121,6 @@ setup() {
 #   `openid-client`) is validated in Story 4.2.
 # ---------------------------------------------------------------------------
 @test "[P1][TS-233a] ID token contains nonce claim matching the value sent in the auth request" {
-  skip "RED PHASE — Task 5.8: add email-claims client scope + RSA key provider; verify nonce claim present in ID token"
 
   # Generate a unique nonce for this test run — must survive in the token
   local sent_nonce="ts-233a-$(date +%s%N)"
@@ -206,7 +205,6 @@ PYEOF
 #   simple nonce store, replaying the same token is detected.
 # ---------------------------------------------------------------------------
 @test "[P1][TS-233b] Replaying an ID token with the same nonce is detected by client-side nonce validation" {
-  skip "RED PHASE — Task 5.8: verify nonce claim present; simulate replay detection pattern"
 
   local sent_nonce="ts-233b-$(date +%s%N)"
 

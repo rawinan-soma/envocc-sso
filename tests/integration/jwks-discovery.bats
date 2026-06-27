@@ -65,7 +65,6 @@ setup() {
 # signing key when Keycloak rotates keys.
 # ---------------------------------------------------------------------------
 @test "[P0][TS-232a] JWKS endpoint returns HTTP 200 with JSON containing at least one key with kid" {
-  skip "RED PHASE — Task 5.4: add RSA key provider component to realm-export.json; verify JWKS published"
 
   local jwks_url="${KC_DIRECT_URL}/realms/envocc/protocol/openid-connect/certs"
 
@@ -122,7 +121,6 @@ PYEOF
 # These are required by the OIDC specification for ID token verification.
 # ---------------------------------------------------------------------------
 @test "[P0][TS-232b] JWKS endpoint contains at least one key with kty=RSA and use=sig" {
-  skip "RED PHASE — Task 5.4: add RSA key provider; confirm JWKS key has kty=RSA and use=sig"
 
   local jwks_url="${KC_DIRECT_URL}/realms/envocc/protocol/openid-connect/certs"
 
@@ -200,7 +198,6 @@ PYEOF
 #   subject_types_supported, id_token_signing_alg_values_supported
 # ---------------------------------------------------------------------------
 @test "[P1][TS-234a] OIDC discovery document contains all required provider metadata fields" {
-  skip "RED PHASE — Task 5.5: verify discovery document served with required fields after RSA key provider added"
 
   local discovery_url="${KC_DIRECT_URL}/realms/envocc/.well-known/openid-configuration"
 
@@ -285,7 +282,6 @@ PYEOF
 # default, but the test confirms this remains true after any realm reconfiguration.
 # ---------------------------------------------------------------------------
 @test "[P0][TS-236a] alg:none JWT presented to userinfo endpoint is rejected with HTTP 401" {
-  skip "RED PHASE — Task 5.7: confirm alg:none rejection at userinfo endpoint (Keycloak default behavior)"
 
   # Build forged JWT: header {"alg":"none","typ":"JWT"}
   local forged_header
@@ -342,7 +338,6 @@ print(encoded, end='')
 # Uses NGINX_BASE_URL (https://localhost) because it tests the full edge path.
 # ---------------------------------------------------------------------------
 @test "[P1][TS-238a] JWKS endpoint Cache-Control header is present and non-empty through Nginx edge" {
-  skip "RED PHASE — Task 5.6: verify Cache-Control preserved through Nginx edge (regression guard from Story 1.3)"
 
   local jwks_url="${NGINX_BASE_URL}/realms/envocc/protocol/openid-connect/certs"
 
@@ -373,7 +368,6 @@ print(encoded, end='')
 # to cache the discovery document per Keycloak's directives.
 # ---------------------------------------------------------------------------
 @test "[P1][TS-238b] Discovery endpoint Cache-Control header is present and non-empty through Nginx edge" {
-  skip "RED PHASE — Task 5.6: verify Cache-Control preserved on discovery endpoint through Nginx edge (regression guard)"
 
   local discovery_url="${NGINX_BASE_URL}/realms/envocc/.well-known/openid-configuration"
 

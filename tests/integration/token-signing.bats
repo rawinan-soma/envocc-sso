@@ -117,7 +117,6 @@ setup() {
 # against alg:none / symmetric algorithms (NFR3, NFR8).
 # ---------------------------------------------------------------------------
 @test "[P0][TS-231a] ID token header alg field is RS256" {
-  skip "RED PHASE — Task 5.1: add RSA key provider to realm-export.json and verify token signing"
 
   local nonce="ts-231a-$(date +%s)"
   local id_token_file
@@ -171,7 +170,6 @@ PYEOF
 #   nonce — replay-protection value matching the auth request nonce (FR5)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-231b] ID token payload contains all required claims: sub email iss aud exp iat nonce" {
-  skip "RED PHASE — Task 5.2: add email-claims client scope and RSA key provider; verify all claims present"
 
   local nonce="ts-231b-$(date +%s)"
   local id_token_file
@@ -242,7 +240,6 @@ PYEOF
 # ceiling as a regression guard so the setting cannot be silently relaxed.
 # ---------------------------------------------------------------------------
 @test "[P0][TS-231c] ID token lifetime exp minus iat does not exceed 900 seconds" {
-  skip "RED PHASE — Task 5.3: verify accessTokenLifespan ≤ 900 in realm config"
 
   local nonce="ts-231c-$(date +%s)"
   local id_token_file
@@ -297,7 +294,6 @@ PYEOF
 # (e.g., a realm configuration change that might inadvertently allow it).
 # ---------------------------------------------------------------------------
 @test "[P0][TS-231d] Keycloak rejects alg:none JWT at userinfo endpoint with HTTP 401" {
-  skip "RED PHASE — Task 5.1/5.7: confirm alg:none rejection is enforced by Keycloak"
 
   # Build forged JWT: header {"alg":"none","typ":"JWT"}
   local forged_header
