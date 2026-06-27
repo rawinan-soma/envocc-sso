@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-25
-last_updated: 2026-06-27T18:00:00Z  # batch-1 PRs #48-#52 merged → stories 2-1..2-5 done
+last_updated: 2026-06-27T18:30:00Z  # batch-1 PRs #48-#52 merged → stories 2-1..2-5 done; PR# corrected for 2-2 (#51) and 2-4 (#49)
 project: envocc-sso
 project_key: NOKEY
 tracking_system: file-system
@@ -54,9 +54,9 @@ development_status:
   # ── Epic 2: Staff Authentication & SSO Identity ──
   epic-2: in-progress
   2-1-canonical-identity-model-lifecycle-states: done  # PR #48 merged 2026-06-27
-  2-2-oidc-authorization-code-pkce-login-hosted-credentials: done  # PR #49 merged 2026-06-27
+  2-2-oidc-authorization-code-pkce-login-hosted-credentials: done  # PR #51 merged 2026-06-27
   2-3-signed-tokens-jwks-oidc-discovery: done  # PR #50 merged 2026-06-27
-  2-4-sso-session-lifetimes-rp-initiated-logout: done  # PR #51 merged 2026-06-27
+  2-4-sso-session-lifetimes-rp-initiated-logout: done  # PR #49 merged 2026-06-27
   2-5-branded-deep-sea-login-theme-top-level-anti-phishing: done  # PR #52 merged 2026-06-27 (4 patches applied, 2 deferred)
   2-6-totp-mfa-enforcement-verification-hardening: backlog
   2-7-brute-force-protection-enumeration-resistant-responses: backlog

@@ -1,5 +1,5 @@
 # Story Dependency Graph
-_Last updated: 2026-06-27T08:30:00Z_
+_Last updated: 2026-06-27T18:30:00Z_
 
 ## Stories
 
@@ -10,15 +10,15 @@ _Last updated: 2026-06-27T08:30:00Z_
 | 1.3 | 1 | Nginx security edge | done | #4 | #46 | merged | 1.1 | ✅ Yes (done) |
 | 1.4 | 1 | Shared Deep Sea design-token stylesheet | done | #5 | #44 | merged | none | ✅ Yes (done) |
 | 1.5 | 1 | Agentic-build / CI security gate | done | #6 | #47 | merged | 1.2, 1.3, 1.4 | ✅ Yes (done) |
-| 2.1 | 2 | Canonical identity model & lifecycle states | atdd-done | #7 | — | — | epic 1 complete | ✅ Yes |
-| 2.2 | 2 | OIDC Authorization Code + PKCE login | ready-for-dev | #8 | — | — | epic 1 complete | ✅ Yes |
-| 2.3 | 2 | Signed tokens, JWKS & OIDC discovery | ready-for-dev | #9 | — | — | epic 1 complete | ✅ Yes |
-| 2.4 | 2 | SSO session, lifetimes & RP-initiated logout | atdd-done | #10 | — | — | epic 1 complete | ✅ Yes |
-| 2.5 | 2 | Branded Deep Sea login theme | ready-for-dev | #11 | — | — | epic 1 complete, 1.4 | ✅ Yes |
-| 2.6 | 2 | TOTP MFA enforcement & verification hardening | backlog | #12 | — | — | epic 1 complete, 2.2 | ❌ No (2.2 not merged) |
-| 2.7 | 2 | Brute-force protection & enumeration-resistant responses | backlog | #13 | — | — | epic 1 complete, 2.2 | ❌ No (2.2 not merged) |
-| 2.8 | 2 | Disable blocks authentication & revokes sessions | backlog | #14 | — | — | epic 1 complete, 2.2 | ❌ No (2.2 not merged) |
-| 2.9 | 2 | Login with ThaiD (brokered federation & account linking) | backlog | #15 | — | — | epic 1 complete, 2.2, 2.1 | ❌ No (2.1, 2.2 not merged) |
+| 2.1 | 2 | Canonical identity model & lifecycle states | done | #7 | #48 | merged | epic 1 complete | ✅ Yes (done) |
+| 2.2 | 2 | OIDC Authorization Code + PKCE login | done | #8 | #51 | merged | epic 1 complete | ✅ Yes (done) |
+| 2.3 | 2 | Signed tokens, JWKS & OIDC discovery | done | #9 | #50 | merged | epic 1 complete | ✅ Yes (done) |
+| 2.4 | 2 | SSO session, lifetimes & RP-initiated logout | done | #10 | #49 | merged | epic 1 complete | ✅ Yes (done) |
+| 2.5 | 2 | Branded Deep Sea login theme | done | #11 | #52 | merged | epic 1 complete, 1.4 | ✅ Yes (done) |
+| 2.6 | 2 | TOTP MFA enforcement & verification hardening | backlog | #12 | — | — | epic 1 complete, 2.2 | ✅ Yes |
+| 2.7 | 2 | Brute-force protection & enumeration-resistant responses | backlog | #13 | — | — | epic 1 complete, 2.2 | ✅ Yes |
+| 2.8 | 2 | Disable blocks authentication & revokes sessions | backlog | #14 | — | — | epic 1 complete, 2.2 | ✅ Yes |
+| 2.9 | 2 | Login with ThaiD (brokered federation & account linking) | backlog | #15 | — | — | epic 1 complete, 2.2, 2.1 | ✅ Yes |
 | 3.1 | 3 | Password policy & breach screening | backlog | #16 | — | — | epic 1+2 complete | ❌ No (epic 2 not complete) |
 | 3.2 | 3 | Email delivery & link-token hygiene | backlog | #17 | — | — | epic 1+2 complete | ❌ No (epic 2 not complete) |
 | 3.3 | 3 | First-login activation | backlog | #18 | — | — | epic 1+2 complete, 3.1, 3.2 | ❌ No (epics 1+2 not complete) |
@@ -91,7 +91,8 @@ _Last updated: 2026-06-27T08:30:00Z_
 - **Epic 1 fully complete and merged**: All 5 stories done, all PRs merged. PR #47 (story-1-5) merged 2026-06-26T23:55Z.
 - **Worktree cleanup**: story-1-2, story-1-3, and story-1-5 worktrees removed; remote branches deleted.
 - **Completed stories (merged PRs)**: 1.1 (PR #43), 1.2 (PR #45), 1.3 (PR #46), 1.4 (PR #44), 1.5 (PR #47) — all merged into main.
-- **Epic 2 unlocked**: Stories 2.1, 2.2, 2.3, 2.4, 2.5 are immediately ready (no intra-epic deps). Stories 2.6, 2.7, 2.8 unlock after 2.2 merges. Story 2.9 unlocks after 2.1 and 2.2 merge.
-- **Parallelization opportunity**: Stories 2.1, 2.2, 2.3, 2.4, and 2.5 can all be started in parallel — none depend on each other. 2.5 (Deep Sea theme) builds on 1.4 token work already merged.
-- **Current epic**: Epic 2 — Staff Authentication & SSO Identity.
+- **Epic 2 batch-1 merged 2026-06-27**: Stories 2.1 (PR #48), 2.2 (PR #51), 2.3 (PR #50), 2.4 (PR #49), 2.5 (PR #52) all merged. PR number correction: sprint-status.yaml had 2.2/2.4 swapped — corrected to #51 and #49 respectively (verified from GitHub).
+- **Epic 2 second batch now unlocked**: Stories 2.6, 2.7, 2.8 all depend only on epic 1 complete + 2.2 merged → now ready. Story 2.9 depends on 2.1 + 2.2 merged → now ready. All four (2.6, 2.7, 2.8, 2.9) are Ready to Work in parallel.
+- **Parallelization opportunity**: Stories 2.6, 2.7, 2.8, and 2.9 can all be started in parallel — 2.6/2.7/2.8 depend only on 2.2 (merged), 2.9 depends on 2.1+2.2 (both merged).
+- **Current epic**: Epic 2 — Staff Authentication & SSO Identity (second batch).
 - **All stories done**: false.
