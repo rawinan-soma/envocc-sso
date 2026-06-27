@@ -69,7 +69,6 @@ setup() {
 # Runs after EVERY test (pass or fail) to ensure cleanup even on assertion failure.
 # ---------------------------------------------------------------------------
 teardown() {
-  local token
   local ids=(
     "${_TS210A_USER_ID}"
     "${_TS210B_USER_ID}"
@@ -77,10 +76,12 @@ teardown() {
     "${_TS210D_USER_ID}"
     "${_TS210E_USER_ID}"
   )
-  local id
+  # Fetch admin token lazily on first non-empty ID and reuse for all subsequent
+  # deletes — avoids a redundant token round-trip per user in multi-user tests.
+  local token="" id
   for id in "${ids[@]}"; do
     if [[ -n "${id}" ]]; then
-      token=$(get_admin_token 2>/dev/null) || true
+      [[ -n "${token}" ]] || token=$(get_admin_token 2>/dev/null) || true
       if [[ -n "${token}" ]]; then
         curl -sf -X DELETE \
           -H "Authorization: Bearer ${token}" \
@@ -140,27 +141,27 @@ teardown() {
     "http://localhost:8080/admin/realms/envocc/users/${id1}" || fail "Could not DELETE test user TS-210a"
   _TS210A_USER_ID=""  # already deleted — skip teardown for this variable
 
-  # Re-create a new user with the same email (different username to avoid username collision)
-  local recreate_status
-  recreate_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+  # Re-create a new user with the same email (different username to avoid username collision).
+  # Capture the Keycloak-assigned UUID from the Location response header immediately —
+  # this guarantees a teardown cleanup handle even if a subsequent assertion fails.
+  local recreate_status recreate_loc_file
+  recreate_loc_file=$(mktemp)
+  recreate_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${recreate_loc_file}" --max-time 10 \
     -X POST \
     -H "Authorization: Bearer ${token}" \
     -H "Content-Type: application/json" \
     -d '{"username":"ts210a-v2@envocc.local","email":"ts210a@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"StableSubV2"}' \
     "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${recreate_status}" == "201" ]] || fail "Could not re-create user with same email TS-210a-v2 (got HTTP ${recreate_status})"
-
-  # GET the re-created user
-  local get3_response id3
-  get3_response=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/users?email=ts210a@envocc.local&exact=true") \
-    || fail "Could not GET re-created user TS-210a"
-  id3=$(echo "${get3_response}" | python3 -c "import json,sys; users=json.load(sys.stdin); print(users[0]['id'] if users else '')")
-  [[ -n "${id3}" ]] || fail "Re-created user TS-210a not found"
+  # Extract UUID from Location header (last path segment of the URL)
+  local new_location
+  new_location=$(grep -i '^Location:' "${recreate_loc_file}" | tr -d '\r' | sed 's/^[Ll]ocation: //')
+  local id3="${new_location##*/}"
+  rm -f "${recreate_loc_file}"
+  [[ "${recreate_status}" == "201" ]] && [[ -n "${id3}" ]] \
+    || fail "Could not re-create user with same email TS-210a-v2 (got HTTP ${recreate_status})"
   _TS210A_USER_ID="${id3}"  # register for teardown cleanup
 
-  # Assert: new user has a DIFFERENT UUID — UUIDs are not recycled after deletion
+  # Assert: new user has a DIFFERENT UUID — UUIDs are not recycled after deletion (FR21)
   if [[ "${id1}" == "${id3}" ]]; then
     fail "UUID was recycled after deletion — FR21 violated! Expected new UUID but got same: ${id3}"
   fi
@@ -253,31 +254,10 @@ teardown() {
     fail "Could not fetch user details (curl exited ${curl_exit})"
   fi
 
-  # Assert: no PDPA §26 sensitive fields in the attributes map
-  run python3 - "${user_tmpfile}" <<'PYEOF'
-import json, sys
-
-with open(sys.argv[1]) as f:
-    user = json.load(f)
-
-# PDPA §26 sensitive data categories forbidden from user attribute storage
-# (national ID / PID is stored ONLY in the ThaiD broker link — not here)
-sensitive_fields = [
-    'nationalId', 'pid', 'citizenId', 'dateOfBirth', 'gender',
-    'ethnicity', 'religion', 'healthInfo', 'biometric', 'criminalRecord',
-    'politicalOpinion', 'sexualOrientation', 'tradeUnion', 'geneticData',
-]
-
-attrs = user.get('attributes', {})
-found = [f for f in sensitive_fields if f in attrs]
-
-if found:
-    print(f'PDPA §26 violation: sensitive fields found in user attributes: {found}')
-    sys.exit(1)
-
-sys.exit(0)
-PYEOF
-
+  # Assert: no PDPA §26 sensitive fields in the attributes map.
+  # Uses shared helper from tests/helpers/common.bash — single source of truth
+  # for the forbidden field list (FR23/NFR12).
+  run check_no_pdpa_sensitive_attrs "${user_tmpfile}"
   # Assert first so test output shows failure context; then clean up temp file
   assert_success
   rm -f "${user_tmpfile}"
@@ -406,30 +386,9 @@ PYEOF
   # Assert: no PDPA §26 sensitive fields appear in the attributes map after clean creation.
   # This validates that the Declarative User Profile default configuration does not inject
   # unexpected sensitive attributes into a freshly created user.
-  run python3 - "${user_tmpfile}" <<'PYEOF'
-import json, sys
-
-with open(sys.argv[1]) as f:
-    user = json.load(f)
-
-# Full list of PDPA §26 sensitive field names to check
-# (national ID / PID for ThaiD is stored ONLY in broker link — not here)
-sensitive_fields = [
-    'nationalId', 'pid', 'citizenId', 'dateOfBirth', 'gender',
-    'ethnicity', 'religion', 'healthInfo', 'biometric', 'criminalRecord',
-    'politicalOpinion', 'sexualOrientation', 'tradeUnion', 'geneticData',
-]
-
-attrs = user.get('attributes', {})
-found = [f for f in sensitive_fields if f in attrs]
-
-if found:
-    print(f'PDPA §26 violation: sensitive fields found in freshly created user attributes: {found}')
-    sys.exit(1)
-
-sys.exit(0)
-PYEOF
-
+  # Uses shared helper from tests/helpers/common.bash — single source of truth
+  # for the forbidden field list (FR23/NFR12).
+  run check_no_pdpa_sensitive_attrs "${user_tmpfile}"
   assert_success
   rm -f "${user_tmpfile}"
 }
