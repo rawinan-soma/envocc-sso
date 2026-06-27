@@ -4,7 +4,7 @@ baseline_commit: 00a78a4208579c2f5f63dfb9a395165730d91c49
 
 # Story 2.5: Branded Deep Sea login theme (top-level, anti-phishing)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -391,3 +391,26 @@ claude-sonnet-4-6 (Claude Code)
 ## Change Log
 
 - 2026-06-27: Story 2.5 implementation complete. Created Keycloak login theme `envocc` with Deep Sea design tokens, anti-phishing banner, externalized strings, WCAG AA focus rings and labels, no-JS POST forms, Dockerfile COPY, and realm loginTheme wiring. All 111 static tests pass (82 Node.js + 29 BATS). Status → review.
+- 2026-06-27: Code review (3-layer adversarial). 4 patches applied, 2 deferred, 3 dismissed. All tests green (82 Node.js + 38 BATS). Status → done.
+
+### Review Findings
+
+Code review 2026-06-27 (Blind Hunter + Edge Case Hunter + Acceptance Auditor). 4 `patch`, 2 `defer`, 3 dismissed.
+
+Patches applied:
+
+- [x] [Review][Patch] Anti-phishing banner apostrophe consumed by Keycloak MessageFormat — rendered as "Well never ask…" [keycloak/themes/envocc/login/messages/messages_en.properties:9]. Doubled the apostrophe (`We''ll`) so MessageFormat renders a single `'`. Updated source-asserting tests (mjs `antiphishingBanner value matches…`, BATS TS-256a) to expect `We''ll`.
+- [x] [Review][Patch] `aria-describedby` wired backwards — error span pointed at the input instead of the input pointing at the error, so screen readers never announced the field error (AC5) [keycloak/themes/envocc/login/login.ftl:38-45; login-otp.ftl:46-53]. Moved `aria-describedby` onto the `<input>` (conditional on error) referencing the error span id; removed the inverted attribute from the span.
+- [x] [Review][Patch] Token focus ring suppressed on text inputs — `input[...]:focus { outline: none }` (specificity 0,2,1) overrode the global `:focus-visible` outline (0,1,0), so the keyboard focus ring used a box-shadow only and the `--color-focus-ring` token was dead on inputs (AC5) [keycloak/themes/envocc/login/resources/css/login.css:72-84]. Added a matching-specificity `input[...]:focus-visible` rule restoring the 3px token outline for keyboard focus.
+- [x] [Review][Patch] Hardcoded-literal AC4 test was effectively a no-op — the `ctx.includes('="')` clause let any hardcoded attribute value (e.g. `value="Sign in"`) pass [tests/theme/login-theme.test.mjs:524]. Dropped the `="` clause so only `${...}`/`msg(` expressions are accepted.
+
+Deferred (pre-existing / cross-cutting):
+
+- [x] [Review][Defer] AC2 literal "exactly one CSP header" — Keycloak's built-in default `contentSecurityPolicy` (`frame-ancestors 'self'; …`) is emitted and passes through because the realm sets no `browserSecurityHeaders` and nginx does not `proxy_hide_header Content-Security-Policy`. Result: two CSP headers on auth pages. Deferred, pre-existing — the duplication originates in epic-1 infra (realm defaults + nginx story 1.3), not this diff; the theme itself adds no conflicting CSP. Framing is still blocked by `X-Frame-Options: DENY` and CSP intersection. Recommended follow-up: add `proxy_hide_header Content-Security-Policy;` to the `/realms`, `/auth`, `/admin` nginx blocks (story-1.3 domain).
+- [x] [Review][Defer] Credential error not shown when `usernameHidden` (re-auth) — the inline error span lives only in the non-hidden username branch and the global message is suppressed via `displayMessage=!existsError(...)` [keycloak/themes/envocc/login/login.ftl:41-49]. Deferred, pre-existing — this mirrors upstream Keycloak base `login.ftl` and only affects the reauthentication path, which is not exercised by this story's email+password flow.
+
+Dismissed (noise / false positive):
+
+- `styles=css/login.css` "drops PatternFly" — false positive. Verified against KC 26.6.3 base: PatternFly loads via `stylesCommon` (inherited, not overridden); `styles` only replaces the base keycloak `login.css` tweak layer, which is intentional for a fully-branded theme. `template.ftl` emits both `stylesCommon` and `styles`.
+- "Add a drift guard between the repo-root and keycloak-copy `deep-sea.css`" — enhancement, not a defect; the two files are currently byte-identical (header comment aside).
+- "Add `var()` fallbacks in login.css" — defensive nicety; tokens load via `@import` and all referenced vars exist in the token file.

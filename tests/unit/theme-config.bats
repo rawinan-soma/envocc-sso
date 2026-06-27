@@ -244,7 +244,9 @@ print('OK: contentSecurityPolicy is absent or empty')
 @test "[P0][TS-256a] messages_en.properties defines antiphishingBanner key with correct copy" {
   assert [ -f "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties" ]
 
-  run grep -F "antiphishingBanner=We'll never ask for your verification code by phone, email, or chat." \
+  # Doubled apostrophe (We''ll) is required: Keycloak resolves the value via
+  # java.text.MessageFormat, which would otherwise consume a lone apostrophe.
+  run grep -F "antiphishingBanner=We''ll never ask for your verification code by phone, email, or chat." \
       "${PROJECT_ROOT}/keycloak/themes/envocc/login/messages/messages_en.properties"
   assert_success
 }

@@ -44,13 +44,13 @@
                                autofocus
                                inputmode="numeric"
                                aria-invalid="<#if messagesPerField.existsError('totp')>true</#if>"
+                               <#if messagesPerField.existsError('totp')>aria-describedby="input-error-otp-code"</#if>
                         />
 
                         <#if messagesPerField.existsError('totp')>
                             <span id="input-error-otp-code"
                                   class="${properties.kcInputErrorMessageClass!}"
-                                  aria-live="polite"
-                                  aria-describedby="totp">
+                                  aria-live="polite">
                                 ${kcSanitize(messagesPerField.getFirstError('totp'))?no_esc}
                             </span>
                         </#if>

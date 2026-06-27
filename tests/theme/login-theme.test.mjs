@@ -464,7 +464,10 @@ describe('AC4 — messages_en.properties has all required string keys', () => {
   }
 
   it('antiphishingBanner value matches the spec copy exactly', () => {
-    const expected = "We'll never ask for your verification code by phone, email, or chat.";
+    // Stored with a doubled apostrophe (We''ll) because Keycloak runs the value
+    // through java.text.MessageFormat, which treats a lone ' as a quote
+    // metacharacter. The doubled '' renders as a single apostrophe ("We'll").
+    const expected = "We''ll never ask for your verification code by phone, email, or chat.";
     assert.match(
       msgProps,
       new RegExp(`antiphishingBanner\\s*=\\s*${expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
@@ -521,7 +524,10 @@ describe('AC4 — login.ftl has no hardcoded English UI strings (uses ${msg(...)
       if (idx === -1) return; // not present — good
       // Check surrounding context for msg( or ${ prefix indicating a template expression.
       const ctx = stripped.slice(Math.max(0, idx - CONTEXT_LOOKBACK), idx + literal.length + CONTEXT_LOOKAHEAD);
-      const inMsg = ctx.includes('msg(') || ctx.includes('${') || ctx.includes('="');
+      // A legitimate occurrence can only be inside a ${msg(...)} expression.
+      // (The previous heuristic also accepted any `="`, which let a hardcoded
+      // attribute value such as value="Sign in" pass — a false negative.)
+      const inMsg = ctx.includes('msg(') || ctx.includes('${');
       assert.ok(inMsg,
         `Expected "${literal}" in login.ftl to come from \${msg(...)} — found possible hardcoded literal`);
     });

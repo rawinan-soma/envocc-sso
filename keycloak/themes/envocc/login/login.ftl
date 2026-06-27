@@ -36,13 +36,13 @@
                                    autofocus
                                    autocomplete="username"
                                    aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
+                                   <#if messagesPerField.existsError('username','password')>aria-describedby="input-error"</#if>
                             />
 
                             <#if messagesPerField.existsError('username','password')>
                                 <span id="input-error"
                                       class="${properties.kcInputErrorMessageClass!}"
-                                      aria-live="polite"
-                                      aria-describedby="username">
+                                      aria-live="polite">
                                     ${kcSanitize(messagesPerField.getFirstError('username','password'))?no_esc}
                                 </span>
                             </#if>
@@ -59,6 +59,7 @@
                                    type="password"
                                    autocomplete="current-password"
                                    aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
+                                   <#if messagesPerField.existsError('username','password')>aria-describedby="input-error"</#if>
                             />
                         </div>
                     </div>

@@ -83,6 +83,16 @@ input[type="email"]:focus {
   outline-offset: 2px;
 }
 
+/* Inputs need a focus-visible rule at matching specificity so the keyboard
+ * focus ring is not suppressed by the input[type=...]:focus { outline: none }
+ * rule above (which is intended only for pointer focus). */
+input[type="text"]:focus-visible,
+input[type="password"]:focus-visible,
+input[type="email"]:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 /* ── Primary button (Sign in / Verify) ───────────────────────────────── */
 .btn-primary,
 #kc-login {
