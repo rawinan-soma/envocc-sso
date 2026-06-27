@@ -122,8 +122,11 @@ checks = [
 
 for key, expected in checks:
     actual = d.get(key)
-    if actual != expected:
-        failures.append(f'{key}: expected={expected} actual={actual}')
+    # Use type-strict comparison: Python's False==0 and True==1 would silently
+    # pass a bool where an int is expected (or vice versa). type() comparison
+    # ensures e.g. refreshTokenMaxReuse=false and revokeRefreshToken=1 are caught.
+    if actual != expected or type(actual) is not type(expected):
+        failures.append(f'{key}: expected={expected!r} actual={actual!r}')
 
 if failures:
     print('Realm setting mismatches: ' + str(failures))
@@ -265,8 +268,10 @@ with open(sys.argv[1]) as f:
     d = json.load(f)
 
 val = d.get('refreshTokenMaxReuse')
-if val != 0:
-    print(f'refreshTokenMaxReuse: expected=0 actual={val!r}')
+# Type-strict: Python False==0, so a naive != 0 would accept refreshTokenMaxReuse=false.
+# Require integer type explicitly (mirrors the lint-realm-export.py guard).
+if not isinstance(val, int) or isinstance(val, bool) or val != 0:
+    print(f'refreshTokenMaxReuse: expected=0 (int) actual={val!r}')
     sys.exit(1)
 sys.exit(0)
 PYEOF
@@ -296,7 +301,9 @@ with open(sys.argv[1]) as f:
     d = json.load(f)
 
 val = d.get('accessTokenLifespan')
-if not isinstance(val, int) or val > MAX_ACCESS_TOKEN_LIFESPAN:
+# Type-strict: bool subclasses int in Python, so isinstance(True, int) is True.
+# Exclude bool explicitly to mirror the lint-realm-export.py guard (line ~148).
+if not isinstance(val, int) or isinstance(val, bool) or val > MAX_ACCESS_TOKEN_LIFESPAN:
     print(f'accessTokenLifespan: expected<={MAX_ACCESS_TOKEN_LIFESPAN}s actual={val!r}')
     sys.exit(1)
 sys.exit(0)
