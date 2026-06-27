@@ -122,15 +122,6 @@ sys.exit(1)
 }
 
 # ---------------------------------------------------------------------------
-# Suite-level setup
-# ---------------------------------------------------------------------------
-setup_suite() {
-  # Only touch .env when actually running integration tests.
-  [[ -z "${INTEGRATION}" ]] && return 0
-  env_setup
-}
-
-# ---------------------------------------------------------------------------
 # Per-test setup: guard non-integration runs; create a fresh test user
 # ---------------------------------------------------------------------------
 TEST_USER_ID=""
@@ -172,7 +163,7 @@ setup() {
 
   # Retrieve the user ID for teardown
   TEST_USER_ID=$(curl -sf --max-time 15 \
-    "${KC_BASE}/admin/realms/${REALM}/users?email=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${TEST_USER_EMAIL}'))")" \
+    "${KC_BASE}/admin/realms/${REALM}/users?email=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "${TEST_USER_EMAIL}")" \
     -H "Authorization: Bearer ${admin_token}" \
     | python3 -c "
 import json, sys

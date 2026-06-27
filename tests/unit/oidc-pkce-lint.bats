@@ -190,6 +190,30 @@ run_lint() {
 }
 
 # ---------------------------------------------------------------------------
+# TS-220v [P1] — lint detects standardFlowEnabled: false on public client (AC1)
+# Regression: PKCE check only enforced "bad flows off", not "required flow on".
+# ---------------------------------------------------------------------------
+@test "[P1][TS-220v] lint-realm-export.py exits 1 when a public client has standardFlowEnabled: false" {
+  local tmpfile
+  tmpfile=$(write_realm_json '{
+    "realm":"envocc","enabled":true,"bruteForceProtected":true,
+    "accessTokenLifespan":900,"accessCodeLifespan":60,
+    "clients":[{
+      "clientId":"no-std-flow-client",
+      "implicitFlowEnabled":false,
+      "directAccessGrantsEnabled":false,
+      "publicClient":true,
+      "standardFlowEnabled":false,
+      "attributes":{"pkce.code.challenge.method":"S256"}
+    }]
+  }')
+  run_lint "${tmpfile}"
+  rm -f "${tmpfile}"
+  assert_failure
+  assert_output --partial "standardFlowEnabled"
+}
+
+# ---------------------------------------------------------------------------
 # TS-220m [P1] — lint handles absent clients key gracefully (AC1)
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220m] lint-realm-export.py exits 0 when clients key is absent (no clients to check)" {
@@ -304,6 +328,6 @@ run_lint() {
 # ---------------------------------------------------------------------------
 @test "[P1][TS-220q] lint-realm-export.py exits 0 against the real keycloak/realm-export.json after Story 2.2 changes" {
   # Pass the path explicitly so this test is CWD-independent (works from any directory).
-  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${PROJECT_ROOT}/keycloak/realm-export.json"
+  run_lint "${PROJECT_ROOT}/keycloak/realm-export.json"
   assert_success
 }

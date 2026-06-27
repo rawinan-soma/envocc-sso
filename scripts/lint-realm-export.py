@@ -22,6 +22,8 @@ Checks performed:
   7. (Story 2.2) Per-client: directAccessGrantsEnabled is not true (Keycloak default
      is true — must be explicitly false).
   8. (Story 2.2) Per public client: attributes.pkce.code.challenge.method must be "S256".
+  9. (Story 2.2) Per public client: standardFlowEnabled must be true (Authorization Code
+     flow must be explicitly enabled — it is the only permitted flow for PKCE clients).
 
 Exit codes:
   0 — all checks passed
@@ -112,8 +114,8 @@ def find_key_material(obj, path="$"):
 def lint_clients(clients):
     """Check per-client Story 2.2 security constraints.
 
-    Returns a list of (client_id, message) error tuples.
-    Each error includes the clientId for debuggability (Task 3.5).
+    Returns a list of error message strings.
+    Each message embeds the clientId for debuggability (Task 3.5).
     """
     client_errors = []
 
@@ -138,11 +140,8 @@ def lint_clients(clients):
         implicit = client.get("implicitFlowEnabled", False)
         if implicit is not False:
             client_errors.append(
-                (
-                    client_id,
-                    f"[{client_id}] implicitFlowEnabled is {implicit!r} — "
-                    "Implicit grant must be disabled (set to false or omit).",
-                )
+                f"[{client_id}] implicitFlowEnabled is {implicit!r} — "
+                "Implicit grant must be disabled (set to false or omit)."
             )
 
         # ── Check 6: directAccessGrantsEnabled must not be true ─────────────
@@ -152,15 +151,12 @@ def lint_clients(clients):
         ropc = client.get("directAccessGrantsEnabled", "<absent>")
         if ropc is not False:
             client_errors.append(
-                (
-                    client_id,
-                    f"[{client_id}] directAccessGrantsEnabled is {ropc!r} — "
-                    "ROPC must be explicitly disabled (set to false). "
-                    "Keycloak default is true.",
-                )
+                f"[{client_id}] directAccessGrantsEnabled is {ropc!r} — "
+                "ROPC must be explicitly disabled (set to false). "
+                "Keycloak default is true."
             )
 
-        # ── Check 7: public clients must have PKCE S256 enforced ─────────────
+        # ── Check 7 + 8: public clients must have PKCE S256 and standard flow ─
         if client.get("publicClient") is True:
             attrs = client.get("attributes")
             pkce_method = None
@@ -168,13 +164,22 @@ def lint_clients(clients):
                 pkce_method = attrs.get("pkce.code.challenge.method")
             if pkce_method != "S256":
                 client_errors.append(
-                    (
-                        client_id,
-                        f"[{client_id}] publicClient is true but "
-                        "attributes.pkce.code.challenge.method is not 'S256' "
-                        f"(got: {pkce_method!r}). "
-                        "PKCE S256 must be enforced on all public clients.",
-                    )
+                    f"[{client_id}] publicClient is true but "
+                    "attributes.pkce.code.challenge.method is not 'S256' "
+                    f"(got: {pkce_method!r}). "
+                    "PKCE S256 must be enforced on all public clients."
+                )
+
+            # ── Check 8: standardFlowEnabled must be true on public PKCE clients ─
+            # Authorization Code flow is the only flow permitted for PKCE clients.
+            # Without standardFlowEnabled: true the client cannot initiate any
+            # auth request, making the PKCE constraint moot.
+            if client.get("standardFlowEnabled") is not True:
+                client_errors.append(
+                    f"[{client_id}] publicClient is true but "
+                    f"standardFlowEnabled is {client.get('standardFlowEnabled', '<absent>')!r} — "
+                    "Authorization Code flow must be explicitly enabled "
+                    "(set to true) on all public PKCE clients."
                 )
 
     return client_errors
@@ -291,7 +296,7 @@ def main():
                 "per-client security checks cannot be performed."
             )
         else:
-            for _client_id, msg in lint_clients(clients):
+            for msg in lint_clients(clients):
                 errors.append(msg)
 
     # ── Step 8: Report and exit ────────────────────────────────────────────────
