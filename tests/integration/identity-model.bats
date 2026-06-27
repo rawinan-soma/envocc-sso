@@ -152,14 +152,25 @@ teardown() {
     -H "Content-Type: application/json" \
     -d '{"username":"ts210a-v2@envocc.local","email":"ts210a@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"StableSubV2"}' \
     "http://localhost:8080/admin/realms/envocc/users")
-  # Extract UUID from Location header (last path segment of the URL)
-  local new_location
-  new_location=$(grep -i '^Location:' "${recreate_loc_file}" | tr -d '\r' | sed 's/^[Ll]ocation: //')
-  local id3="${new_location##*/}"
+  # Extract UUID from the Location header (last path segment of the URL).
+  # Strip the header name case-agnostically (everything up to and including the
+  # first colon + whitespace), so a differently-cased "Location" still parses.
+  local new_location id3
+  new_location=$(grep -i '^location:' "${recreate_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
   rm -f "${recreate_loc_file}"
+  id3="${new_location##*/}"
+  # Fallback: if the header was absent/unparseable, recover the UUID via GET-by-email
+  # so teardown always has a cleanup handle and the next run isn't poisoned by a leak.
+  if [[ "${recreate_status}" == "201" && -z "${id3}" ]]; then
+    local recovery
+    recovery=$(curl -sf --max-time 10 \
+      -H "Authorization: Bearer ${token}" \
+      "http://localhost:8080/admin/realms/envocc/users?email=ts210a@envocc.local&exact=true") || true
+    id3=$(echo "${recovery}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+  fi
+  _TS210A_USER_ID="${id3}"  # register for teardown cleanup BEFORE asserting
   [[ "${recreate_status}" == "201" ]] && [[ -n "${id3}" ]] \
     || fail "Could not re-create user with same email TS-210a-v2 (got HTTP ${recreate_status})"
-  _TS210A_USER_ID="${id3}"  # register for teardown cleanup
 
   # Assert: new user has a DIFFERENT UUID — UUIDs are not recycled after deletion (FR21)
   if [[ "${id1}" == "${id3}" ]]; then
@@ -317,6 +328,28 @@ teardown() {
   local ropc_secret
   ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
   [[ -n "${ropc_secret}" ]] || fail "KC_TEST_ROPC_CLIENT_SECRET not set in .env — add it per Task 1.6 (.env.example: KC_TEST_ROPC_CLIENT_SECRET=change-me-test-secret)"
+
+  # The realm export ships test-ropc-client with a zeroed secret (secret-hygiene),
+  # so the imported client's secret will NOT match the .env value. Set it at runtime
+  # via the Admin REST API so that client authentication succeeds — this guarantees the
+  # asserted HTTP 400 reflects the pending-state block (VERIFY_EMAIL), not a client-auth
+  # failure (HTTP 401 invalid_client), which would silently pass for the wrong reason.
+  local clients_json client_uuid client_rep update_status
+  clients_json=$(curl -sf --max-time 10 \
+    -H "Authorization: Bearer ${token}" \
+    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") \
+    || fail "Could not look up test-ropc-client — is the realm import current?"
+  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
+  [[ -n "${client_uuid}" ]] || fail "test-ropc-client not found in realm — re-import realm-export.json (Task 1.5)"
+  # Inject the secret into the full client representation and PUT it back (preserves all flags).
+  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
+  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+    -X PUT \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json" \
+    -d "${client_rep}" \
+    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
+  [[ "${update_status}" == "204" ]] || fail "Could not set test-ropc-client secret (got HTTP ${update_status})"
 
   # Attempt ROPC login with valid credentials.
   # Expected: HTTP 400 — Keycloak rejects because VERIFY_EMAIL required action is pending.

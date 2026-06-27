@@ -4,7 +4,7 @@ baseline_commit: dd474f3b8a9897d2593dc50981284211ba38f709
 
 # Story 2.1: Canonical identity model & lifecycle states
 
-Status: review
+Status: done
 
 ## Story
 
@@ -70,6 +70,16 @@ then it moves only through `pending` → `active` → `disabled` via controlled 
   - [x] 4.1: Run the full gate locally before committing: `gitleaks protect --staged --redact` + `python3 scripts/lint-realm-export.py` (via `lefthook run pre-commit` or individually).
   - [x] 4.2: Verify `bats tests/integration/identity-model.bats` passes with `INTEGRATION=1` and a live stack.
   - [x] 4.3: Confirm CI passes on the PR (the gate in `.github/workflows/ci.yml` includes secret-scan + realm-lint jobs).
+
+### Review Findings
+
+Code review 2026-06-27 (Blind Hunter + Edge Case Hunter + Acceptance Auditor). All three ACs verified satisfied. Patches below applied during review.
+
+- [x] [Review][Patch] TS-210d would assert 400 against an unauthenticated client (HTTP 401), not the pending-state block — imported `test-ropc-client` secret is zeroed with no path to the `.env` value [tests/integration/identity-model.bats:316] — fixed: test now sets the client secret via Admin REST (`PUT /clients/{id}`) at runtime so client-auth succeeds and the asserted 400 reflects VERIFY_EMAIL.
+- [x] [Review][Patch] TS-210a UUID-from-Location parsing is fragile and leaks a user (poisoning later runs) if the header is absent/unparseable [tests/integration/identity-model.bats:155] — fixed: case-agnostic header strip, GET-by-email fallback, and cleanup handle registered before the assert.
+- [x] [Review][Patch] Realm-lint value check is type-loose — `data[field] != False` accepts JSON integer `0` (Python `0 == False`) [scripts/lint-realm-export.py:151] — fixed: now requires exact `bool` type.
+- [x] [Review][Patch] Realm-lint omitted `loginWithEmailAllowed: true`, which underpins AC1's email reconciliation key [scripts/lint-realm-export.py:42] — fixed: added to value-level checks (confirmed present + true in export).
+- [x] [Review][Defer] `test-ropc-client` (ROPC) ships in the shared realm export with no enforced production removal [keycloak/realm-export.json] — deferred to production-hardening pass; recorded in deferred-work.md. Documented test-only with warnings; out of scope for the identity-model story.
 
 ## Dev Notes
 
