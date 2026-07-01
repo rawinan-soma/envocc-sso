@@ -81,6 +81,52 @@
   ],
   "roles": {},
   "groups": [],
+  "identityProviders": [
+    {
+      "alias": "thaid",
+      "displayName": "Login with ThaiD",
+      "providerId": "oidc",
+      "enabled": true,
+      "trustEmail": false,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "linkOnly": false,
+      "hideOnLogin": false,
+      "firstBrokerLoginFlowAlias": "thaid-first-broker-login",
+      "config": {
+        "clientId": "envocc-thaid-client",
+        "clientSecret": "",
+        "authorizationUrl": "http://localhost:18080/thaid/authorize",
+        "tokenUrl": "http://mock-oidc-provider:8080/thaid/token",
+        "userInfoUrl": "http://mock-oidc-provider:8080/thaid/userinfo",
+        "jwksUrl": "http://mock-oidc-provider:8080/thaid/jwks",
+        "issuer": "http://mock-oidc-provider:8080/thaid",
+        "useJwksUrl": "true",
+        "validateSignature": "true",
+        "clientAuthMethod": "client_secret_post",
+        "defaultScope": "openid",
+        "syncMode": "IMPORT"
+      }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "thaid-first-broker-login",
+      "description": "Deny-only first-broker-login for thaid. Runs only when no federated-identity link exists for the (thaid, PID) pair; never creates/links an account. See keycloak/IDENTITY-MODEL.md Section 3.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "deny-access-authenticator",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
   "components": {
     "org.keycloak.keys.KeyProvider": [
       {

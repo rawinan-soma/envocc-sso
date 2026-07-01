@@ -26,21 +26,16 @@
 #
 # NOTE: TS-290g (bonus, reverse direction — same PID linked to a second, different
 # account) is an OPTIONAL scenario per story Task 5.7 ("if time permits") and is
-# NOT implemented here — only the mandatory TS-290a-f/h set is in scope for this
-# red-phase scaffold.
+# NOT implemented here — only the mandatory TS-290a-f/h set is in scope.
 #
-# RED PHASE (expected failures at this story's baseline, before Tasks 0-2 land):
-#   - TS-290a fails: no `mock-oidc-provider` service exists in compose.yaml yet
-#     (Task 0) — the discovery curl cannot connect.
-#   - TS-290b/c/d/e/f/h all fail: `keycloak/realm-export.json` has no
-#     `identityProviders` entry yet (Task 1), so `kc_idp_hint=thaid` is rejected
-#     by Keycloak with an unknown-IDP error before any broker flow can begin.
-#   - Once Tasks 0-2 land, drive_thaid_broker_login()'s exact multi-hop shape
-#     (the mock IdP's login/consent form field names and redirect chain) MUST be
-#     re-verified empirically against the running `mock-oidc-provider` container
-#     (story Task 5.3) — this helper is a best-effort scaffold written from the
-#     `ghcr.io/navikt/mock-oauth2-server` documented behavior, not a confirmed
-#     hands-on trace, and may need field-name/hop adjustments during dev-story.
+# HANDS-ON VERIFICATION (story Task 5.3, dev-story implementation pass): the
+# drive_thaid_broker_login() helper's exact multi-hop shape, the `deny-access`
+# authenticator's real provider id, and the `thaid` identity provider's split
+# browser-facing/backend-facing URL scheme (see keycloak/REALM-EXPORT-NOTES.md,
+# Story 2.9 section) were all confirmed by importing this story's actual
+# realm-export.json into a live Keycloak 26.6.3 container alongside a real
+# ghcr.io/navikt/mock-oauth2-server 5.0.2 container and driving the full
+# TS-290a/b/d/e/f flows by hand — not written from documentation alone.
 #
 # IMPORTANT: All tests in this file require a live Keycloak + mock-oidc-provider
 # stack. They are skipped unless the INTEGRATION environment variable is set.
@@ -79,142 +74,156 @@ MOCK_IDP_BASE="http://localhost:18080"
 MOCK_IDP_DISCOVERY="${MOCK_IDP_BASE}/thaid/.well-known/openid-configuration"
 
 # ---------------------------------------------------------------------------
-# drive_thaid_broker_login <pid> [password_form_value]
+# drive_thaid_broker_login <pid>
 #
 # Drives the full brokered-login redirect chain: Keycloak auth endpoint (with
 # kc_idp_hint=thaid) -> mock IdP authorize/login -> mock IdP asserts `sub:
 # <pid>` -> Keycloak broker callback -> RP redirect_uri with ?code=...
 #
 # Exchanges the resulting code for a token set and prints two lines to stdout:
-#   1. the final HTTP status observed at the RP redirect hop ("200"-class
-#      proxy for "did the flow complete", or the error status/marker)
-#   2. the `sub` claim from the exchanged access_token's JWT payload (decoded,
+#   1. the final HTTP status observed ("200" if the flow completed and a
+#      token was issued, or the error status/marker otherwise)
+#   2. the `sub` claim from the exchanged ID token's JWT payload (decoded,
 #      NOT signature-verified — this test only needs the claim value), or
 #      empty if no token was obtained
 #
-# Returns non-zero if the flow could not even be attempted (e.g. no HTTP
-# response at all — connection refused because mock-oidc-provider isn't up).
+# Returns non-zero if the flow did not complete with a usable token.
 #
-# NOTE (see file header RED PHASE note): the mock IdP hop's exact form field
-# name / redirect shape is written from `ghcr.io/navikt/mock-oauth2-server`'s
-# documented behavior (a GET to the authorization endpoint returns an HTML
-# login page; POSTing a `username` — used verbatim as the issued `sub` claim
-# unless a `claims` override is configured — completes the flow). Re-verify
-# hands-on per story Task 5.3 once Task 0 lands; adjust field names/hops here
-# if the chosen image's actual behavior differs.
+# HANDS-ON VERIFIED (story Task 5.3) against a live Keycloak 26.6.3 import of
+# this story's own realm-export.json + a real ghcr.io/navikt/mock-oauth2-server
+# 5.0.2 container, replacing the original best-effort red-phase scaffold. Key
+# findings that shaped this helper (documented in keycloak/REALM-EXPORT-NOTES.md,
+# Story 2.9 section, in more detail):
+#   - The mock IdP's login page is a SINGLE hop, not three: `GET .../authorize`
+#     returns an HTML form with NO `action` attribute (a browser posts back to
+#     the *same* URL), and `POST username=<pid>` to that same URL returns the
+#     302 redirect straight to Keycloak's broker callback — there is no
+#     separate "mock IdP redirect" hop to follow before reaching Keycloak.
+#   - `test-oidc-client` is a public client with PKCE S256 enforced
+#     (realm-export.json `pkce.code.challenge.method: "S256"`) — the initial
+#     `/auth` request MUST include `code_challenge`/`code_challenge_method`,
+#     and the final token exchange MUST include the matching `code_verifier`,
+#     or Keycloak rejects the request before any broker redirect happens.
+#   - This realm's access_token does NOT carry a `sub` claim for this client
+#     (confirmed against a live token exchange) — only the ID token does, per
+#     the OIDC spec's ID Token requirement. Decode `id_token`, matching
+#     tests/helpers/common.bash's get_envocc_test_token() convention, which
+#     also reads id_token rather than access_token for the same reason.
 # ---------------------------------------------------------------------------
 drive_thaid_broker_login() {
   local pid="${1}"
-  local session_jar idp_jar state tmphtml idp_html
+  local session_jar hop1_html hop2_html hop3_html
+  local state verifier challenge
   state="state-thaid-$$-${RANDOM}"
   session_jar=$(mktemp "${TMPDIR:-/tmp}/kc-thaid-sess-XXXXXX")
-  tmphtml=$(mktemp "${TMPDIR:-/tmp}/kc-thaid-hop1-XXXXXX")
-  idp_html=$(mktemp "${TMPDIR:-/tmp}/kc-thaid-hop2-XXXXXX")
+  hop1_html=$(mktemp "${TMPDIR:-/tmp}/kc-thaid-hop1-XXXXXX")
+  hop2_html=$(mktemp "${TMPDIR:-/tmp}/kc-thaid-hop2-XXXXXX")
+  hop3_html=$(mktemp "${TMPDIR:-/tmp}/kc-thaid-hop3-XXXXXX")
+
+  # PKCE S256 verifier/challenge — required by test-oidc-client (see header note).
+  verifier="verifier-${RANDOM}-$$-$(date +%s)-thaidbrokertestpadding"
+  challenge=$(python3 -c "
+import hashlib, base64, sys
+v = sys.argv[1]
+h = hashlib.sha256(v.encode()).digest()
+print(base64.urlsafe_b64encode(h).decode().rstrip('='))
+" "${verifier}")
 
   # Hop 1: Keycloak auth endpoint with kc_idp_hint=thaid — jumps straight to
   # the named broker, skipping the local login form. Follow redirects with a
-  # cookie jar; capture the final page (should be the mock IdP's login/consent
-  # form) plus headers for diagnostics.
-  local hop1_headers
-  hop1_headers=$(curl -s --max-time 15 -L \
+  # cookie jar; %{url_effective} captures the FINAL URL reached (the mock
+  # IdP's login form). That form has no action attribute of its own, so the
+  # next hop posts back to this same URL, exactly as a browser would.
+  local hop1_url
+  hop1_url=$(curl -s --max-time 15 -L \
     -c "${session_jar}" -b "${session_jar}" \
-    -D - -o "${tmphtml}" \
-    "${AUTH_ENDPOINT}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=openid&state=${state}&kc_idp_hint=thaid") \
-    || { rm -f "${session_jar}" "${tmphtml}" "${idp_html}"; echo "connect_error"; echo ""; return 1; }
+    -o "${hop1_html}" \
+    -w '%{url_effective}' \
+    "${AUTH_ENDPOINT}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=openid&state=${state}&kc_idp_hint=thaid&code_challenge=${challenge}&code_challenge_method=S256") \
+    || { rm -f "${session_jar}" "${hop1_html}" "${hop2_html}" "${hop3_html}"; echo "connect_error"; echo ""; return 1; }
 
-  # If Keycloak itself rejected the hint (thaid IdP not configured — Task 1
-  # not yet landed), the final page will be a Keycloak error page with no form
-  # pointing at the mock IdP. Detect this explicitly so callers get a clear
-  # red-phase failure message rather than an opaque parse error downstream.
-  if ! grep -qi "mock-oidc-provider\|localhost:18080\|/thaid/" "${tmphtml}" 2>/dev/null; then
-    local last_status
-    last_status=$(echo "${hop1_headers}" | grep -i "^HTTP/" | tail -1 | awk '{print $2}' | tr -d '\r')
-    rm -f "${session_jar}" "${tmphtml}" "${idp_html}"
-    echo "${last_status:-no_thaid_redirect}"
+  # If Keycloak itself rejected the hint (thaid IdP not configured) or the
+  # mock IdP is unreachable (connection failure mid-redirect — TS-290h), the
+  # final URL will not be under the mock IdP's published host port.
+  if [[ "${hop1_url}" != http://localhost:18080/* ]]; then
+    rm -f "${session_jar}" "${hop1_html}" "${hop2_html}" "${hop3_html}"
+    echo "no_thaid_redirect"
     echo ""
     return 1
   fi
 
-  # Hop 2: the mock IdP's login/consent form. Extract its form action and
-  # submit the PID as the `username` field (mock-oauth2-server convention —
-  # see helper header note).
-  local idp_form_action
-  idp_form_action=$(python3 -c "
-import re, sys
-html = open('${tmphtml}').read()
-actions = [m.replace('&amp;', '&') for m in re.findall(r'action=\"([^\"]+)\"', html)]
-print(actions[0] if actions else '')
-")
-  if [[ -z "${idp_form_action}" ]]; then
-    rm -f "${session_jar}" "${tmphtml}" "${idp_html}"
-    echo "no_idp_form"
-    echo ""
-    return 1
-  fi
-
-  local hop2_headers
-  hop2_headers=$(curl -s --max-time 15 \
+  # Hop 2: POST the PID as `username` to the mock IdP's login form (its own
+  # current URL — see header note). Capture the Location header WITHOUT
+  # following it automatically: the target (Keycloak's broker callback)
+  # requires a GET, and re-issuing that GET explicitly keeps this helper's
+  # behavior deterministic regardless of how a given curl build handles
+  # POST-to-GET conversion on a 302.
+  local hop2_headers hop2_location
+  hop2_headers=$(curl -s --max-time 15 -D - -o "${hop2_html}" \
     -c "${session_jar}" -b "${session_jar}" \
-    -D - -o "${idp_html}" \
-    -X POST "${idp_form_action}" \
-    -d "username=${pid}" \
-    -d "subject=${pid}" \
-    -d "claims={\"sub\":\"${pid}\"}") || true
-
-  local idp_location
-  idp_location=$(echo "${hop2_headers}" | grep -i "^location:" | tail -1 | tr -d '\r' | sed -E 's/^[Ll]ocation:[[:space:]]*//')
-  if [[ -z "${idp_location}" ]]; then
-    rm -f "${session_jar}" "${tmphtml}" "${idp_html}"
+    -X POST "${hop1_url}" \
+    -d "username=${pid}") || true
+  hop2_location=$(echo "${hop2_headers}" | grep -i "^location:" | tail -1 | tr -d '\r' | sed -E 's/^[Ll]ocation:[[:space:]]*//')
+  if [[ -z "${hop2_location}" ]]; then
+    rm -f "${session_jar}" "${hop1_html}" "${hop2_html}" "${hop3_html}"
     echo "no_idp_redirect"
     echo ""
     return 1
   fi
 
-  # Hop 3: follow the mock IdP's redirect back through Keycloak's broker
-  # callback. Keycloak's core broker logic (not this file) decides whether a
-  # matching federated-identity link exists; if so it completes the flow with
-  # a redirect to the RP's redirect_uri carrying ?code=...; if not, it renders
-  # an error page (Task 2's deny-only flow, or a generic broker error).
-  local hop3_headers hop3_body
-  hop3_headers=$(curl -s --max-time 15 -L \
+  # Hop 3: GET Keycloak's broker callback. Keycloak's backend exchanges the
+  # code with the mock IdP's tokenUrl/jwksUrl server-to-server (container-
+  # network URLs, realm-export.json Task 1.2), then either:
+  #   - an existing federated-identity link was found -> redirects to the RP
+  #     redirect_uri with Keycloak's own ?code=... (this hop's Location header)
+  #   - no link found -> thaid-first-broker-login (deny-access) runs -> HTTP
+  #     401 themed error page, no Location header
+  #   - the linked account is disabled -> HTTP 400 themed error page, no
+  #     Location header
+  local hop3_headers hop3_status hop3_location
+  hop3_headers=$(curl -s --max-time 15 -D - -o "${hop3_html}" \
     -c "${session_jar}" -b "${session_jar}" \
-    -D - -o "${idp_html}" \
-    "${idp_location}") || true
-  hop3_body=$(cat "${idp_html}" 2>/dev/null || true)
+    "${hop2_location}") || true
+  hop3_status=$(echo "${hop3_headers}" | grep -i "^HTTP/" | tail -1 | awk '{print $2}' | tr -d '\r')
+  hop3_location=$(echo "${hop3_headers}" | grep -i "^location:" | tail -1 | tr -d '\r' | sed -E 's/^[Ll]ocation:[[:space:]]*//')
 
-  rm -f "${session_jar}" "${tmphtml}" "${idp_html}"
+  rm -f "${session_jar}" "${hop1_html}" "${hop2_html}" "${hop3_html}"
 
-  # Extract the RP redirect's `code` param from the LAST Location header in
-  # the redirect chain (curl -D - with -L prints headers for every hop).
-  local code final_status
-  code=$(echo "${hop3_headers}" | python3 -c "
-import sys, urllib.parse
-code = ''
-for line in sys.stdin:
-    if line.lower().startswith('location:'):
-        loc = line.split(':', 1)[1].strip()
-        params = urllib.parse.parse_qs(urllib.parse.urlparse(loc).query)
-        c = params.get('code', [''])[0]
-        if c:
-            code = c
-print(code)
-")
-  final_status=$(echo "${hop3_headers}" | grep -i "^HTTP/" | tail -1 | awk '{print $2}' | tr -d '\r')
-
-  if [[ -z "${code}" ]]; then
-    echo "${final_status:-no_code}"
+  if [[ -z "${hop3_location}" ]]; then
+    # No further redirect — broker flow was rejected (deny-access / disabled
+    # account / other error). Report Keycloak's own HTTP status so callers
+    # can assert on it (never "200" in this branch).
+    echo "${hop3_status:-no_redirect}"
     echo ""
     return 1
   fi
 
-  # Exchange the code for tokens (test-oidc-client is a public client — no secret).
-  local token_response token_status token_body access_token
+  # Extract the RP redirect's `code` param.
+  local code
+  code=$(python3 -c "
+import sys, urllib.parse
+loc = sys.argv[1]
+params = urllib.parse.parse_qs(urllib.parse.urlparse(loc).query)
+print(params.get('code', [''])[0])
+" "${hop3_location}")
+
+  if [[ -z "${code}" ]]; then
+    echo "${hop3_status:-no_code}"
+    echo ""
+    return 1
+  fi
+
+  # Exchange the code for tokens (test-oidc-client is a public PKCE client —
+  # no client_secret, but the code_verifier matching hop 1's code_challenge
+  # IS required).
+  local token_response token_status token_body id_token
   token_response=$(curl -s --max-time 15 -w $'\n%{http_code}' \
     -X POST "${TOKEN_ENDPOINT}" \
     -d "grant_type=authorization_code" \
     -d "code=${code}" \
     -d "client_id=${CLIENT_ID}" \
-    -d "redirect_uri=${REDIRECT_URI}")
+    -d "redirect_uri=${REDIRECT_URI}" \
+    -d "code_verifier=${verifier}")
   token_status=$(echo "${token_response}" | tail -n 1)
   token_body=$(echo "${token_response}" | sed '$d')
 
@@ -224,9 +233,9 @@ print(code)
     return 1
   fi
 
-  access_token=$(echo "${token_body}" | python3 -c "import json,sys; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
-  if [[ -z "${access_token}" ]]; then
-    echo "no_access_token"
+  id_token=$(echo "${token_body}" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id_token',''))" 2>/dev/null || echo "")
+  if [[ -z "${id_token}" ]]; then
+    echo "no_id_token"
     echo ""
     return 1
   fi
@@ -243,7 +252,7 @@ try:
     print(claims.get('sub', ''))
 except Exception:
     print('')
-" "${access_token}")
+" "${id_token}")
 
   echo "200"
   echo "${sub}"
@@ -463,7 +472,10 @@ print('OK')
   pid="pid-ts290d-unregistered-$$-${RANDOM}"
 
   local result
-  result=$(drive_thaid_broker_login "${pid}")
+  # drive_thaid_broker_login intentionally returns non-zero when the flow is
+  # rejected (the expected outcome here) — `|| true` prevents bats' implicit
+  # errexit from aborting the test before the assertions below run.
+  result=$(drive_thaid_broker_login "${pid}") || true
   status=$(echo "${result}" | sed -n '1p')
 
   [[ "${status}" != "200" ]] || fail "Expected the broker flow to be rejected for an unrecognized PID, but it completed with HTTP 200"
@@ -508,7 +520,10 @@ print('OK')
   [[ "${disable_status}" == "204" ]] || fail "Could not disable TS-290e user (got HTTP ${disable_status})"
 
   local result status
-  result=$(drive_thaid_broker_login "${pid}")
+  # See TS-290d's comment: drive_thaid_broker_login intentionally returns
+  # non-zero here (expected outcome) — `|| true` prevents bats' implicit
+  # errexit from aborting the test before the assertion below runs.
+  result=$(drive_thaid_broker_login "${pid}") || true
   status=$(echo "${result}" | sed -n '1p')
 
   [[ "${status}" != "200" ]] || fail "Expected the broker flow to be rejected for a disabled account, but it completed with HTTP 200"
@@ -590,7 +605,10 @@ print(','.join(sorted(l.get('userId', '') for l in links if l.get('identityProvi
   docker compose -f "${PROJECT_ROOT}/compose.yaml" stop mock-oidc-provider >/dev/null 2>&1 || true
 
   local result status
-  result=$(drive_thaid_broker_login "${pid}")
+  # See TS-290d's comment: drive_thaid_broker_login intentionally returns
+  # non-zero here (expected outcome) — `|| true` prevents bats' implicit
+  # errexit from aborting the test before the mock IdP is restarted below.
+  result=$(drive_thaid_broker_login "${pid}") || true
   status=$(echo "${result}" | sed -n '1p')
 
   # Always attempt to bring the mock IdP back up before asserting, so a failed
