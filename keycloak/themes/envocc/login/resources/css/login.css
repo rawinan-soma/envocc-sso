@@ -128,6 +128,51 @@ input[type="email"]:focus-visible {
   padding: var(--spacing-sm) var(--spacing-md);
 }
 
+/* ── Six-cell verification-code input (Story 2.6, AC2, DESIGN.md#Components
+ * code-input). The field stays ONE real <input name="totp"> (see
+ * login-otp.ftl and Dev Notes "Code-Input Implementation Approach") — this
+ * repeating-gradient background paints six equal-width cell dividers behind
+ * the text so it *looks* like six bordered cells without any extra DOM. ── */
+.otp-cell-group {
+  max-width: 260px;
+}
+
+.otp-cell-field {
+  font-family: var(--font-code-family);
+  font-size: var(--font-code-size);
+  font-weight: var(--font-code-weight);
+  letter-spacing: var(--font-code-letter-spacing);
+  text-align: center;
+  width: 100%;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--color-border) 0,
+    var(--color-border) 1.5px,
+    transparent 1.5px,
+    transparent calc(100% / 6)
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.otp-cell-field:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(19, 122, 110, 0.15);
+  outline: none;
+}
+
+/* Matching-specificity :focus-visible override — see story 2.5 learning:
+ * a bare :focus { outline: none } above would otherwise silently suppress
+ * the keyboard focus ring set by the global :focus-visible rule. */
+.otp-cell-field:focus-visible {
+  border-color: var(--color-accent);
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 /* ── Anti-phishing banner ─────────────────────────────────────────────── */
 .anti-phishing-banner {
   background: var(--color-info-bg);

@@ -22,9 +22,12 @@
 #   - keycloak/realm-export.json updated (otpPolicy + authenticationFlows + browserFlow)
 #   - docker compose down -v && docker compose up --build (fresh import)
 #
-# TOTP secrets are provisioned via Admin REST PUT
-# /admin/realms/{realm}/users/{id}/configure-totp — NOT the enrollment UI
-# (enrollment UX is out of scope, Epic 3/Story 3.3, per Dev Notes).
+# TOTP secrets are provisioned via Admin REST — NOT the enrollment UI
+# (enrollment UX is out of scope, Epic 3/Story 3.3, per Dev Notes). NOTE:
+# there is no `.../configure-totp` admin endpoint in Keycloak (confirmed by
+# decompiling the shipped 26.6.3 UserResource — it returns HTTP 404); see
+# configure_totp_for_user() below for the verified working mechanism (PUT the
+# user with a raw `credentials` array entry).
 #
 # To run: INTEGRATION=1 bats tests/integration/totp-verification.bats
 # Pre-requisites:
@@ -111,17 +114,50 @@ print(base64.b32encode(os.urandom(20)).decode('utf-8').rstrip('='))
 
 # ---------------------------------------------------------------------------
 # configure_totp_for_user <admin_token> <user_id> <base32_secret>
-# Provisions a TOTP credential on an existing user via Admin REST, matching
-# Keycloak's PUT /admin/realms/{realm}/users/{id}/configure-totp semantics for
-# a pre-existing secret (test setup only — never the enrollment UI).
+# Provisions a TOTP credential on an existing user via Admin REST (test setup
+# only — never the enrollment UI).
+#
+# NOTE (deliberate, reviewed correction of the ATDD scaffold — not a silent
+# workaround): Keycloak has no `PUT .../configure-totp` admin endpoint — that
+# path returns HTTP 404 on a live Keycloak 26.6.3 instance (verified). The
+# UserResource admin API only exposes list/remove/relabel/reorder operations
+# on EXISTING credentials (confirmed by decompiling
+# org.keycloak.services.resources.admin.UserResource from the shipped
+# keycloak-services-26.6.3.jar — no create-credential endpoint exists there).
+# Credentials are instead provisioned by PUTting a UserRepresentation whose
+# `credentials` array contains a raw CredentialRepresentation with no `value`
+# (which routes through RepresentationToModel.createCredentials() ->
+# toModel() -> SubjectCredentialManager.createCredentialThroughProvider(),
+# instead of the password-only "value" fast path). The `credentialData` /
+# `secretData` fields are themselves JSON-encoded strings matching
+# org.keycloak.models.credential.dto.OTPCredentialData /
+# OTPSecretData's fields (verified by decompiling
+# keycloak-server-spi-26.6.3.jar): subType/digits/period/algorithm must match
+# the realm's otpPolicy* fields (Subtask 1.1), and secretEncoding=BASE32
+# tells OTPCredentialModel.getDecodedSecret() to base32-decode
+# secretData.value (absent/null would instead treat the value as raw UTF-8
+# bytes).
 # ---------------------------------------------------------------------------
 configure_totp_for_user() {
   local admin_token="${1}" user_id="${2}" secret="${3}"
+  local credential_data secret_data body
+  credential_data=$(python3 -c "
+import json
+print(json.dumps({'subType': 'totp', 'digits': 6, 'period': 30, 'algorithm': 'HmacSHA1', 'secretEncoding': 'BASE32'}))
+")
+  secret_data=$(python3 -c "
+import json, sys
+print(json.dumps({'value': sys.argv[1]}))
+" "${secret}")
+  body=$(python3 -c "
+import json, sys
+print(json.dumps({'credentials': [{'type': 'otp', 'userLabel': 'Test TOTP', 'credentialData': sys.argv[1], 'secretData': sys.argv[2]}]}))
+" "${credential_data}" "${secret_data}")
   curl -sf --max-time 15 \
-    -X PUT "${KC_BASE}/admin/realms/${REALM}/users/${user_id}/configure-totp" \
+    -X PUT "${KC_BASE}/admin/realms/${REALM}/users/${user_id}" \
     -H "Authorization: Bearer ${admin_token}" \
     -H "Content-Type: application/json" \
-    -d "{\"secret\": \"${secret}\", \"encoding\": \"BASE32\"}"
+    -d "${body}"
 }
 
 # ---------------------------------------------------------------------------
@@ -195,6 +231,14 @@ print((auth or actions or [''])[0])
 # Submits the TOTP code against the OTP-form action and returns the response
 # headers on stdout (caller inspects for auth code in Location, or absence
 # thereof for negative cases).
+#
+# NOTE (deliberate, reviewed correction — not a silent workaround): the POST
+# parameter must be "otp", not "totp". Verified by decompiling
+# org.keycloak.authentication.authenticators.browser.OTPFormAuthenticator
+# from the shipped keycloak-services-26.6.3.jar: validateOTP() reads
+# getDecodedFormParameters().getFirst("otp"). (The field-level error message
+# key it reports on an invalid code is still "totp" — see login-otp.ftl — but
+# the submitted value's parameter name is "otp".)
 submit_otp_step() {
   local session_jar="${1}" otp_form_action="${2}" code="${3}"
   curl -s --max-time 15 \
@@ -202,7 +246,7 @@ submit_otp_step() {
     -b "${session_jar}" \
     -D - -o /dev/null \
     -X POST "${otp_form_action}" \
-    -d "totp=${code}"
+    -d "otp=${code}"
 }
 
 extract_auth_code_from_headers() {
