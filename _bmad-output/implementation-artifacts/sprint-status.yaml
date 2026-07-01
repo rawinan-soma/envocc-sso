@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-25
-last_updated: 2026-06-27T18:30:00Z  # batch-1 PRs #48-#52 merged → stories 2-1..2-5 done; PR# corrected for 2-2 (#51) and 2-4 (#49)
+last_updated: 2026-07-01T14:45:00Z  # story 2-6 red-phase ATDD scaffolds committed → atdd-done
 project: envocc-sso
 project_key: NOKEY
 tracking_system: file-system
@@ -58,9 +58,9 @@ development_status:
   2-3-signed-tokens-jwks-oidc-discovery: done  # PR #50 merged 2026-06-27
   2-4-sso-session-lifetimes-rp-initiated-logout: done  # PR #49 merged 2026-06-27
   2-5-branded-deep-sea-login-theme-top-level-anti-phishing: done  # PR #52 merged 2026-06-27 (4 patches applied, 2 deferred)
-  2-6-totp-mfa-enforcement-verification-hardening: backlog
-  2-7-brute-force-protection-enumeration-resistant-responses: backlog
-  2-8-disable-blocks-authentication-revokes-sessions: backlog
+  2-6-totp-mfa-enforcement-verification-hardening: atdd-done  # red-phase ATDD scaffolds committed 2026-07-01 (TS-260x/261x)
+  2-7-brute-force-protection-enumeration-resistant-responses: atdd-done  # red-phase ATDD scaffolds committed 2026-07-01 (TS-271x/272x/273x)
+  2-8-disable-blocks-authentication-revokes-sessions: ready-for-dev  # story file created 2026-07-01
   2-9-login-with-thaid-brokered-federation-account-linking: backlog
   epic-2-retrospective: optional
 
