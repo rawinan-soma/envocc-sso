@@ -1,10 +1,12 @@
 /**
  * otp-input.js — Story 2.6: six-cell TOTP verification-code progressive enhancement
  *
- * The underlying form field stays a single <input id="totp" name="totp"> (see
+ * The underlying form field stays a single <input id="totp" name="otp"> (see
  * login-otp.ftl and Dev Notes "Code-Input Implementation Approach" — Keycloak's
- * server-side OTPFormAuthenticator reads request.getFirstParam("totp"), so this
- * script must never rename, remove, or duplicate that field).
+ * server-side OTPFormAuthenticator reads getDecodedFormParameters().getFirst("otp"),
+ * not "totp" (verified by decompiling the shipped 26.6.3 server JAR — id=
+ * stays "totp" to match the existing <label for="totp">, only name= is "otp"),
+ * so this script must never rename, remove, or duplicate that field).
  *
  * Because the code is a SINGLE real <input> (visually presented as six cells via
  * CSS, see .otp-cell-field in login.css), most of AC2's "six-cell" interaction

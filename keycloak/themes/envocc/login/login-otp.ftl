@@ -96,7 +96,7 @@
 
             <#-- Story 2.6 (AC2): additive progressive-enhancement script only — auto-submit on the
                  6th digit and paste-fills-all-six. The form above already POSTs a single 6-digit
-                 name="totp" value via standard HTML submission with this script absent (no-JS
+                 name="otp" value via standard HTML submission with this script absent (no-JS
                  fallback, NFR8-aligned: no framework, no change to the POST contract). -->
             <script src="${url.resourcesPath}/js/otp-input.js" defer></script>
         </div>

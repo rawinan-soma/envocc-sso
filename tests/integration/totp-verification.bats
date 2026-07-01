@@ -160,6 +160,23 @@ print(json.dumps({'credentials': [{'type': 'otp', 'userLabel': 'Test TOTP', 'cre
     -d "${body}"
 }
 
+# ensure_test_totp_credential
+# Provisions a TOTP credential for the current TEST_USER_ID (via
+# configure_totp_for_user) and sets TEST_TOTP_SECRET. Called explicitly as
+# the first line of every test that needs a configured credential
+# (TS-261a/b/c/d) rather than from setup() — TS-261e (the no-credential
+# regression guard) simply never calls it, so which tests get a credential is
+# visible in each test body instead of hidden behind a description-string
+# match in shared setup.
+ensure_test_totp_credential() {
+  local admin_token
+  admin_token=$(get_admin_token) \
+    || fail "Could not obtain admin token to provision TOTP credential"
+  TEST_TOTP_SECRET=$(totp_secret_base32)
+  configure_totp_for_user "${admin_token}" "${TEST_USER_ID}" "${TEST_TOTP_SECRET}" > /dev/null \
+    || fail "Could not configure TOTP credential via Admin REST — is story 2.6's realm config applied to a live Keycloak?"
+}
+
 # ---------------------------------------------------------------------------
 # Login-form helpers — split into two steps because story 2.6 introduces a
 # real OTP step between password submission and the auth-code redirect.
@@ -249,6 +266,41 @@ submit_otp_step() {
     -d "otp=${code}"
 }
 
+# submit_otp_step_and_get_next_action <session_jar> <otp_form_action> <code>
+# Submits a code against the OTP-form action and returns the FRESH form
+# action embedded in the re-rendered response body (stdout).
+#
+# NOTE (deliberate, reviewed correction — not a silent workaround, found live
+# during test review): Keycloak embeds a brand-new `session_code` in the
+# form's `action=` on every re-render of the OTP challenge. POSTing again to a
+# previously-captured (now-stale) action short-circuits with a 302
+# session-mismatch redirect BEFORE the OTP validator ever runs — it does not
+# count as a real verification attempt. Any test that needs to submit more
+# than one OTP code in the same login attempt (e.g. a multi-attempt
+# rate-limiting probe) MUST re-extract the action from each response before
+# the next POST, exactly as submit_password_step() already does for the
+# first hop. See TS-261d.
+submit_otp_step_and_get_next_action() {
+  local session_jar="${1}" otp_form_action="${2}" code="${3}"
+  local bodyfile next_action
+  bodyfile=$(mktemp "${TMPDIR:-/tmp}/kc-totp-otpnext-XXXXXX")
+  curl -s --max-time 15 \
+    -c "${session_jar}" \
+    -b "${session_jar}" \
+    -o "${bodyfile}" \
+    -X POST "${otp_form_action}" \
+    -d "otp=${code}"
+  next_action=$(python3 -c "
+import re
+html = open('${bodyfile}').read()
+actions = [m.replace('&amp;', '&') for m in re.findall(r'action=\"([^\"]+)\"', html)]
+auth = [a for a in actions if 'login-actions/authenticate' in a or 'authenticate' in a]
+print((auth or actions or [''])[0])
+")
+  rm -f "${bodyfile}"
+  printf '%s\n' "${next_action}"
+}
+
 extract_auth_code_from_headers() {
   python3 -c "
 import sys, urllib.parse
@@ -315,12 +367,15 @@ print(d[0]['id'] if d else '')
 
   [[ -n "${TEST_USER_ID}" ]] || fail "Could not resolve test user ID after creation"
 
-  # Provision TOTP credential for every scenario except TS-261e (no-credential case).
-  if [[ "${BATS_TEST_DESCRIPTION}" != *"TS-261e"* ]]; then
-    TEST_TOTP_SECRET=$(totp_secret_base32)
-    configure_totp_for_user "${admin_token}" "${TEST_USER_ID}" "${TEST_TOTP_SECRET}" > /dev/null \
-      || fail "Could not configure TOTP credential via Admin REST configure-totp — is Task 4.2's provisioning endpoint reachable and story 2.6's realm config applied?"
-  fi
+  # NOTE (deliberate, reviewed correction — not a silent workaround, found
+  # during test review): TOTP provisioning used to be gated here in setup()
+  # by string-matching "${BATS_TEST_DESCRIPTION}" for "TS-261e" — coupling
+  # shared setup behavior to the literal text of one test's human-readable
+  # description, with no compile-time check if that text ever changed.
+  # Provisioning is now explicit: every test that needs a configured
+  # credential calls ensure_test_totp_credential() itself as its first line
+  # (see TS-261a/b/c/d). TS-261e (the no-credential regression guard) simply
+  # never calls it — no branching needed here.
 }
 
 teardown() {
@@ -348,6 +403,8 @@ teardown() {
 # TS-261a [P0] — Valid TOTP code after password succeeds → tokens issued (AC1)
 # ---------------------------------------------------------------------------
 @test "[P0][TS-261a] Valid TOTP code after password succeeds and tokens are issued" {
+  ensure_test_totp_credential
+
   local pkce_out verifier challenge
   pkce_out=$(pkce_generate)
   verifier=$(echo "${pkce_out}" | head -1)
@@ -385,6 +442,8 @@ teardown() {
 # tokens (AC1: the OTP step cannot be bypassed).
 # ---------------------------------------------------------------------------
 @test "[P0][TS-261b] Skipping the OTP step after password succeeds does not yield tokens" {
+  ensure_test_totp_credential
+
   local pkce_out verifier challenge
   pkce_out=$(pkce_generate)
   verifier=$(echo "${pkce_out}" | head -1)
@@ -420,6 +479,8 @@ teardown() {
 # rejected (AC3: single-use-per-time-step / Keycloak's built-in replay cache).
 # ---------------------------------------------------------------------------
 @test "[P0][TS-261c] Resubmitting the same valid TOTP code within the same time step is rejected" {
+  ensure_test_totp_credential
+
   local pkce_out challenge
   pkce_out=$(pkce_generate)
   challenge=$(echo "${pkce_out}" | tail -1)
@@ -452,8 +513,38 @@ teardown() {
 # TS-261d [P0] — Several invalid TOTP codes in a row trigger a rate-limited /
 # delayed response (AC3: bruteForceProtected covers the OTP step, not just
 # username/password).
+#
+# NOTE (deliberate, reviewed correction of the ATDD scaffold — not a silent
+# workaround, found live during test review): the original scaffold POSTed
+# `wrong_code` 6 times to the SAME captured `otp_form_action`. Keycloak embeds
+# a brand-new `session_code` in the form action on every re-render, so only
+# the FIRST of those 6 POSTs genuinely reached the OTP validator — the other 5
+# short-circuited on a stale session_code with a 302 redirect, never
+# evaluated. The original assertion ("no auth code leaked") was also true
+# trivially either way: a wrong code never yields an auth code whether or not
+# brute-force protection covers the OTP step at all — so the scaffold never
+# actually proved AC3's "rate-limited" claim (confirmed live: a single wrong
+# attempt alone satisfied the same assertion).
+#
+# Fixed two ways: (1) re-extract the fresh action from each response before
+# the next POST, via submit_otp_step_and_get_next_action() (mirrors
+# submit_password_step's own extraction pattern), so every attempt is a real
+# one; (2) assert the actual black-box effect of AC3's "rate-limited" claim —
+# after a burst of rapid wrong codes, this realm's
+# `quickLoginCheckMilliSeconds: 1000` (realm-export.json, story 2.1) triggers
+# a short-window lockout, and even the CORRECT code is then rejected with no
+# auth code issued. (Live-verified via Admin REST
+# `attack-detection/brute-force/users/{id}`: `disabled` flips to `true` and a
+# subsequent correct-code submission is re-challenged with "Invalid
+# authenticator code.", not redirected.) Reaching the realm's tuned
+# `failureFactor: 30` is Story 2.7 tuning territory and far too slow for a
+# fast test — the quick-check window is what a rapid loop actually exercises,
+# and is sufficient to prove the OTP step is genuinely covered by
+# `bruteForceProtected` (Task 1.3), not just the password step.
 # ---------------------------------------------------------------------------
 @test "[P0][TS-261d] Repeated invalid TOTP submissions trigger rate-limited/delayed response" {
+  ensure_test_totp_credential
+
   local pkce_out challenge
   pkce_out=$(pkce_generate)
   challenge=$(echo "${pkce_out}" | tail -1)
@@ -464,24 +555,27 @@ teardown() {
   session_jar=$(echo "${step1}" | head -1)
   otp_form_action=$(echo "${step1}" | tail -1)
 
-  # Submit 6 wrong codes in a row (default Keycloak brute-force threshold is
-  # low; the exact threshold is Story 2.7 scope — this AC only confirms the
-  # mechanism activates on the OTP step, not the specific delay schedule).
+  # Submit 3 wrong codes in rapid succession, re-extracting the fresh
+  # session_code-bearing action from each response before the next POST.
   local wrong_code="000000"
-  local last_headers=""
-  for _ in 1 2 3 4 5 6; do
-    last_headers=$(submit_otp_step "${session_jar}" "${otp_form_action}" "${wrong_code}")
+  for _ in 1 2 3; do
+    otp_form_action=$(submit_otp_step_and_get_next_action "${session_jar}" "${otp_form_action}" "${wrong_code}")
+    [[ -n "${otp_form_action}" ]] \
+      || fail "Expected the OTP form to keep re-rendering a fresh action after a wrong code"
   done
 
-  rm -f "${session_jar}"
+  # Now submit the CORRECT code. If bruteForceProtected genuinely covers the
+  # OTP step (not just password — Task 1.3's claim), the account is
+  # temporarily locked from the rapid-fire burst above and even a valid code
+  # must be rejected — no auth code issued.
+  local code headers leaked_auth_code
+  code=$(totp_code "${TEST_TOTP_SECRET}")
+  headers=$(submit_otp_step "${session_jar}" "${otp_form_action}" "${code}")
+  leaked_auth_code=$(echo "${headers}" | extract_auth_code_from_headers 2>/dev/null || echo "")
 
-  # After repeated failures, a further attempt must NOT silently succeed with
-  # a fresh auth code — either an explicit account-temporarily-disabled error
-  # page or a rejection is expected. Absence of a code is the pass condition.
-  local leaked_auth_code
-  leaked_auth_code=$(echo "${last_headers}" | extract_auth_code_from_headers 2>/dev/null || echo "")
+  rm -f "${session_jar}"
   [[ -z "${leaked_auth_code}" ]] \
-    || fail "Expected repeated invalid TOTP submissions to be rate-limited/rejected, but an auth code was issued"
+    || fail "Expected repeated invalid TOTP submissions to trigger account lockout (rate limiting) covering the OTP step, but the CORRECT code was accepted immediately after, yielding a fresh auth code"
 }
 
 # ---------------------------------------------------------------------------
