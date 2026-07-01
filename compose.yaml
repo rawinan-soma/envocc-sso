@@ -165,6 +165,18 @@ services:
     healthcheck:
       # The Wolfi-based image ships wget but no curl (confirmed at implementation
       # time). GET /isalive returns 200 "alive and well" once ready.
+      #
+      # Code review note: switching this to poll the `thaid` issuer's own
+      # discovery endpoint (Task 0.2's literal suggestion) was tried and
+      # reverted — hands-on verification found the per-issuer discovery route
+      # (`/thaid/.well-known/openid-configuration`) is not reliably ready in
+      # the same window /isalive is, causing spurious `unhealthy` status and
+      # blocking Keycloak's `depends_on: service_healthy` gate from ever
+      # passing. /isalive remains the healthcheck; TS-290a in
+      # tests/integration/thaid-broker.bats independently and directly
+      # verifies the `thaid` discovery endpoint as this suite's first test,
+      # so discovery-readiness is still covered, just not at the compose
+      # healthcheck layer.
       test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8080/isalive"]
       interval: 10s
       timeout: 5s

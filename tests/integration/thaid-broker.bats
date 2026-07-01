@@ -201,7 +201,9 @@ print(base64.urlsafe_b64encode(h).decode().rstrip('='))
   # outcome. A pre-existing federated-identity link (TS-290b/c) never
   # redirects through this endpoint, so this is a no-op for every other
   # caller.
+  local via_first_broker_login="false"
   if [[ "${hop3_location}" == */login-actions/first-broker-login* ]]; then
+    via_first_broker_login="true"
     local hop3b_headers
     hop3b_headers=$(curl -s --max-time 15 -D - -o "${hop3_html}" \
       -c "${session_jar}" -b "${session_jar}" \
@@ -279,6 +281,15 @@ except Exception:
 
   echo "200"
   echo "${sub}"
+  # 3rd line: whether the flow was routed through Keycloak's
+  # login-actions/first-broker-login endpoint (i.e. an interstitial
+  # confirm-link/profile-review step) before completing. Callers with a
+  # pre-registered federated-identity link (TS-290b/c) must observe "false"
+  # here — Keycloak's core broker logic should match the existing link
+  # directly, never routing through first-broker-login at all (code review
+  # finding: makes Task 5.4's "no confirm-link form" requirement an explicit,
+  # positive assertion instead of an inference from a 200 status alone).
+  echo "${via_first_broker_login}"
   return 0
 }
 
@@ -399,13 +410,16 @@ teardown() {
 
   assert_equal "${status}" "200"
 
+  # Pass the body via stdin rather than splicing it into a Python source
+  # literal — a discovery response containing `'''` or backslash sequences
+  # would otherwise corrupt the triple-quoted string (code review finding).
   run python3 -c "
 import json, sys
-d = json.loads('''${body}''')
+d = json.load(sys.stdin)
 for key in ('issuer', 'authorization_endpoint', 'token_endpoint'):
     assert key in d and d[key], f'missing or empty {key}'
 print('OK')
-"
+" <<< "${body}"
   assert_success
 }
 
@@ -453,7 +467,7 @@ print('OK')
 # RED until Tasks 0-2 land.
 # ---------------------------------------------------------------------------
 @test "[P1][TS-290c] Second ThaiD login by the same PID reuses the same identity" {
-  local user_id pid first_status first_sub second_status second_sub
+  local user_id pid first_status first_sub first_via_fbl second_status second_sub second_via_fbl
   user_id=$(_create_active_thaid_user "ts290c")
   [[ -n "${user_id}" ]] || fail "Could not create test user TS-290c"
   _TS290C_USER_ID="${user_id}"
@@ -467,6 +481,7 @@ print('OK')
   first_result=$(drive_thaid_broker_login "${pid}")
   first_status=$(echo "${first_result}" | sed -n '1p')
   first_sub=$(echo "${first_result}" | sed -n '2p')
+  first_via_fbl=$(echo "${first_result}" | sed -n '3p')
   assert_equal "${first_status}" "200"
   assert_equal "${first_sub}" "${user_id}"
 
@@ -474,9 +489,19 @@ print('OK')
   second_result=$(drive_thaid_broker_login "${pid}")
   second_status=$(echo "${second_result}" | sed -n '1p')
   second_sub=$(echo "${second_result}" | sed -n '2p')
+  second_via_fbl=$(echo "${second_result}" | sed -n '3p')
 
   assert_equal "${second_status}" "200"
   assert_equal "${second_sub}" "${first_sub}"
+
+  # Task 5.4: explicitly prove there was no intermediate confirm-link/
+  # profile-review HTML form on EITHER call — because the federated-identity
+  # link is pre-registered before the first call too, Keycloak's core broker
+  # logic should match it directly and never route through
+  # login-actions/first-broker-login at all (code review finding: this was
+  # previously only inferred from a bare 200 status, not asserted directly).
+  assert_equal "${first_via_fbl}" "false"
+  assert_equal "${second_via_fbl}" "false"
 }
 
 # ---------------------------------------------------------------------------
@@ -494,6 +519,13 @@ print('OK')
   local pid status token
   pid="pid-ts290d-unregistered-$$-${RANDOM}"
 
+  token=$(get_admin_token) || fail "Could not obtain admin token"
+  local count_before
+  count_before=$(curl -sf --max-time 10 \
+    -H "Authorization: Bearer ${token}" \
+    "${KC_BASE}/admin/realms/${REALM}/users/count") \
+    || fail "Could not read realm user count before the broker attempt"
+
   local result
   # drive_thaid_broker_login intentionally returns non-zero when the flow is
   # rejected (the expected outcome here) — `|| true` prevents bats' implicit
@@ -509,13 +541,27 @@ print('OK')
   assert_equal "${status}" "401"
 
   token=$(get_admin_token) || fail "Could not obtain admin token"
-  local search_json count
+  local search_json count_by_username
   search_json=$(curl -sf --max-time 10 \
     -H "Authorization: Bearer ${token}" \
     "${KC_BASE}/admin/realms/${REALM}/users?username=${pid}") \
     || fail "Could not search for phantom user by username=${pid}"
-  count=$(echo "${search_json}" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
-  assert_equal "${count}" "0"
+  count_by_username=$(echo "${search_json}" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+  assert_equal "${count_by_username}" "0"
+
+  # Code review finding: a username-only search would miss a phantom account
+  # auto-created under a different key (e.g. a claim-derived username/email
+  # rather than the raw PID, per Task 5.5's "search by any other identifying
+  # value" ask). A realm-wide user-count delta is a stronger, key-agnostic
+  # proof that the deny-only flow created NO account at all, regardless of
+  # what field it might have been keyed on — this is "the single most
+  # important test in this story" (Task 5.5).
+  local count_after
+  count_after=$(curl -sf --max-time 10 \
+    -H "Authorization: Bearer ${token}" \
+    "${KC_BASE}/admin/realms/${REALM}/users/count") \
+    || fail "Could not read realm user count after the broker attempt"
+  assert_equal "${count_after}" "${count_before}"
 }
 
 # ---------------------------------------------------------------------------
@@ -606,16 +652,28 @@ print(','.join(sorted(l.get('userId', '') for l in links if l.get('identityProvi
 }
 
 # ---------------------------------------------------------------------------
-# TS-290h [P2] — Mock IdP unreachable produces a clean broker error, not a
-# raw 5xx passed through to the browser
+# TS-290h [P2] — Mock IdP unreachable produces a clean connection failure at
+# the browser-facing hop, not a raw 5xx/opaque status passed through
 #
 # Runs LAST in this file deliberately: stops the mock-oidc-provider container,
-# attempts the broker flow against a linked PID, asserts Keycloak returns a
-# themed/generic error state (not an unhandled 502/stack trace), then restarts
-# the container and waits for it to become healthy again BEFORE the test ends
-# — mandatory, so a failure here does not poison any test that runs after this
-# file (including on the next local/CI run, since the stack persists between
-# bats invocations if not torn down).
+# attempts the broker flow against a linked PID, then restarts the container
+# and waits for it to become healthy again BEFORE asserting — mandatory, so a
+# failed assertion does not poison any test that runs after this file
+# (including on the next local/CI run, since the stack persists between bats
+# invocations if not torn down). Restart failure is itself a fatal assertion,
+# not silently swallowed.
+#
+# SCOPE NOTE (code review finding): stopping mock-oidc-provider kills BOTH its
+# browser-facing port (18080, the `thaid` IdP's authorizationUrl) and its
+# container-network hostname (Keycloak's backend-facing tokenUrl/jwksUrl)
+# simultaneously, since both are served by the same container. The flow
+# therefore always fails at Hop 1 (the browser-facing redirect), deterministically
+# and safely, well before Keycloak's own backend would ever attempt (and could
+# fail) a server-to-server token exchange. This test proves the browser-facing
+# leg fails cleanly (a connection error, not a raw proxied 502/stack trace) —
+# it does not, and with a single mock container cannot, isolate a pure
+# backend-token-exchange failure. See the in-test comment for the accepted
+# residual gap and what a fuller test would require.
 #
 # RED until Tasks 0-2 land (and, structurally, this test cannot even exercise
 # its "stop the container" step meaningfully until Task 0 creates the
@@ -642,11 +700,38 @@ print(','.join(sorted(l.get('userId', '') for l in links if l.get('identityProvi
   result=$(drive_thaid_broker_login "${pid}") || true
   status=$(echo "${result}" | sed -n '1p')
 
-  # Always attempt to bring the mock IdP back up before asserting, so a failed
-  # assertion below does not leave the stack in a poisoned state for later runs.
-  docker compose -f "${PROJECT_ROOT}/compose.yaml" start mock-oidc-provider >/dev/null 2>&1 || true
-  wait_for_healthy mock-oidc-provider 60 || true
+  # Restart the mock IdP and wait for it to become healthy BEFORE asserting —
+  # mandatory (see header note) so a failed assertion below never leaves the
+  # stack poisoned for later tests/runs. Restart failure is FATAL (code
+  # review finding: previously both `docker compose start` and
+  # `wait_for_healthy` were `|| true` with no downstream check at all, so a
+  # broken restore could go unnoticed and silently poison every subsequent
+  # test/run — the exact hazard this test's own header comment warns about).
+  local restart_ok=1 healthy_ok=1
+  docker compose -f "${PROJECT_ROOT}/compose.yaml" start mock-oidc-provider >/dev/null 2>&1 || restart_ok=0
+  wait_for_healthy mock-oidc-provider 60 || healthy_ok=0
 
-  [[ "${status}" != "502" ]] || fail "Expected a clean broker error (themed error page / non-502 status) when the mock IdP is unreachable, got a raw HTTP 502"
-  [[ "${status}" != "200" ]] || fail "Expected the broker flow to fail when the mock IdP is unreachable, but it completed with HTTP 200"
+  # Code review finding: `mock-oidc-provider` serves BOTH the browser-facing
+  # authorizationUrl (localhost:18080) and Keycloak's own backend-facing
+  # tokenUrl/jwksUrl (container-network hostname) from the SAME container.
+  # Stopping it fails the flow at Hop 1 — the browser-facing redirect target
+  # becomes unreachable to curl — before Keycloak's own backend ever attempts
+  # (and could fail) a token exchange. `drive_thaid_broker_login` reports
+  # this deterministically via its Hop 1 failure branch ("connect_error", or
+  # "no_thaid_redirect" if a redirect partially resolves before failing).
+  # This test therefore proves the browser-facing leg degrades to a clean
+  # connection failure rather than any raw Keycloak-proxied 5xx/stack trace —
+  # it does NOT (and, with a single mock container serving both roles,
+  # cannot) isolate a pure backend-token-exchange failure independent of the
+  # browser-facing outage. Doing so would require either splitting the mock
+  # into two independently-stoppable endpoints or container-level network
+  # fault injection — out of scope for this story; documented here as a
+  # known, accepted residual gap rather than left as an implicit assumption
+  # the previous "anything but 200/502" assertion silently relied on.
+  if [[ "${status}" != "connect_error" && "${status}" != "no_thaid_redirect" ]]; then
+    fail "Expected a deterministic Hop-1 connection-failure marker (connect_error/no_thaid_redirect) when the mock IdP is unreachable, got '${status}'"
+  fi
+
+  [[ "${restart_ok}" == "1" ]] || fail "Could not restart mock-oidc-provider after TS-290h — stack may be left in a poisoned state for subsequent tests/runs"
+  [[ "${healthy_ok}" == "1" ]] || fail "mock-oidc-provider did not become healthy within 60s after TS-290h restart — stack may be left in a poisoned state for subsequent tests/runs"
 }

@@ -4,7 +4,7 @@ baseline_commit: 1203707
 
 # Story 2.9: Login with ThaiD (brokered federation & account linking)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -100,6 +100,23 @@ Then the `thaid` IdP's `authorizationUrl`/`tokenUrl`/`userInfoUrl`/`issuer`/`jwk
   - [x] 7.3: `semgrep scan --config auto --error` — must exit 0.
   - [x] 7.4: `bats tests/integration/thaid-broker.bats` locally with `INTEGRATION=1` against a rebuilt stack (`docker compose down -v && docker compose up --build`) — all tests (TS-290a through TS-290h, or TS-290g if the bonus reverse-direction test from 5.7 was added) must pass. Also re-run `bats tests/unit/ci-security-gate.bats` and `bats tests/unit/secret-hygiene.bats` (Task 4.2) to confirm the pre-existing secret-scan coverage still passes against the Task 1 realm-export.json changes.
   - [x] 7.5: Push branch; confirm CI jobs pass (`realm-export-check`, `realm-lint`, `sast`, `gitleaks`; integration/unit bats are not run in CI per the existing pattern — Task 7.4 is the local-only verification gate for this story, same as every prior Epic 2 story).
+
+### Review Findings
+
+Adversarial code review (Blind Hunter, Edge Case Hunter, Acceptance Auditor — 3 parallel layers, no cross-contamination) run 2026-07-02 against the full branch diff vs `main`, with this story file as the Acceptance Auditor's spec. All `patch` findings applied and re-verified against a fresh live-stack rebuild (`docker compose down -v && docker compose up --build`); all 7 `thaid-broker.bats` tests (TS-290a/b/c/d/e/f/h) pass, `lint-realm-export.py`/`gitleaks`/`semgrep` all exit 0.
+
+- [x] [Review][Patch] TS-290d's phantom-account check only searched `username=<PID>`, missing the "any other identifying value" defense-in-depth Task 5.5 asked for — replaced/augmented with a realm-wide `users/count` delta check (before vs. after the denied broker attempt), which is key-agnostic and catches a phantom account under ANY username scheme, not just a guessed alternate field [tests/integration/thaid-broker.bats: `[P0][TS-290d]`]
+- [x] [Review][Patch] TS-290c asserted only `200` + matching `sub` on both calls, leaving Task 5.4's "no intermediate confirm-link/profile-review form" requirement only inferable, not asserted — `drive_thaid_broker_login` now reports a 3rd line (`via_first_broker_login`) indicating whether the flow was routed through Keycloak's `login-actions/first-broker-login` endpoint; TS-290c now explicitly asserts `false` on both calls [tests/integration/thaid-broker.bats: `[P1][TS-290c]`, `drive_thaid_broker_login()`]
+- [x] [Review][Patch] TS-290h's assertion (`status != "502" && status != "200"`) passed vacuously on any connection failure and did not test what its own name/comments claimed (a themed Keycloak *backend* error, not a raw 5xx) — stopping `mock-oidc-provider` actually fails the flow at Hop 1 (the browser-facing redirect) since one container serves both the browser-facing and backend-facing URLs, so a true backend-token-exchange failure is never reached. Tightened the assertion to the deterministic Hop-1 marker (`connect_error`/`no_thaid_redirect`) and added an in-test comment documenting the scope limitation honestly rather than leaving it as an implicit, untested assumption [tests/integration/thaid-broker.bats: `[P2][TS-290h]`]
+- [x] [Review][Patch] TS-290h's mock-IdP restart (`docker compose start` + `wait_for_healthy`) was `|| true` on both steps with no downstream check — a failed restart would silently poison every later test/run, the exact hazard the test's own header comment warns about. Restart/health-restore failure is now a fatal `fail()` [tests/integration/thaid-broker.bats: `[P2][TS-290h]`]
+- [x] [Review][Patch] TS-290a spliced the untrusted discovery response body directly into a `python3 -c` triple-quoted string literal (`json.loads('''${body}''')`) — a body containing `'''` or certain backslash sequences would corrupt the literal. Switched to passing the body via stdin (`json.load(sys.stdin)`), matching the safer pattern already used elsewhere in this file [tests/integration/thaid-broker.bats: `[P0][TS-290a]`]
+- [x] [Review][Patch-attempted, reverted] Compose healthcheck for `mock-oidc-provider` polls the generic `/isalive` liveness endpoint rather than the `thaid` issuer's own OIDC discovery endpoint Task 0.2 asked for — attempted the literal fix, but live verification found the per-issuer discovery route is not reliably ready in the same window `/isalive` is, causing spurious `unhealthy` status that blocked Keycloak's `depends_on: service_healthy` gate from ever passing (observed hands-on: 5/5 healthcheck failures, exit code 8, over the default `start_period`). Reverted to `/isalive` with a comment documenting the attempt/finding; `TS-290a` already independently and directly verifies `thaid` discovery as this suite's first test, so discovery-readiness remains covered, just not at the compose healthcheck layer [compose.yaml: `mock-oidc-provider.healthcheck`]
+- [x] [Review][Defer] `thaid` IdP config ships dev/CI-only mock-IdP URLs + zeroed `clientSecret` with no mechanical production guard — deferred, pre-existing class of gap (same as story-2.1's `test-ropc-client` item); already named/accepted in this story's own Dev Notes [keycloak/realm-export.json] — see `deferred-work.md`
+- [x] [Review][Defer] `keycloak`'s `depends_on: mock-oidc-provider: service_healthy` couples core-service boot to a dev-only container — deferred, documented compose comment already flags it for a future production-hardening pass [compose.yaml] — see `deferred-work.md`
+- [x] [Review][Defer] TS-290d/TS-290e assert exact HTTP status codes (401/400) rather than a looser "non-2xx + distinguishing marker" — deliberate per this story's own Dev Notes, but couples the tests to one hands-on-verified Keycloak build; deferred as a future-brittleness watch item, not a current defect [tests/integration/thaid-broker.bats] — see `deferred-work.md`
+- Dismissed as noise / already correct (no action): the `?html` FreeMarker-escaping removal (necessary pre-existing-bug fix, already documented, escaping is retained via KC26 auto-escaping); the zeroed-`clientSecret`-with-documented-manual-`PUT` pattern (matches the established `test-ropc-client` convention); TS-290f's lenient `^2` non-2xx check (more robust than the literal spec ask, not a defect); TS-290g's intentional skip (explicitly optional per Task 5.7).
+
+**Review Complete:** 0 decision-needed, 6 patch (5 fixed as specified + 1 attempted-and-reverted-with-documentation), 3 deferred, 4 dismissed. Status → `done`.
 
 ## Dev Notes
 
