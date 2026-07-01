@@ -76,6 +76,23 @@ FAILURE_FACTOR=5
 # strictly greater than quickLoginCheckMilliSeconds/1000.
 QUICK_LOGIN_GUARD_SECONDS="1.1"
 
+# PKCE code_challenge sent on every browser-flow authorization GET.
+# test-oidc-client (keycloak/realm-export.json) enforces PKCE S256
+# ("pkce.code.challenge.method": "S256") — a request without a matching
+# code_challenge is rejected by Keycloak before the login form renders (no
+# action="..." to scrape). The corresponding code_verifier is never used:
+# this suite only needs the login FORM to render, it never completes a code
+# exchange. Computed once here (rather than per _bf_browser_login call,
+# which is invoked ~20 times across this file) so the suite doesn't pay for
+# a fresh python3 subprocess + SHA-256 computation dozens of times for a
+# verifier that is immediately discarded — one valid S256 pair is reused for
+# every login attempt in this file.
+BF_CODE_CHALLENGE=$(python3 -c "
+import base64, hashlib, secrets
+verifier = base64.urlsafe_b64encode(secrets.token_bytes(48)).rstrip(b'=').decode()
+print(base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode())
+")
+
 setup() {
   if [[ -z "${INTEGRATION}" ]]; then
     skip "Integration tests skipped — set INTEGRATION=1 and ensure stack is running"
@@ -190,24 +207,6 @@ _bf_browser_login() {
   local cookie_jar
   cookie_jar=$(mktemp)
 
-  # test-oidc-client (keycloak/realm-export.json) enforces PKCE S256
-  # ("pkce.code.challenge.method": "S256") — the authorization GET below
-  # MUST include a matching code_challenge or Keycloak rejects the request
-  # with an error page before rendering any login form (no action="..." to
-  # scrape, action_url ends up empty). The verifier is never used again
-  # since this helper only needs the login FORM to render — it does not
-  # complete the code exchange.
-  local pkce code_verifier code_challenge
-  pkce=$(python3 -c "
-import base64, hashlib, secrets
-verifier = base64.urlsafe_b64encode(secrets.token_bytes(48)).rstrip(b'=').decode()
-challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
-print(verifier)
-print(challenge)
-")
-  code_verifier=$(echo "${pkce}" | sed -n '1p')
-  code_challenge=$(echo "${pkce}" | sed -n '2p')
-
   # Step 1: GET the realm's auth endpoint via test-oidc-client to start a
   # fresh login flow and capture the session cookie + form action URL.
   # redirect_uri MUST exactly match one of test-oidc-client's registered
@@ -223,11 +222,23 @@ print(challenge)
     --data-urlencode "response_type=code" \
     --data-urlencode "scope=openid" \
     --data-urlencode "redirect_uri=http://localhost:8888/callback" \
-    --data-urlencode "code_challenge=${code_challenge}" \
+    --data-urlencode "code_challenge=${BF_CODE_CHALLENGE}" \
     --data-urlencode "code_challenge_method=S256")
 
+  # Extract the login form action URL. Prefer the form that POSTs to
+  # Keycloak's login-actions/authenticate endpoint (same approach as
+  # tests/integration/oidc-pkce-flow.bats:acquire_auth_code) rather than
+  # blindly taking the first action="..." on the page — an earlier
+  # unrelated element (locale selector, IdP button) with its own action=
+  # attribute would otherwise be silently picked up instead.
   local action_url
-  action_url=$(echo "${login_page}" | grep -oE 'action="[^"]+"' | head -n 1 | sed -E 's/action="//; s/"$//' | sed 's/&amp;/\&/g')
+  action_url=$(echo "${login_page}" | python3 -c "
+import re, sys
+html = sys.stdin.read()
+actions = [m.replace('&amp;', '&') for m in re.findall(r'action=\"([^\"]+)\"', html)]
+auth = [a for a in actions if 'login-actions/authenticate' in a]
+print((auth or actions or [''])[0])
+")
 
   if [[ -z "${action_url}" ]]; then
     rm -f "${cookie_jar}"
@@ -276,16 +287,22 @@ print(m.group(1).strip() if m else '')
 # ---------------------------------------------------------------------------
 @test "[P0][TS-273a] account is NOT locked before failureFactor failed attempts" {
   local password="Correct!Passw0rd1"
-  local create_out create_rc user_id username
-  create_out=$(_bf_create_user "ts273a" "${password}")
+  local create_out create_rc user_id username create_err_file create_err
+  create_err_file=$(mktemp)
+  create_out=$(_bf_create_user "ts273a" "${password}" 2>"${create_err_file}")
   create_rc=$?
+  create_err=$(cat "${create_err_file}")
+  rm -f "${create_err_file}"
   user_id=$(echo "${create_out}" | awk '{print $1}')
   username=$(echo "${create_out}" | awk '{print $2}')
   # Register for teardown cleanup as soon as an id is parseable, even if
   # _bf_create_user returned non-zero (e.g. password-reset failed after the
   # user already exists in Keycloak) — see _bf_create_user comment.
   [[ -n "${user_id}" ]] && _BF_USER_ID="${user_id}"
-  [[ "${create_rc}" -eq 0 ]] || fail "setup: ${create_out}"
+  # create_err surfaces _bf_create_user's stderr diagnostic (e.g. the actual
+  # HTTP status of a failed step) — without it, a setup failure only shows
+  # the (often empty) stdout capture and loses the real reason.
+  [[ "${create_rc}" -eq 0 ]] || fail "setup: ${create_out} ${create_err}"
 
   # Submit (failureFactor - 1) wrong passwords — must NOT trigger lockout.
   # Paced by QUICK_LOGIN_GUARD_SECONDS (see declaration above) so consecutive
@@ -321,23 +338,32 @@ print(m.group(1).strip() if m else '')
 # ---------------------------------------------------------------------------
 @test "[P0][TS-273b] account IS locked after failureFactor failed attempts" {
   local password="Correct!Passw0rd2"
-  local create_out create_rc user_id username
-  create_out=$(_bf_create_user "ts273b" "${password}")
+  local create_out create_rc user_id username create_err_file create_err
+  create_err_file=$(mktemp)
+  create_out=$(_bf_create_user "ts273b" "${password}" 2>"${create_err_file}")
   create_rc=$?
+  create_err=$(cat "${create_err_file}")
+  rm -f "${create_err_file}"
   user_id=$(echo "${create_out}" | awk '{print $1}')
   username=$(echo "${create_out}" | awk '{print $2}')
   # Register for teardown cleanup as soon as an id is parseable, even if
   # _bf_create_user returned non-zero (e.g. password-reset failed after the
   # user already exists in Keycloak) — see _bf_create_user comment.
   [[ -n "${user_id}" ]] && _BF_USER_ID="${user_id}"
-  [[ "${create_rc}" -eq 0 ]] || fail "setup: ${create_out}"
+  [[ "${create_rc}" -eq 0 ]] || fail "setup: ${create_out} ${create_err}"
 
   # Submit exactly failureFactor wrong passwords to trip the lockout threshold.
   # Paced by QUICK_LOGIN_GUARD_SECONDS so failures accrue toward failureFactor
   # instead of tripping the separate quick-retry guard (see declaration above).
+  # Each attempt's status is checked (not discarded) so a login-form-resolution
+  # failure (_bf_browser_login returns "000") fails loudly here instead of
+  # silently not counting toward failureFactor and producing a confusing
+  # failure later at the lockout assertion.
   local i result status
   for ((i = 1; i <= FAILURE_FACTOR; i++)); do
     result=$(_bf_browser_login "${username}" "WrongPassword${i}!")
+    status=$(echo "${result}" | sed -n '1p')
+    [[ "${status}" == "200" ]] || fail "attempt ${i}: expected HTTP 200 (re-rendered login form), got ${status}"
     sleep "${QUICK_LOGIN_GUARD_SECONDS}"
   done
 
@@ -363,16 +389,19 @@ print(m.group(1).strip() if m else '')
 # ---------------------------------------------------------------------------
 @test "[P1][TS-273c] locked-account response is identical to wrong-password response" {
   local password="Correct!Passw0rd3"
-  local create_out create_rc user_id username
-  create_out=$(_bf_create_user "ts273c" "${password}")
+  local create_out create_rc user_id username create_err_file create_err
+  create_err_file=$(mktemp)
+  create_out=$(_bf_create_user "ts273c" "${password}" 2>"${create_err_file}")
   create_rc=$?
+  create_err=$(cat "${create_err_file}")
+  rm -f "${create_err_file}"
   user_id=$(echo "${create_out}" | awk '{print $1}')
   username=$(echo "${create_out}" | awk '{print $2}')
   # Register for teardown cleanup as soon as an id is parseable, even if
   # _bf_create_user returned non-zero (e.g. password-reset failed after the
   # user already exists in Keycloak) — see _bf_create_user comment.
   [[ -n "${user_id}" ]] && _BF_USER_ID="${user_id}"
-  [[ "${create_rc}" -eq 0 ]] || fail "setup: ${create_out}"
+  [[ "${create_rc}" -eq 0 ]] || fail "setup: ${create_out} ${create_err}"
 
   # First wrong-password attempt (pre-lockout) — capture status + generic error text.
   local pre_result pre_status pre_body pre_error
@@ -380,14 +409,20 @@ print(m.group(1).strip() if m else '')
   pre_status=$(echo "${pre_result}" | sed -n '1p')
   pre_body=$(echo "${pre_result}" | tail -n +2)
   pre_error=$(_bf_extract_error "${pre_body}")
+  [[ "${pre_status}" == "200" ]] || fail "pre-lockout attempt: expected HTTP 200 (re-rendered login form), got ${pre_status}"
   sleep "${QUICK_LOGIN_GUARD_SECONDS}"
 
   # Trip the lockout with the remaining attempts. Paced by
   # QUICK_LOGIN_GUARD_SECONDS so failures accrue toward failureFactor instead
   # of tripping the separate quick-retry guard (see declaration above).
-  local i
+  # Each attempt's status is checked so a login-form-resolution failure
+  # (_bf_browser_login returns "000") fails loudly here instead of silently
+  # not counting toward failureFactor.
+  local i during_result during_status
   for ((i = 2; i <= FAILURE_FACTOR; i++)); do
-    _bf_browser_login "${username}" "WrongDuring${i}!" >/dev/null
+    during_result=$(_bf_browser_login "${username}" "WrongDuring${i}!")
+    during_status=$(echo "${during_result}" | sed -n '1p')
+    [[ "${during_status}" == "200" ]] || fail "attempt ${i}: expected HTTP 200 (re-rendered login form), got ${during_status}"
     sleep "${QUICK_LOGIN_GUARD_SECONDS}"
   done
 
@@ -411,16 +446,19 @@ print(m.group(1).strip() if m else '')
 # ---------------------------------------------------------------------------
 @test "[P1][TS-273d] nonexistent-user response is identical to wrong-password response" {
   local password="Correct!Passw0rd4"
-  local create_out create_rc user_id username
-  create_out=$(_bf_create_user "ts273d" "${password}")
+  local create_out create_rc user_id username create_err_file create_err
+  create_err_file=$(mktemp)
+  create_out=$(_bf_create_user "ts273d" "${password}" 2>"${create_err_file}")
   create_rc=$?
+  create_err=$(cat "${create_err_file}")
+  rm -f "${create_err_file}"
   user_id=$(echo "${create_out}" | awk '{print $1}')
   username=$(echo "${create_out}" | awk '{print $2}')
   # Register for teardown cleanup as soon as an id is parseable, even if
   # _bf_create_user returned non-zero (e.g. password-reset failed after the
   # user already exists in Keycloak) — see _bf_create_user comment.
   [[ -n "${user_id}" ]] && _BF_USER_ID="${user_id}"
-  [[ "${create_rc}" -eq 0 ]] || fail "setup: ${create_out}"
+  [[ "${create_rc}" -eq 0 ]] || fail "setup: ${create_out} ${create_err}"
 
   # Real user, wrong password.
   local real_result real_status real_body real_error
