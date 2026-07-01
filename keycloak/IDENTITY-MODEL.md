@@ -95,7 +95,7 @@ An identity moves through exactly three states via controlled transitions:
 |---|---|---|---|---|
 | `pending` | `true` | `false` | **No** | User created by HR Admin (Epic 4). Activation email not yet completed (Story 3.3). Keycloak enforces `VERIFY_EMAIL` required action — login redirects to verification page and returns HTTP 400 from the token endpoint. |
 | `active` | `true` | `true` | **Yes** | User completed email activation. Can authenticate via the login flow (Story 2.2). |
-| `disabled` | `false` | any | **No** | User disabled by HR Admin (Story 2.8). Keycloak immediately rejects all authentication attempts and revokes active sessions/tokens. |
+| `disabled` | `false` | any | **No** | User disabled by HR Admin (Story 2.8). Keycloak immediately rejects all **new** authentication attempts. Revoking already-issued sessions/tokens is a separate step (`POST /users/{id}/logout`) — see Section 5. |
 
 > **Note:** There is no direct `pending → disabled` transition. A user must always be activated before being disabled. There is no dedicated "un-disable" endpoint distinct from the disable endpoint — re-enabling uses the same `PUT /users/{id}` call with `{"enabled": true}`. This is a deliberate symmetry, not an irreversible state: a disabled account CAN be re-enabled by a future HR Admin action (Story 4.5 scope). Story 2.8's `[P1][TS-280d]` integration test proves this re-enable path.
 

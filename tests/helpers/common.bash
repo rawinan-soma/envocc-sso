@@ -209,6 +209,59 @@ fetch_realm_json_to_tmpfile() {
 }
 
 # ---------------------------------------------------------------------------
+# configure_test_ropc_client_secret <admin_token>
+# Reads KC_TEST_ROPC_CLIENT_SECRET from .env and pushes it onto the live
+# test-ropc-client via PUT /clients/{id} — the realm export ships the client
+# with a zeroed secret (secret hygiene). Prints the secret to stdout on
+# success; exits non-zero with a stderr diagnostic on any failure.
+#
+# Shared by tests/integration/identity-model.bats (TS-210d, pattern origin)
+# and tests/integration/account-disable.bats (TS-280a/b/d/e/f/g) — promoted
+# here so a second consumer doesn't have to carry its own copy.
+#
+# Usage:
+#   local token ropc_secret
+#   token=$(get_admin_token) || fail "Could not obtain admin token"
+#   ropc_secret=$(configure_test_ropc_client_secret "${token}") \
+#     || fail "Could not configure test-ropc-client secret"
+# ---------------------------------------------------------------------------
+configure_test_ropc_client_secret() {
+  local token="${1}"
+  local ropc_secret
+  ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
+  if [[ -z "${ropc_secret}" ]]; then
+    echo "configure_test_ropc_client_secret: KC_TEST_ROPC_CLIENT_SECRET not set in .env" >&2
+    return 1
+  fi
+
+  local clients_json client_uuid client_rep update_status
+  clients_json=$(curl -sf --max-time 10 \
+    -H "Authorization: Bearer ${token}" \
+    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") || {
+    echo "configure_test_ropc_client_secret: could not look up test-ropc-client — is the realm import current?" >&2
+    return 1
+  }
+  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
+  if [[ -z "${client_uuid}" ]]; then
+    echo "configure_test_ropc_client_secret: test-ropc-client not found in realm — re-import realm-export.json" >&2
+    return 1
+  fi
+  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
+  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+    -X PUT \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json" \
+    -d "${client_rep}" \
+    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
+  if [[ "${update_status}" != "204" ]]; then
+    echo "configure_test_ropc_client_secret: could not set test-ropc-client secret (got HTTP ${update_status})" >&2
+    return 1
+  fi
+
+  echo "${ropc_secret}"
+}
+
+# ---------------------------------------------------------------------------
 # compose_service_field <service_name> <python_expression>
 # Parses compose.yaml and evaluates <python_expression> with `svc` bound to
 # the named service's dict. Prints the evaluated result to stdout.

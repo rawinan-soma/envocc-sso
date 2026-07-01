@@ -97,12 +97,21 @@ teardown() {
     "${_TS280G_USER_ID}"
     "${_TS280H_USER_ID}"
   )
-  # Fetch admin token lazily on first non-empty ID and reuse for all subsequent
-  # deletes — avoids a redundant token round-trip per user in multi-user tests.
-  local token="" id
+  # Fetch admin token lazily on the first non-empty ID and reuse for all
+  # subsequent deletes — avoids a redundant token round-trip per user in
+  # multi-user tests. Only attempt the fetch once: if it fails, emit a
+  # diagnostic (instead of silently skipping cleanup with no explanation)
+  # rather than retrying it per-id.
+  local token="" id token_fetch_attempted="false"
   for id in "${ids[@]}"; do
     if [[ -n "${id}" ]]; then
-      [[ -n "${token}" ]] || token=$(get_admin_token 2>/dev/null) || true
+      if [[ -z "${token}" && "${token_fetch_attempted}" == "false" ]]; then
+        token_fetch_attempted="true"
+        token=$(get_admin_token 2>/dev/null) || true
+        if [[ -z "${token}" ]]; then
+          echo "teardown: could not obtain admin token — test user(s) may be leaked: ${ids[*]}" >&2
+        fi
+      fi
       if [[ -n "${token}" ]]; then
         curl -sf -X DELETE \
           -H "Authorization: Bearer ${token}" \
@@ -119,10 +128,9 @@ teardown() {
 # TS-280a/b/d/e/f/g each independently need "create an active user, set its
 # password, and populate the live test-ropc-client secret from .env" — that
 # ~45-line sequence was originally duplicated verbatim 6 times in this file.
-# These three composable helpers replace that duplication. Per this story's
-# Dev Notes ("Do not add a new shared helper function to common.bash unless a
-# second story would also need it"), they are scoped locally to this file
-# rather than added to tests/helpers/common.bash.
+# These two composable helpers (plus configure_test_ropc_client_secret, now
+# shared via tests/helpers/common.bash since a second file — this one — needs
+# it too) replace that duplication.
 #
 # IMPORTANT — subshell/`fail` interaction: each helper is invoked via command
 # substitution (`x=$(_helper ...)`), which runs in a subshell. A `fail` call
@@ -146,7 +154,10 @@ _create_active_test_user() {
   local token="${1}" username="${2}" lastname="${3}"
   local http_status post_loc_file user_id loc
 
-  post_loc_file=$(mktemp)
+  post_loc_file=$(mktemp) || {
+    echo "_create_active_test_user: mktemp failed — TMPDIR unwritable or out of space?" >&2
+    return 1
+  }
   http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
     -X POST \
     -H "Authorization: Bearer ${token}" \
@@ -194,46 +205,11 @@ _set_test_user_password() {
   fi
 }
 
-# _configure_ropc_client_secret <token>
+# configure_test_ropc_client_secret <token>
 # Reads KC_TEST_ROPC_CLIENT_SECRET from .env and pushes it onto the live
-# test-ropc-client via PUT /clients/{id} — the realm export ships the client
-# with a zeroed secret (see identity-model.bats TS-210d for pattern origin).
-# Prints the secret to stdout on success.
-_configure_ropc_client_secret() {
-  local token="${1}"
-  local ropc_secret
-  ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
-  if [[ -z "${ropc_secret}" ]]; then
-    echo "_configure_ropc_client_secret: KC_TEST_ROPC_CLIENT_SECRET not set in .env" >&2
-    return 1
-  fi
-
-  local clients_json client_uuid client_rep update_status
-  clients_json=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") || {
-    echo "_configure_ropc_client_secret: could not look up test-ropc-client — is the realm import current? (Story 2.8 Task 0)" >&2
-    return 1
-  }
-  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
-  if [[ -z "${client_uuid}" ]]; then
-    echo "_configure_ropc_client_secret: test-ropc-client not found in realm — re-import realm-export.json (Story 2.8 Task 0)" >&2
-    return 1
-  fi
-  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
-  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d "${client_rep}" \
-    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
-  if [[ "${update_status}" != "204" ]]; then
-    echo "_configure_ropc_client_secret: could not set test-ropc-client secret (got HTTP ${update_status})" >&2
-    return 1
-  fi
-
-  echo "${ropc_secret}"
-}
+# test-ropc-client. Shared with tests/integration/identity-model.bats
+# (TS-210d, pattern origin) via tests/helpers/common.bash — see that file
+# for the implementation.
 
 # ---------------------------------------------------------------------------
 # TS-280a [P0] — Active user can authenticate (control/baseline)
@@ -264,7 +240,7 @@ _configure_ropc_client_secret() {
   _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280a — see stderr above"
 
   local ropc_secret
-  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+  ropc_secret=$(configure_test_ropc_client_secret "${token}") \
     || fail "Could not configure test-ropc-client secret for TS-280a — see stderr above"
 
   # Attempt ROPC login — expect HTTP 200 with a non-empty access_token.
@@ -272,7 +248,7 @@ _configure_ropc_client_secret() {
   response=$(curl -s --max-time 10 -w $'\n%{http_code}' \
     -d "grant_type=password" \
     -d "client_id=test-ropc-client" \
-    -d "client_secret=${ropc_secret}" \
+    --data-urlencode "client_secret=${ropc_secret}" \
     -d "username=ts280a@envocc.local" \
     -d "password=Test!Disable123" \
     "http://localhost:8080/realms/envocc/protocol/openid-connect/token")
@@ -310,7 +286,7 @@ _configure_ropc_client_secret() {
   _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280b — see stderr above"
 
   local ropc_secret
-  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+  ropc_secret=$(configure_test_ropc_client_secret "${token}") \
     || fail "Could not configure test-ropc-client secret for TS-280b — see stderr above"
 
   # Disable the account
@@ -328,7 +304,7 @@ _configure_ropc_client_secret() {
   response=$(curl -s --max-time 10 -w $'\n%{http_code}' \
     -d "grant_type=password" \
     -d "client_id=test-ropc-client" \
-    -d "client_secret=${ropc_secret}" \
+    --data-urlencode "client_secret=${ropc_secret}" \
     -d "username=ts280b@envocc.local" \
     -d "password=Test!Disable123" \
     "http://localhost:8080/realms/envocc/protocol/openid-connect/token")
@@ -379,7 +355,7 @@ _configure_ropc_client_secret() {
 
   # Fetch the full user object
   local user_tmpfile curl_exit
-  user_tmpfile=$(mktemp)
+  user_tmpfile=$(mktemp) || fail "mktemp failed — cannot create temp file for user details (TMPDIR unwritable or out of space?)"
   curl_exit=0
   curl -sf --max-time 10 \
     -H "Authorization: Bearer ${token}" \
@@ -392,7 +368,7 @@ _configure_ropc_client_secret() {
 
   # Fetch the full client list
   local clients_tmpfile
-  clients_tmpfile=$(mktemp)
+  clients_tmpfile=$(mktemp) || { rm -f "${user_tmpfile}"; fail "mktemp failed — cannot create temp file for client list (TMPDIR unwritable or out of space?)"; }
   curl_exit=0
   curl -sf --max-time 10 \
     -H "Authorization: Bearer ${token}" \
@@ -471,7 +447,7 @@ PYEOF
   _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280d — see stderr above"
 
   local ropc_secret
-  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+  ropc_secret=$(configure_test_ropc_client_secret "${token}") \
     || fail "Could not configure test-ropc-client secret for TS-280d — see stderr above"
 
   # Disable, confirm rejection
@@ -488,7 +464,7 @@ PYEOF
   disabled_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
     -d "grant_type=password" \
     -d "client_id=test-ropc-client" \
-    -d "client_secret=${ropc_secret}" \
+    --data-urlencode "client_secret=${ropc_secret}" \
     -d "username=ts280d@envocc.local" \
     -d "password=Test!Disable123" \
     "http://localhost:8080/realms/envocc/protocol/openid-connect/token")
@@ -511,7 +487,7 @@ PYEOF
   response=$(curl -s --max-time 10 -w $'\n%{http_code}' \
     -d "grant_type=password" \
     -d "client_id=test-ropc-client" \
-    -d "client_secret=${ropc_secret}" \
+    --data-urlencode "client_secret=${ropc_secret}" \
     -d "username=ts280d@envocc.local" \
     -d "password=Test!Disable123" \
     "http://localhost:8080/realms/envocc/protocol/openid-connect/token")
@@ -565,7 +541,7 @@ PYEOF
   _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280e — see stderr above"
 
   local ropc_secret
-  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+  ropc_secret=$(configure_test_ropc_client_secret "${token}") \
     || fail "Could not configure test-ropc-client secret for TS-280e — see stderr above"
 
   # Authenticate and capture both access_token and refresh_token
@@ -573,7 +549,7 @@ PYEOF
   login_response=$(curl -s --max-time 10 -w $'\n%{http_code}' \
     -d "grant_type=password" \
     -d "client_id=test-ropc-client" \
-    -d "client_secret=${ropc_secret}" \
+    --data-urlencode "client_secret=${ropc_secret}" \
     -d "username=ts280e@envocc.local" \
     -d "password=Test!Disable123" \
     "http://localhost:8080/realms/envocc/protocol/openid-connect/token")
@@ -606,7 +582,7 @@ PYEOF
   refresh_response=$(curl -s --max-time 10 -w $'\n%{http_code}' \
     -d "grant_type=refresh_token" \
     -d "client_id=test-ropc-client" \
-    -d "client_secret=${ropc_secret}" \
+    --data-urlencode "client_secret=${ropc_secret}" \
     -d "refresh_token=${refresh_token}" \
     "http://localhost:8080/realms/envocc/protocol/openid-connect/token")
   refresh_status=$(echo "${refresh_response}" | tail -n 1)
@@ -648,7 +624,7 @@ PYEOF
   _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280f — see stderr above"
 
   local ropc_secret
-  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+  ropc_secret=$(configure_test_ropc_client_secret "${token}") \
     || fail "Could not configure test-ropc-client secret for TS-280f — see stderr above"
 
   # Authenticate to establish a server-side session
@@ -656,7 +632,7 @@ PYEOF
   login_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
     -d "grant_type=password" \
     -d "client_id=test-ropc-client" \
-    -d "client_secret=${ropc_secret}" \
+    --data-urlencode "client_secret=${ropc_secret}" \
     -d "username=ts280f@envocc.local" \
     -d "password=Test!Disable123" \
     "http://localhost:8080/realms/envocc/protocol/openid-connect/token")
@@ -727,7 +703,7 @@ PYEOF
   _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280g — see stderr above"
 
   local ropc_secret
-  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+  ropc_secret=$(configure_test_ropc_client_secret "${token}") \
     || fail "Could not configure test-ropc-client secret for TS-280g — see stderr above"
 
   # Authenticate to establish a server-side session
@@ -735,7 +711,7 @@ PYEOF
   login_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
     -d "grant_type=password" \
     -d "client_id=test-ropc-client" \
-    -d "client_secret=${ropc_secret}" \
+    --data-urlencode "client_secret=${ropc_secret}" \
     -d "username=ts280g@envocc.local" \
     -d "password=Test!Disable123" \
     "http://localhost:8080/realms/envocc/protocol/openid-connect/token")
