@@ -64,6 +64,18 @@ _BF_USERNAME=""
 # against a stale/placeholder value without anyone noticing the constant).
 FAILURE_FACTOR=5
 
+# Minimum delay (seconds) between consecutive failed-login attempts against
+# the SAME user, used only in loops that are counting failures toward
+# FAILURE_FACTOR. keycloak/realm-export.json sets quickLoginCheckMilliSeconds:
+# 1000 — per keycloak/REALM-EXPORT-NOTES.md (Story 2.7), attempts less than
+# 1000ms apart are treated as scripted "quick" retries and immediately incur
+# minimumQuickLoginWaitSeconds (60s), independent of the failureFactor count.
+# Firing curl requests back-to-back with no delay would trip that separate
+# quick-retry guard well before failureFactor attempts are reached, making
+# TS-273a/b/c fail for a reason unrelated to what they're testing. Must be
+# strictly greater than quickLoginCheckMilliSeconds/1000.
+QUICK_LOGIN_GUARD_SECONDS="1.1"
+
 setup() {
   if [[ -z "${INTEGRATION}" ]]; then
     skip "Integration tests skipped — set INTEGRATION=1 and ensure stack is running"
@@ -236,6 +248,8 @@ print(m.group(1).strip() if m else '')
   _BF_USER_ID="${user_id}"
 
   # Submit (failureFactor - 1) wrong passwords — must NOT trigger lockout.
+  # Paced by QUICK_LOGIN_GUARD_SECONDS (see declaration above) so consecutive
+  # failures aren't misclassified as scripted "quick" retries.
   local attempts=$((FAILURE_FACTOR - 1))
   local i status body
   for ((i = 1; i <= attempts; i++)); do
@@ -243,6 +257,7 @@ print(m.group(1).strip() if m else '')
     result=$(_bf_browser_login "${username}" "WrongPassword${i}!")
     status=$(echo "${result}" | sed -n '1p')
     [[ "${status}" == "200" ]] || fail "attempt ${i}: expected HTTP 200 (re-rendered login form), got ${status}"
+    sleep "${QUICK_LOGIN_GUARD_SECONDS}"
   done
 
   # The next attempt with the CORRECT password must still succeed (not locked).
@@ -273,9 +288,12 @@ print(m.group(1).strip() if m else '')
   _BF_USER_ID="${user_id}"
 
   # Submit exactly failureFactor wrong passwords to trip the lockout threshold.
+  # Paced by QUICK_LOGIN_GUARD_SECONDS so failures accrue toward failureFactor
+  # instead of tripping the separate quick-retry guard (see declaration above).
   local i result status
   for ((i = 1; i <= FAILURE_FACTOR; i++)); do
     result=$(_bf_browser_login "${username}" "WrongPassword${i}!")
+    sleep "${QUICK_LOGIN_GUARD_SECONDS}"
   done
 
   # Confirm lockout via Admin REST API attack-detection endpoint.
@@ -312,11 +330,15 @@ print(m.group(1).strip() if m else '')
   pre_status=$(echo "${pre_result}" | sed -n '1p')
   pre_body=$(echo "${pre_result}" | tail -n +2)
   pre_error=$(_bf_extract_error "${pre_body}")
+  sleep "${QUICK_LOGIN_GUARD_SECONDS}"
 
-  # Trip the lockout with the remaining attempts.
+  # Trip the lockout with the remaining attempts. Paced by
+  # QUICK_LOGIN_GUARD_SECONDS so failures accrue toward failureFactor instead
+  # of tripping the separate quick-retry guard (see declaration above).
   local i
   for ((i = 2; i <= FAILURE_FACTOR; i++)); do
     _bf_browser_login "${username}" "WrongDuring${i}!" >/dev/null
+    sleep "${QUICK_LOGIN_GUARD_SECONDS}"
   done
 
   # Post-lockout attempt (any password) — capture status + generic error text.
