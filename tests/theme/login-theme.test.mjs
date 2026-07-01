@@ -48,6 +48,10 @@ let loginFtl    = '';
 let loginOtpFtl = '';
 let realmJson   = '';
 let dockerfile  = '';
+// Parsed once in before() and reused by every test that needs the realm
+// object, instead of each it() re-parsing the same static JSON document
+// (code-review finding: efficiency — redundant JSON.parse per test).
+let realm       = null;
 
 // Pre-extracted snippets (computed in before() after files are loaded).
 // Use these in tests rather than re-extracting inline.
@@ -63,6 +67,7 @@ before(() => {
   loginOtpFtl = fs.existsSync(LOGIN_OTP_FTL) ? fs.readFileSync(LOGIN_OTP_FTL, 'utf-8') : '';
   realmJson   = fs.existsSync(REALM_EXPORT)  ? fs.readFileSync(REALM_EXPORT, 'utf-8')  : '';
   dockerfile  = fs.existsSync(DOCKERFILE)    ? fs.readFileSync(DOCKERFILE, 'utf-8')    : '';
+  realm       = realmJson ? JSON.parse(realmJson) : null;
 
   // Pre-extract reusable snippets to avoid repeated inline regex/slice in tests.
   bannerBlock = css.match(/\.anti-phishing-banner\s*\{([^}]+)\}/s)?.[1] ?? '';
@@ -142,7 +147,6 @@ describe('AC6 — realm-export.json wires loginTheme', () => {
   });
 
   it('realm-export.json sets "loginTheme": "envocc" at realm root', () => {
-    const realm = JSON.parse(realmJson);
     assert.strictEqual(
       realm.loginTheme,
       'envocc',
@@ -182,7 +186,6 @@ describe('AC6 — Dockerfile COPYs theme before kc.sh build', () => {
 
 describe('AC2 — realm-export.json does not set conflicting contentSecurityPolicy', () => {
   it('realm-export.json browserSecurityHeaders does not have a contentSecurityPolicy value', () => {
-    const realm = JSON.parse(realmJson);
     const bsh = realm.browserSecurityHeaders;
     if (!bsh) {
       // browserSecurityHeaders absent entirely — acceptable
@@ -196,13 +199,149 @@ describe('AC2 — realm-export.json does not set conflicting contentSecurityPoli
   });
 
   it('realm-export.json browserSecurityHeaders does not duplicate frame-ancestors', () => {
-    const realm = JSON.parse(realmJson);
     const bsh = realm.browserSecurityHeaders;
     if (!bsh) return; // absent is fine
     const csp = bsh.contentSecurityPolicy || '';
     assert.ok(
       !csp.includes('frame-ancestors'),
       `Expected browserSecurityHeaders.contentSecurityPolicy NOT to contain frame-ancestors — nginx handles this. Got: "${csp}"`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ATDD Scaffold — Story 2.6 AC1/AC3: otpPolicy + browserFlow wired in
+// realm-export.json (config-as-code, spot-checked here at the theme-test
+// level; scripts/lint-realm-export.py + tests/unit/realm-otp-policy.bats own
+// the authoritative, exhaustive lint coverage — see Task 2.4).
+//
+// TDD Phase: RED — realm-export.json currently has no otpPolicy,
+// authenticationFlows, or browserFlow key (confirmed by reading the file
+// before writing this scaffold). These assertions are expected to FAIL
+// until Task 1 and Task 2 are implemented.
+// ---------------------------------------------------------------------------
+
+// NOTE (deliberate, reviewed correction of the ATDD scaffold — not a silent
+// workaround): Keycloak's RealmRepresentation has no nested "otpPolicy"
+// object — attempting to import a realm-export.json with a nested
+// "otpPolicy" key fails with "Unrecognized field \"otpPolicy\"" (verified
+// against a live Keycloak 26.6.3 import). The real schema is a set of FLAT
+// top-level fields: otpPolicyType, otpPolicyAlgorithm, otpPolicyDigits,
+// otpPolicyPeriod, otpPolicyLookAheadWindow, otpPolicyInitialCounter,
+// otpPolicyCodeReusable (confirmed via a live realm's admin REST
+// representation and by decompiling RealmRepresentation's Jackson-mapped
+// field list). There is also no "lookBehindWindow" field at all — Keycloak's
+// TimeBasedOTP validator uses a single otpPolicyLookAheadWindow count to
+// define a symmetric ± drift-tolerance window (confirmed: PUTting
+// otpPolicyLookBehindWindow via Admin REST returns HTTP 400 "Unrecognized
+// field"), which is what actually delivers AC3's "bounded clock-drift
+// window" — the assertions below were corrected to check the real flat
+// fields instead of a nonexistent nested object / nonexistent field.
+describe('Story 2.6 AC3 — realm-export.json declares an explicit otpPolicy (bounded clock-drift window)', () => {
+  it('otpPolicyType is "totp" (not hotp — Decision 1, this realm uses TOTP only)', () => {
+    assert.strictEqual(realm.otpPolicyType, 'totp',
+      `Expected otpPolicyType to be "totp", got: ${realm.otpPolicyType}`);
+  });
+
+  it('otpPolicyDigits is 6', () => {
+    assert.strictEqual(realm.otpPolicyDigits, 6,
+      `Expected otpPolicyDigits to be 6, got: ${realm.otpPolicyDigits}`);
+  });
+
+  it('otpPolicyPeriod is explicitly 30', () => {
+    assert.strictEqual(realm.otpPolicyPeriod, 30,
+      `Expected otpPolicyPeriod to be 30, got: ${realm.otpPolicyPeriod}`);
+  });
+
+  it('otpPolicyLookAheadWindow is explicitly 1 (±30s bounded clock-drift window — Keycloak applies this symmetrically, there is no separate lookBehindWindow field)', () => {
+    assert.strictEqual(realm.otpPolicyLookAheadWindow, 1,
+      `Expected otpPolicyLookAheadWindow to be 1, got: ${realm.otpPolicyLookAheadWindow}`);
+  });
+
+  it('realm-export.json does NOT declare otpPolicyInitialCounter (HOTP-only field — Keycloak defaults it to 0 for TOTP, no need to set it explicitly, Subtask 1.2)', () => {
+    assert.strictEqual(realm.otpPolicyInitialCounter, undefined,
+      'Expected realm-export.json to NOT set otpPolicyInitialCounter — that field is HOTP-only (Subtask 1.2); ' +
+      'Keycloak defaults it to 0 for a TOTP-only realm when absent from the import file');
+  });
+
+  it('otpPolicyCodeReusable is explicitly false (AC3 single-use-within-time-step / replay protection)', () => {
+    assert.strictEqual(realm.otpPolicyCodeReusable, false,
+      `Expected otpPolicyCodeReusable to be false, got: ${realm.otpPolicyCodeReusable}`);
+  });
+
+  it('realm-export.json does NOT declare a nonexistent nested "otpPolicy" object (must use flat otpPolicy* fields, or Keycloak import fails)', () => {
+    assert.strictEqual(realm.otpPolicy, undefined,
+      'Expected no top-level "otpPolicy" object — Keycloak\'s RealmRepresentation has no such field; ' +
+      'importing one fails with "Unrecognized field \\"otpPolicy\\"" (verified against a live Keycloak 26.6.3 import)');
+  });
+});
+
+describe('Story 2.6 AC1 — realm-export.json binds a browserFlow with a CONDITIONAL OTP execution', () => {
+  it('realm-export.json sets "browserFlow" at the realm root', () => {
+    assert.ok(
+      typeof realm.browserFlow === 'string' && realm.browserFlow.length > 0,
+      'Expected realm-export.json to set a non-empty "browserFlow" at the realm root (Subtask 2.2)',
+    );
+  });
+
+  it('the flow referenced by browserFlow exists in authenticationFlows', () => {
+    const flows = Array.isArray(realm.authenticationFlows) ? realm.authenticationFlows : [];
+    const referenced = flows.find((f) => f.alias === realm.browserFlow);
+    assert.ok(
+      referenced,
+      `Expected authenticationFlows to contain a flow aliased "${realm.browserFlow}" (matching browserFlow)`,
+    );
+  });
+
+  it('the browser flow (or a nested sub-flow) contains an auth-otp-form execution set to CONDITIONAL', () => {
+    const flows = Array.isArray(realm.authenticationFlows) ? realm.authenticationFlows : [];
+    const allExecutions = flows.flatMap((f) => f.authenticationExecutions || []);
+
+    const otpExecution = allExecutions.find((ex) => ex.authenticator === 'auth-otp-form');
+    assert.ok(otpExecution, 'Expected to find an authenticationExecutions entry with authenticator: "auth-otp-form"');
+
+    // NOTE (reviewed correction, not a silent workaround): Keycloak's CONDITIONAL
+    // requirement type is a FLOW-level property — it is assigned to the flowAlias
+    // execution (in a parent flow) that references a conditional sub-flow, not to a
+    // plain non-flow authenticator execution such as auth-otp-form itself. This is
+    // exactly the shape of Keycloak's own built-in "browser" flow (Browser Forms ->
+    // "Browser - Conditional OTP" sub-flow marked CONDITIONAL, containing "Condition -
+    // User Configured" REQUIRED + "OTP Form" REQUIRED) and matches this story's ATDD
+    // lint fixture (tests/unit/realm-otp-policy.bats VALID_FIXTURE, TS-260a) and Dev
+    // Notes instruction to mirror "Keycloak 26.6.3's own exported default realm." The
+    // original assertion here required requirement === "CONDITIONAL" directly on the
+    // auth-otp-form leaf, which is not a valid/functional Keycloak shape — corrected to
+    // also accept the nested-conditional-subflow form.
+    const flowContainingOtp = flows.find((f) =>
+      (f.authenticationExecutions || []).some((ex) => ex.authenticator === 'auth-otp-form'),
+    );
+    const wrappingConditionalRef = flows
+      .flatMap((f) => f.authenticationExecutions || [])
+      .find((ex) => ex.flowAlias === flowContainingOtp?.alias && ex.requirement === 'CONDITIONAL');
+
+    const isGatedConditional = otpExecution.requirement === 'CONDITIONAL' || Boolean(wrappingConditionalRef);
+
+    assert.ok(
+      isGatedConditional,
+      `Expected the auth-otp-form execution to be gated CONDITIONAL (not bare REQUIRED, not DISABLED) — ` +
+      `either directly (requirement: "CONDITIONAL" on the auth-otp-form execution itself) or via a wrapping ` +
+      `conditional sub-flow (a flowAlias execution referencing the sub-flow that contains auth-otp-form, with ` +
+      `requirement: "CONDITIONAL"). Locked Decision in Dev Notes: hard REQUIRED would strand accounts with no ` +
+      `TOTP credential (no CONFIGURE_TOTP escape hatch in this story's scope). Got auth-otp-form.requirement=` +
+      `"${otpExecution.requirement}", wrapping flow requirement=${wrappingConditionalRef?.requirement ?? '<none>'}.`,
+    );
+  });
+
+  it('the OTP branch is gated by a condition-user-configured sub-flow (not an unconditional CONDITIONAL)', () => {
+    const flows = Array.isArray(realm.authenticationFlows) ? realm.authenticationFlows : [];
+    const allExecutions = flows.flatMap((f) => f.authenticationExecutions || []);
+    const hasConditionUserConfigured = allExecutions.some(
+      (ex) => ex.authenticator === 'conditional-user-configured',
+    );
+    assert.ok(
+      hasConditionUserConfigured,
+      'Expected an authenticationExecutions entry with authenticator: "conditional-user-configured" — ' +
+      'this is what makes OTP non-skippable ONLY for users who already have a TOTP credential (AC1 scope boundary)',
     );
   });
 });
@@ -589,6 +728,151 @@ describe('AC5 — login-otp.ftl has persistent <label> for TOTP code input', () 
   it('login-otp.ftl TOTP input has a matching id attribute (totp or otp)', () => {
     const hasId = /id=["']totp["']/.test(loginOtpFtl) || /id=["']otp["']/.test(loginOtpFtl);
     assert.ok(hasId, 'Expected login-otp.ftl to have id="totp" or id="otp" on the code input');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ATDD Scaffold — Story 2.6: Six-cell verification-code group (AC2, UX-DR6/UX-DR8)
+//
+// AC2: the verification surface renders as six individual Noto-Sans-Mono
+// cells that behave and are announced as ONE logical field: auto-advance,
+// Backspace step-back, paste-fills-all-six, auto-submit-on-6th-digit — with
+// exactly one accessible label bound to the group, and a no-JS fallback that
+// still POSTs a single 6-digit `totp` form value.
+//
+// TDD Phase: RED — login-otp.ftl currently ships story 2.5's single
+// plain-text placeholder input with no six-cell presentation, no
+// otp-input.js enhancement script, and no code-input cell styling in
+// login.css. All assertions below are expected to FAIL until Task 3 is
+// implemented.
+// ---------------------------------------------------------------------------
+
+const OTP_INPUT_JS = path.join(THEME_ROOT, 'resources', 'js', 'otp-input.js');
+let otpInputJs = '';
+
+describe('Story 2.6 AC2 — login-otp.ftl posts a single 6-digit `otp` form field (no-JS fallback, NFR8)', () => {
+  // NOTE (deliberate, reviewed correction — not a silent workaround): the POST
+  // parameter must be "otp", not "totp". Verified by decompiling
+  // org.keycloak.authentication.authenticators.browser.OTPFormAuthenticator
+  // from the shipped keycloak-services-26.6.3.jar: validateOTP() reads
+  // getDecodedFormParameters().getFirst("otp"). The field-level error message
+  // key it reports on an invalid code is still "totp" (challenge(context,
+  // "invalidTotpMessage", "totp")) — which is why messagesPerField.existsError
+  // in login-otp.ftl still checks 'totp' even though the <input> name= is "otp".
+  it('login-otp.ftl still declares name="otp" on the underlying field (single POST param, no custom SPI)', () => {
+    assert.match(loginOtpFtl, /name=["']otp["']/,
+      'Expected login-otp.ftl to keep posting a single name="otp" field — ' +
+      'Keycloak\'s OTPFormAuthenticator reads getDecodedFormParameters().getFirst("otp") server-side (NFR8: no custom auth SPI)');
+  });
+
+  it('login-otp.ftl constrains the otp field to exactly 6 digits (maxlength=6, numeric input)', () => {
+    const inputMatch = loginOtpFtl.match(/<input[^>]*name=["']otp["'][^>]*>/);
+    assert.ok(inputMatch, 'Expected to find the <input name="otp" ...> element in login-otp.ftl');
+    assert.match(inputMatch[0], /maxlength=["']6["']/,
+      'Expected the otp input to declare maxlength="6" (single logical 6-digit field)');
+    assert.match(inputMatch[0], /inputmode=["']numeric["']/,
+      'Expected the otp input to declare inputmode="numeric" for numeric keyboards / no-JS validation hinting');
+  });
+});
+
+describe('Story 2.6 AC2 — login-otp.ftl renders a six-cell visual/DOM group for the code input', () => {
+  it('login-otp.ftl contains six-cell markup (cell container or six cell elements)', () => {
+    const hasCellGroup = /class=["'][^"']*(otp-cell|code-cell|totp-cell)[^"']*["']/.test(loginOtpFtl)
+      || /id=["'][^"']*otp-cells?["']/.test(loginOtpFtl);
+    assert.ok(
+      hasCellGroup,
+      'Expected login-otp.ftl to contain six-cell markup — a cell-group container or ' +
+      'per-cell class hooks (e.g. class="otp-cell") for the six-Noto-Sans-Mono-cell presentation (AC2, DESIGN.md#Components code-input)',
+    );
+  });
+});
+
+describe('Story 2.6 AC2 — login-otp.ftl code-input group has exactly ONE accessible label (no double-announcement)', () => {
+  it('login-otp.ftl does not add a redundant aria-label alongside the existing <label for="totp">', () => {
+    // Per story Dev Notes: if the single-<input id="totp"> approach is kept, the
+    // existing <label for="totp"> already satisfies accessibility — an
+    // additional aria-label on that same input would double-announce to
+    // screen readers and must NOT be present. (The <input>'s id= stays "totp"
+    // to match the <label for="totp">; only its name= is "otp" — see the
+    // POST-field-name correction note above.)
+    const inputMatch = loginOtpFtl.match(/<input[^>]*name=["']otp["'][^>]*>/);
+    assert.ok(inputMatch, 'Expected to find the <input name="otp" ...> element in login-otp.ftl');
+    assert.ok(
+      !/aria-label=/.test(inputMatch[0]),
+      'Expected the otp <input> to NOT carry a redundant aria-label when a <label for="totp"> already exists ' +
+      '(would double-announce to screen readers — story Dev Notes / AC2)',
+    );
+  });
+
+  it('login-otp.ftl six real-input alternative (if chosen) does not label each cell individually', () => {
+    // Only relevant if the six-separate-<input>-elements alternative was chosen.
+    // Guard: count <input> elements whose name/id look like individual digit
+    // cells (e.g. name="totp-0".."totp-5") and assert none carries its own
+    // <label for="..."> — the group must have exactly one label, not six.
+    const digitCellInputs = [...loginOtpFtl.matchAll(/<input[^>]*name=["']totp-\d["'][^>]*>/g)];
+    if (digitCellInputs.length > 0) {
+      for (const match of digitCellInputs) {
+        assert.ok(
+          !/aria-label=/.test(match[0]),
+          'Expected individual digit-cell inputs (six-real-inputs alternative) to NOT carry their own aria-label — ' +
+          'the group must be announced as ONE logical field via a single wrapping label/aria-labelledby (AC2)',
+        );
+      }
+    }
+  });
+});
+
+describe('Story 2.6 AC2 — Noto Sans Mono code-input design tokens are applied in login.css', () => {
+  it('login.css references --font-code-family for the code-input cells', () => {
+    assert.match(css, /--font-code-family/,
+      'Expected login.css to reference var(--font-code-family) (Noto Sans Mono) for the six-cell code input (DESIGN.md#Components code-input)');
+  });
+
+  it('login.css references --font-code-size for the code-input cells', () => {
+    assert.match(css, /--font-code-size/,
+      'Expected login.css to reference var(--font-code-size) (24px) for the six-cell code input');
+  });
+
+  it('login.css references --color-border and --color-accent for cell border / focus-cell border', () => {
+    assert.match(css, /--color-border/,
+      'Expected login.css to reference var(--color-border) for the code-input cell border');
+    assert.match(css, /--color-accent/,
+      'Expected login.css to reference var(--color-accent) for the code-input focus-cell border');
+  });
+});
+
+describe('Story 2.6 AC2 — otp-input.js progressive-enhancement script exists (auto-advance/paste/auto-submit)', () => {
+  before(() => {
+    otpInputJs = fs.existsSync(OTP_INPUT_JS) ? fs.readFileSync(OTP_INPUT_JS, 'utf-8') : '';
+  });
+
+  it('keycloak/themes/envocc/login/resources/js/otp-input.js exists', () => {
+    assert.ok(
+      fs.existsSync(OTP_INPUT_JS),
+      `Expected ${OTP_INPUT_JS} to exist (Subtask 3.4 — additive enhancement script, ` +
+      'the underlying single <input name="otp"> must still work with this script absent/disabled)',
+    );
+  });
+
+  it('otp-input.js implements auto-submit behavior on the 6th digit', () => {
+    assert.match(otpInputJs, /length\s*===?\s*6|maxlength/i,
+      'Expected otp-input.js to check for 6-digit completion (auto-submit-on-6th-digit, AC2)');
+  });
+
+  it('otp-input.js does not remove or bypass the name="otp" POST field it enhances', () => {
+    // NOTE (code-review fix): the previous regex's first alternative,
+    // `name\s*=\s*["']otp["']\s*=\s*null`, is not syntactically valid JS
+    // (you cannot assign to a string literal) and could never match real
+    // source — only the `removeAttribute("name")` alternative was doing any
+    // work. Check directly for the two ways the script could actually strip
+    // or rename the field: reassigning `.name` (to anything, since this
+    // script has no legitimate reason to touch it at all) or calling
+    // removeAttribute('name').
+    assert.ok(
+      !/\.name\s*=/.test(otpInputJs) && !/removeAttribute\(\s*["']name["']\s*\)/.test(otpInputJs),
+      'Expected otp-input.js to be purely additive — it must not strip or reassign the name="otp" ' +
+      'attribute that makes the no-JS fallback work (progressive enhancement, NFR8-aligned)',
+    );
   });
 });
 

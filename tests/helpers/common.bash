@@ -318,3 +318,40 @@ env_setup() {
     rm -f "${PROJECT_ROOT}/.env.bak"
   fi
 }
+
+# ---------------------------------------------------------------------------
+# pkce_generate
+# Generates an RFC 7636 PKCE code_verifier / code_challenge (S256) pair.
+# Prints the verifier on stdout line 1 and the challenge on line 2.
+#
+# Shared by every integration test that drives the Authorization Code + PKCE
+# flow (originally duplicated per-file — code-review finding: reuse).
+# ---------------------------------------------------------------------------
+pkce_generate() {
+  local verifier challenge
+  verifier=$(openssl rand -base64 48 | tr '+/' '-_' | tr -d '=\n')
+  challenge=$(printf '%s' "${verifier}" | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '=\n')
+  printf '%s\n%s\n' "${verifier}" "${challenge}"
+}
+
+# ---------------------------------------------------------------------------
+# extract_auth_code_from_headers
+# Reads raw HTTP response headers on stdin and prints the `code` query
+# param from the first `Location:` header found (the OIDC authorization
+# code on a successful redirect). Exits 1 if no Location header carries a
+# non-empty code (e.g. an error/redisplay response).
+# ---------------------------------------------------------------------------
+extract_auth_code_from_headers() {
+  python3 -c "
+import sys, urllib.parse
+for line in sys.stdin:
+    if line.lower().startswith('location:'):
+        loc = line.split(':', 1)[1].strip()
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(loc).query)
+        code = params.get('code', [''])[0]
+        if code:
+            print(code)
+            sys.exit(0)
+sys.exit(1)
+"
+}

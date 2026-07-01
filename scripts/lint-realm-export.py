@@ -393,7 +393,223 @@ def main():
                     "is required so the realm publishes an RS256 signing key (AC2, AC7, AC9)."
                 )
 
-    # ── Step 9: Report and exit ────────────────────────────────────────────────
+    # ── Step 9 (Story 2.6): otpPolicy* + browserFlow / CONDITIONAL OTP checks ──
+    # AC3: the realm's OTP policy must be present and fully explicit
+    # (config-as-code — do not rely on Keycloak's implicit defaults). AC1:
+    # browserFlow must be bound to a flow whose OTP Form execution is
+    # CONDITIONAL, gated by a condition-user-configured sub-flow (the "Locked
+    # Decision" in the story's Dev Notes — bare REQUIRED with no escape hatch
+    # is explicitly forbidden).
+    #
+    # NOTE (deliberate, reviewed correction — not a silent workaround):
+    # Keycloak's RealmRepresentation has no nested "otpPolicy" object — a
+    # realm-export.json with one fails to import ("Unrecognized field
+    # \"otpPolicy\"", verified against a live Keycloak 26.6.3 import). The
+    # real schema is flat top-level fields: otpPolicyType, otpPolicyDigits,
+    # otpPolicyPeriod, otpPolicyLookAheadWindow, otpPolicyCodeReusable,
+    # otpPolicyInitialCounter (HOTP-only). There is also no
+    # "otpPolicyLookBehindWindow" field at all (PUTting one via Admin REST
+    # returns HTTP 400 "Unrecognized field") — Keycloak's TimeBasedOTP
+    # validator applies otpPolicyLookAheadWindow symmetrically to deliver the
+    # "bounded clock-drift window" AC3 asks for.
+    if data.get("otpPolicyType") != "totp":
+        errors.append(
+            f"otpPolicyType must be 'totp' (this realm uses TOTP only, not HOTP), "
+            f"got {data.get('otpPolicyType')!r}."
+        )
+
+    digits = data.get("otpPolicyDigits")
+    if not isinstance(digits, int) or isinstance(digits, bool) or digits != 6:
+        errors.append(
+            f"otpPolicyDigits must be the integer 6, got {digits!r}."
+        )
+
+    # bool is a subclass of int in Python — exclude it explicitly so a JSON
+    # `true` (which equals 1) cannot slip past a loose `!= 1` comparison
+    # (TS-260j type-confusion guard).
+    look_ahead = data.get("otpPolicyLookAheadWindow")
+    if not isinstance(look_ahead, int) or isinstance(look_ahead, bool) or look_ahead != 1:
+        errors.append(
+            f"otpPolicyLookAheadWindow must be the integer 1 (bounded clock-drift "
+            f"window, AC3 — Keycloak applies this symmetrically; there is no separate "
+            f"lookBehindWindow field), got {look_ahead!r}."
+        )
+
+    period = data.get("otpPolicyPeriod")
+    if not isinstance(period, int) or isinstance(period, bool) or period != 30:
+        errors.append(
+            f"otpPolicyPeriod must be the integer 30, got {period!r}."
+        )
+
+    # `is not False` correctly rejects null/0/1/true — only the boolean
+    # `false` singleton passes. Explicit-false is what enables Keycloak's
+    # single-use-per-time-step replay cache (AC3).
+    if data.get("otpPolicyCodeReusable") is not False:
+        errors.append(
+            f"otpPolicyCodeReusable must be boolean false (AC3: a verified code must be "
+            f"single-use within its time step — Keycloak's replay-protection cache is "
+            f"active only when this is false), got {data.get('otpPolicyCodeReusable')!r}."
+        )
+
+    if "otpPolicyInitialCounter" in data:
+        errors.append(
+            "realm-export.json must NOT declare 'otpPolicyInitialCounter' — that field "
+            "is HOTP-only and this realm uses TOTP exclusively (Subtask 1.2); Keycloak "
+            "defaults it to 0 when absent."
+        )
+
+    if "otpPolicy" in data:
+        errors.append(
+            "realm-export.json must NOT declare a top-level 'otpPolicy' object — "
+            "Keycloak's RealmRepresentation has no such field; use the flat otpPolicy* "
+            "fields instead (otpPolicyType, otpPolicyDigits, etc.), or realm import fails."
+        )
+
+    browser_flow = data.get("browserFlow")
+    if not isinstance(browser_flow, str) or not browser_flow:
+        errors.append(
+            "Missing or empty 'browserFlow' in realm-export.json — the realm's active "
+            "browser flow must be explicitly bound (Subtask 2.2, AC1)."
+        )
+    else:
+        flows = data.get("authenticationFlows")
+        flows = flows if isinstance(flows, list) else []
+        flows_by_alias = {
+            f.get("alias"): f for f in flows if isinstance(f, dict)
+        }
+
+        if browser_flow not in flows_by_alias:
+            errors.append(
+                f"'browserFlow' references '{browser_flow}', but no flow with that alias "
+                "exists in 'authenticationFlows'."
+            )
+
+        # Code-review finding (edge-case hunter): every execution that points at a
+        # sub-flow (autheticatorFlow=true / has a flowAlias) must resolve to a flow
+        # that actually exists in 'authenticationFlows' — a dangling reference passes
+        # a naive check but makes the whole realm import fail at Keycloak startup.
+        for f in flows:
+            if not isinstance(f, dict):
+                continue
+            for ex in f.get("authenticationExecutions") or []:
+                if not isinstance(ex, dict):
+                    continue
+                flow_alias_ref = ex.get("flowAlias")
+                if flow_alias_ref is not None and flow_alias_ref not in flows_by_alias:
+                    errors.append(
+                        f"Flow '{f.get('alias')!r}' has an execution referencing "
+                        f"flowAlias {flow_alias_ref!r}, which does not exist in "
+                        "'authenticationFlows' — this dangling reference would fail "
+                        "at Keycloak import time."
+                    )
+
+        # AC1 ("Locked Decision"): the CONDITIONAL-OTP gate must live in the flow
+        # that is ACTUALLY ACTIVE (i.e. reachable from 'browserFlow' by following
+        # flowAlias references), not merely present *somewhere* in
+        # 'authenticationFlows'. A leftover/unused flow containing a correctly
+        # shaped OTP step must not make an unrelated, unprotected active browser
+        # flow pass lint (code-review finding: edge-case hunter).
+        reachable_aliases = set()
+        frontier = [browser_flow] if browser_flow in flows_by_alias else []
+        while frontier:
+            alias = frontier.pop()
+            if alias in reachable_aliases:
+                continue
+            reachable_aliases.add(alias)
+            flow = flows_by_alias.get(alias)
+            if not isinstance(flow, dict):
+                continue
+            for ex in flow.get("authenticationExecutions") or []:
+                if not isinstance(ex, dict):
+                    continue
+                nested_alias = ex.get("flowAlias")
+                if nested_alias in flows_by_alias and nested_alias not in reachable_aliases:
+                    frontier.append(nested_alias)
+
+        reachable_executions = [
+            ex
+            for alias in reachable_aliases
+            for ex in (flows_by_alias[alias].get("authenticationExecutions") or [])
+            if isinstance(ex, dict)
+        ]
+
+        otp_executions = [
+            ex for ex in reachable_executions if ex.get("authenticator") == "auth-otp-form"
+        ]
+        has_condition_user_configured = any(
+            ex.get("authenticator") == "conditional-user-configured"
+            for ex in reachable_executions
+        )
+
+        if not otp_executions:
+            errors.append(
+                "No 'auth-otp-form' execution found reachable from 'browserFlow' "
+                f"({browser_flow!r}) — the ACTIVE browser flow must include an OTP "
+                "step (AC1); an OTP execution existing only in an unreferenced flow "
+                "does not satisfy this."
+            )
+        else:
+            # Keycloak's CONDITIONAL requirement type is assigned to the flow-alias
+            # execution that references a conditional sub-flow — CONDITIONAL is a
+            # flow-level property, never valid directly on a non-flow (leaf)
+            # execution (confirmed live against Keycloak 26.6.3 — see this story's
+            # Dev Agent Record). Reject that shape outright rather than silently
+            # accepting it only for it to fail at Keycloak import time.
+            for ex in otp_executions:
+                if ex.get("requirement") == "CONDITIONAL" and not ex.get("autheticatorFlow"):
+                    errors.append(
+                        "The 'auth-otp-form' execution has requirement=CONDITIONAL set "
+                        "directly on the leaf execution — CONDITIONAL is only valid on a "
+                        "flow-alias execution (autheticatorFlow=true) referencing a "
+                        "conditional sub-flow, not on a non-flow authenticator execution; "
+                        "this shape is rejected by Keycloak at import time."
+                    )
+
+            # Only the sub-flow(s) that actually contain 'auth-otp-form' are eligible
+            # to satisfy the CONDITIONAL-wrapper requirement — this correlates the
+            # two checks instead of testing each token's existence independently and
+            # globally (code-review finding: edge-case hunter).
+            flow_alias_by_authenticator_flow = {
+                alias
+                for alias in reachable_aliases
+                if any(
+                    isinstance(ex, dict) and ex.get("authenticator") == "auth-otp-form"
+                    for ex in (flows_by_alias[alias].get("authenticationExecutions") or [])
+                )
+            }
+            has_conditional_wrapper = any(
+                ex.get("flowAlias") in flow_alias_by_authenticator_flow
+                and ex.get("requirement") == "CONDITIONAL"
+                for ex in reachable_executions
+            )
+
+            for ex in otp_executions:
+                requirement = ex.get("requirement")
+                if requirement == "DISABLED":
+                    errors.append(
+                        "The 'auth-otp-form' execution requirement is DISABLED — OTP "
+                        "verification must be gated CONDITIONAL (on itself or its wrapping "
+                        "sub-flow), never turned off entirely (AC1)."
+                    )
+                elif requirement != "CONDITIONAL" and not has_conditional_wrapper:
+                    errors.append(
+                        "The 'auth-otp-form' execution requirement is "
+                        f"{requirement!r}, and it is not wrapped by a CONDITIONAL "
+                        "flowAlias execution either — OTP must be gated CONDITIONAL, not "
+                        "bare REQUIRED with no condition-user-configured escape hatch "
+                        "(Locked Decision — see Dev Notes 'Flow Requirement Level')."
+                    )
+
+        if not has_condition_user_configured:
+            errors.append(
+                "No 'conditional-user-configured' execution found reachable from "
+                "'browserFlow' — the OTP branch must be gated by a "
+                "condition-user-configured sub-flow so OTP is only non-skippable for "
+                "accounts that already have a TOTP credential (Locked Decision — bare "
+                "REQUIRED with no escape hatch would strand unenrolled accounts)."
+            )
+
+    # ── Step 10: Report and exit ────────────────────────────────────────────────
     if errors:
         print("realm-export.json FAILED lint:", file=sys.stderr)
         for err in errors:

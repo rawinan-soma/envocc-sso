@@ -24,14 +24,14 @@
                                    id="username"
                                    class="${properties.kcInputClass!}"
                                    name="username"
-                                   value="${(login.username!'')?html}"
+                                   value="${(login.username!'')}"
                                    type="hidden">
                         <#else>
                             <input tabindex="${properties.kcLoginTabIndex!}"
                                    id="username"
                                    class="${properties.kcInputClass!}"
                                    name="username"
-                                   value="${(login.username!'')?html}"
+                                   value="${(login.username!'')}"
                                    type="text"
                                    autofocus
                                    autocomplete="username"
