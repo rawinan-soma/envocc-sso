@@ -172,6 +172,12 @@ Per `.github/workflows/ci.yml`'s job list (`gitleaks`, `realm-export-check`, `re
 
 `git log --oneline -5` at this story's baseline: `1203707 chore(bad): update dependency graph timestamp 2026-07-01`, `311d368 chore(sprint): record ATDD/dev progress for stories 2-6, 2-7, 2-8`, `a61dfc1 fix: pin GitHub Actions to commit SHAs (unblocks pre-commit gate) (#53)`, then the batch-1 merges (2.1-2.5). Branch naming convention confirmed: `story-2.9-login-with-thaid` (this worktree), consistent with `story-2.8-disable-blocks-authentication` etc. Commit message convention (from Story 2.8's own Dev Notes, itself derived from PRs #48-#52): PR-squash format `story-{epic}-{story}-{kebab-title} - fixes #{issue} (#{pr})`, inner commits `feat(story-2-9): {short description}`, with a `Co-Authored-By: Claude Sonnet <version> <noreply@anthropic.com>` trailer — fill the Dev Agent Record's "Agent Model Used" with whatever model actually implements this story.
 
+### ATDD Artifacts
+
+- Checklist: `_bmad-output/test-artifacts/atdd-checklist-2-9-login-with-thaid-brokered-federation-account-linking.md`
+- Integration tests: `tests/integration/thaid-broker.bats` (7 tests, TS-290a/b/c/d/e/f/h — `INTEGRATION=1`-gated, confirmed skip-clean without a live stack; will fail red against a live rebuilt stack until Tasks 0-2 land). TS-290g (bonus reverse-direction case) intentionally not implemented — optional per Task 5.7.
+- `drive_thaid_broker_login()`'s mock-IdP hop is a best-effort scaffold pending Task 5.3's mandatory hands-on re-verification once `mock-oidc-provider` exists — see the test file's header comment and the checklist's Risks section.
+
 ### References
 
 - [Source: _bmad-output/planning-artifacts/epics.md#Story 2.9] — story text, GH issue #15, all 5 ACs verbatim (lines ~544-573); "Change Note — Two Login Methods" (lines ~19-27)
