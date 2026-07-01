@@ -85,14 +85,25 @@ services:
       postgres:
         condition: service_healthy
       # Story 2.9 — dev/CI convenience only: Keycloak's realm import references the
-      # `thaid` identity provider's mock endpoints (keycloak/realm-export.json), so
-      # the mock IdP should be up before Keycloak's own healthcheck is relied upon by
-      # dependents. A production-hardening pass MUST remove this dependency entirely
-      # (along with the mock-oidc-provider service itself) once the `thaid` IdP is
+      # `thaid` identity provider's mock endpoints (keycloak/realm-export.json) as
+      # static config strings — the import itself does not probe them over the
+      # network, so Keycloak does not need mock-oidc-provider to be *healthy* to
+      # start successfully. `condition: service_started` (ordering only, not a
+      # health gate) avoids making the unrelated email+password/TOTP login path
+      # (Story 2.2/2.6) a hostage to this dev/CI-only mock container: if
+      # mock-oidc-provider fails to become healthy (bad pull, crash-loop, etc.),
+      # Keycloak still starts and every non-ThaiD login path keeps working.
+      # ThaiD-specific readiness is independently, directly verified by TS-290a in
+      # tests/integration/thaid-broker.bats before any ThaiD-dependent assertions
+      # run. Code review finding (Step 7): this was previously a hard
+      # `condition: service_healthy` gate, making all of Keycloak (not just ThaiD
+      # login) a single point of failure on the mock IdP's health.
+      # A production-hardening pass MUST remove this dependency entirely (along
+      # with the mock-oidc-provider service itself) once the `thaid` IdP is
       # repointed at the real DOPA/ThaiD endpoints — mirrors the `test-ropc-client`
       # "FORBIDDEN in production" pattern from Story 2.1/2.8.
       mock-oidc-provider:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       # Health endpoint moved to management port 9000 in KC 25+.
       # The ubi9-micro base image has no curl/wget — use a bash TCP socket.

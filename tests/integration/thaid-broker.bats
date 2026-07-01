@@ -611,8 +611,10 @@ print('OK')
 # conflicting link attempt
 #
 # Pre-registers pid_A to a test user, then attempts to register a second,
-# different pid_B to the SAME user. Asserts the second call is rejected
-# (non-2xx) and that only pid_A remains linked afterward.
+# different pid_B to the SAME user. Asserts the second call is rejected with
+# the specific, hands-on-confirmed HTTP 409 Conflict (not merely "non-2xx",
+# which would also match a curl transport failure) and that only pid_A
+# remains linked afterward.
 #
 # This test exercises the Admin REST API directly (no broker flow) — it can
 # in principle pass or fail independent of Tasks 0/2, but is grouped here
@@ -633,9 +635,14 @@ print('OK')
   [[ "${first_link_status}" == "204" ]] || fail "Could not pre-register pid_A for TS-290f (got HTTP ${first_link_status})"
 
   second_link_status=$(_register_pid_link "${user_id}" "${pid_b}")
-  if [[ "${second_link_status}" =~ ^2 ]]; then
-    fail "Expected the second, conflicting federated-identity link attempt to be rejected (non-2xx), got HTTP ${second_link_status}"
-  fi
+  # Code review finding (Step 7): a bare "not 2xx" check treats a curl transport
+  # failure (e.g. "000"/empty from a connection error, see _register_pid_link)
+  # identically to a real Keycloak rejection — silently passing without ever
+  # exercising the conflicting-link business logic. Assert the specific,
+  # hands-on-confirmed rejection status (HTTP 409 Conflict, per
+  # keycloak/REALM-EXPORT-NOTES.md) so only an actual server-side rejection
+  # satisfies this test.
+  [[ "${second_link_status}" == "409" ]] || fail "Expected the second, conflicting federated-identity link attempt to be rejected with HTTP 409, got HTTP ${second_link_status}"
 
   token=$(get_admin_token) || fail "Could not obtain admin token"
   local links_json remaining_pids
