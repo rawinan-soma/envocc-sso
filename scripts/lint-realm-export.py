@@ -25,7 +25,9 @@ Checks performed:
   5. (Story 2.2) accessCodeLifespan is present AND its value is <= 60 seconds.
   6. (Story 2.2) Per-client: implicitFlowEnabled is not true (must be false or absent).
   7. (Story 2.2) Per-client: directAccessGrantsEnabled is not true (Keycloak default
-     is true — must be explicitly false).
+     is true — must be explicitly false), EXCEPT the single, explicitly-named
+     test-only fixture client `test-ropc-client` (Story 2.1/2.8 — see Check 6
+     implementation for the narrow, clientId-keyed exemption and its rationale).
   8. (Story 2.2) Per public client: attributes.pkce.code.challenge.method must be "S256".
   9. (Story 2.2) Per public client: standardFlowEnabled must be true (Authorization Code
      flow must be explicitly enabled — it is the only permitted flow for PKCE clients).
@@ -158,13 +160,54 @@ def lint_clients(clients):
         # Keycloak default is true — absence is NOT safe; it must be explicitly
         # false. Flag absence and any non-false value (including truthy non-bool
         # values like `1` or `"true"`).
-        ropc = client.get("directAccessGrantsEnabled", "<absent>")
-        if ropc is not False:
-            client_errors.append(
-                f"[{client_id}] directAccessGrantsEnabled is {ropc!r} — "
-                "ROPC must be explicitly disabled (set to false). "
-                "Keycloak default is true."
-            )
+        #
+        # EXEMPTION (Story 2.1 / Story 2.8): `test-ropc-client` is a deliberately
+        # named, test-only fixture that MUST have directAccessGrantsEnabled: true
+        # — it exists solely to drive ROPC/password-grant integration tests
+        # (tests/integration/identity-model.bats TS-210d, tests/integration/
+        # account-disable.bats TS-280a/b/d/e) and cannot function otherwise. This
+        # is a narrow, clientId-keyed exemption, not a loosening of the general
+        # rule — it does not apply to any other client. The client's secret is
+        # zeroed on disk (populated from KC_TEST_ROPC_CLIENT_SECRET at test
+        # runtime) and it is documented in keycloak/IDENTITY-MODEL.md Section 7
+        # as "Production use: FORBIDDEN — remove before production deployment".
+        # The residual risk of this client shipping in a non-dev realm export is
+        # a tracked, deferred item (_bmad-output/implementation-artifacts/
+        # deferred-work.md, "Deferred from: code review of story-2.1") —
+        # resolving that production-hardening gap is explicitly out of scope for
+        # both Story 2.1 and Story 2.8; do not attempt to fix it here.
+        if client_id == "test-ropc-client":
+            if client.get("publicClient") is not False:
+                client_errors.append(
+                    f"[{client_id}] publicClient is {client.get('publicClient')!r} — "
+                    "the ROPC test fixture must remain a confidential client "
+                    "(publicClient: false) even though directAccessGrantsEnabled "
+                    "is exempted."
+                )
+            # Positive check (code review, Story 2.8): the exemption above only
+            # skips the "must be false" rule — it does not itself guarantee the
+            # fixture is still ROPC-capable. Without this, an accidental edit
+            # that flips test-ropc-client's directAccessGrantsEnabled to false
+            # (or removes it) would pass lint silently while breaking every
+            # ROPC-dependent integration test (identity-model.bats TS-210d;
+            # account-disable.bats TS-280a/b/d/e) for an unrelated reason.
+            if client.get("directAccessGrantsEnabled") is not True:
+                client_errors.append(
+                    f"[{client_id}] directAccessGrantsEnabled is "
+                    f"{client.get('directAccessGrantsEnabled', '<absent>')!r} — "
+                    "the ROPC test fixture must have directAccessGrantsEnabled: "
+                    "true (it exists solely to drive ROPC integration tests; the "
+                    "exemption above only permits this value, it does not imply "
+                    "it may be omitted or false)."
+                )
+        else:
+            ropc = client.get("directAccessGrantsEnabled", "<absent>")
+            if ropc is not False:
+                client_errors.append(
+                    f"[{client_id}] directAccessGrantsEnabled is {ropc!r} — "
+                    "ROPC must be explicitly disabled (set to false). "
+                    "Keycloak default is true."
+                )
 
         # ── Check 7 + 8: public clients must have PKCE S256 and standard flow ─
         if client.get("publicClient") is True:
