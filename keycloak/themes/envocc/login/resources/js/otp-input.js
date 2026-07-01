@@ -25,7 +25,17 @@
  *   - strips non-digit characters and enforces the 6-digit max client-side
  *     (defense-in-depth; the server and maxlength="6"/pattern="[0-9]{6}"
  *     already constrain this without JS)
- *   - auto-submits the form once the 6th digit is entered or pasted
+ *   - auto-submits the form once the 6th digit is entered or pasted, UNLESS
+ *     the multi-credential selector (#kc-otp-credentials, story 2.5) is
+ *     present — with more than one TOTP credential, the field also carries
+ *     `autofocus`, so a user who starts typing before explicitly picking a
+ *     non-default credential radio would otherwise have the code auto-submit
+ *     against the wrong (default-checked) credential with no chance to
+ *     switch. In that case the user must click the submit button, exactly
+ *     like the no-JS path already requires.
+ *   - ignores IME composition sessions (compositionstart/compositionend) so
+ *     mobile predictive-text keyboards don't get digits dropped/duplicated
+ *     by a mid-composition value rewrite (code review finding, story 2.6)
  */
 (function () {
   'use strict';
@@ -35,6 +45,9 @@
     if (!input) {
       return;
     }
+
+    var hasMultipleCredentials = !!document.getElementById('kc-otp-credentials');
+    var isComposing = false;
 
     function submitForm() {
       var form = input.form;
@@ -48,12 +61,26 @@
       }
     }
 
+    input.addEventListener('compositionstart', function () {
+      isComposing = true;
+    });
+
+    input.addEventListener('compositionend', function () {
+      isComposing = false;
+      // Re-run the digit filter/auto-submit check now that composition has
+      // settled and the field's final value is known.
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
     input.addEventListener('input', function () {
+      if (isComposing) {
+        return;
+      }
       var digitsOnly = input.value.replace(/\D/g, '').slice(0, 6);
       if (digitsOnly !== input.value) {
         input.value = digitsOnly;
       }
-      if (input.value.length === 6) {
+      if (input.value.length === 6 && !hasMultipleCredentials) {
         submitForm();
       }
     });
@@ -68,7 +95,9 @@
       if (digitsOnly.length === 6) {
         event.preventDefault();
         input.value = digitsOnly;
-        submitForm();
+        if (!hasMultipleCredentials) {
+          submitForm();
+        }
       }
     });
   }

@@ -53,6 +53,12 @@
 #                (AC3 single-use-within-time-step / replay protection)
 #   TS-260l [P1] Lint exits 1 when a legacy nested "otpPolicy" object is present
 #                (regression guard against the nonexistent-field mistake above)
+#   TS-260m [P1] Lint exits 1 when a flowAlias execution references a nonexistent
+#                sub-flow (dangling reference — code-review addition)
+#   TS-260n [P1] Lint exits 1 when a correctly-shaped CONDITIONAL-OTP flow exists
+#                but is unreachable from the active browserFlow (code-review addition)
+#   TS-260o [P1] Lint exits 1 when CONDITIONAL is set directly on the auth-otp-form
+#                leaf execution instead of its wrapping flow-alias (code-review addition)
 #
 # Run: BATS_LIB_PATH=$(pwd)/tests/lib bats tests/unit/realm-otp-policy.bats
 #
@@ -436,5 +442,100 @@ print(json.dumps(d))
   run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
   assert_failure
   assert_output --partial "otpPolicy"
+  rm -f "${fixture}"
+}
+
+# ---------------------------------------------------------------------------
+# TS-260m [P1] — Lint exits 1 when a flowAlias reference is dangling (points
+# at a sub-flow alias that does not exist in authenticationFlows). Added by
+# code review (edge-case hunter): a dangling reference passed the pre-review
+# lint but fails at Keycloak import time — the lint's whole purpose is to
+# catch exactly this class of config error statically.
+# ---------------------------------------------------------------------------
+@test "[P1][TS-260m] Lint exits 1 when a flowAlias execution references a nonexistent sub-flow" {
+  local fixture
+  fixture=$(mktemp)
+  echo "${VALID_FIXTURE}" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for flow in d['authenticationFlows']:
+    if flow['alias'] == 'envocc browser forms':
+        for ex in flow['authenticationExecutions']:
+            if ex.get('flowAlias') == 'envocc browser forms conditional otp':
+                ex['flowAlias'] = 'envocc browser forms conditional otp TYPO'
+print(json.dumps(d))
+" > "${fixture}"
+  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
+  assert_failure
+  assert_output --partial "dangling"
+  rm -f "${fixture}"
+}
+
+# ---------------------------------------------------------------------------
+# TS-260n [P1] — Lint exits 1 when a correctly-shaped CONDITIONAL-OTP flow
+# exists in authenticationFlows but is NOT reachable from browserFlow (i.e.
+# it's a leftover/unused flow) while the ACTUAL active flow has no OTP
+# gating at all. Added by code review (edge-case hunter): the pre-review
+# lint accepted an auth-otp-form execution existing *anywhere* in the file,
+# not specifically in the flow that is actually bound and active.
+# ---------------------------------------------------------------------------
+@test "[P1][TS-260n] Lint exits 1 when the CONDITIONAL-OTP flow is unreachable from the active browserFlow" {
+  local fixture
+  fixture=$(mktemp)
+  echo "${VALID_FIXTURE}" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+# Point browserFlow at a NEW top-level flow with no OTP step at all, while the
+# original well-formed conditional-OTP flow chain is left dangling/unused —
+# only reachable-from-browserFlow enforcement catches this.
+d['authenticationFlows'].append({
+    'alias': 'envocc browser unprotected',
+    'description': 'No OTP step — regression fixture',
+    'providerId': 'basic-flow',
+    'topLevel': True,
+    'builtIn': False,
+    'authenticationExecutions': [
+        {
+            'authenticator': 'auth-username-password-form',
+            'requirement': 'REQUIRED',
+            'priority': 10,
+            'userSetupAllowed': False,
+            'autheticatorFlow': False
+        }
+    ]
+})
+d['browserFlow'] = 'envocc browser unprotected'
+print(json.dumps(d))
+" > "${fixture}"
+  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
+  assert_failure
+  assert_output --partial "reachable"
+  rm -f "${fixture}"
+}
+
+# ---------------------------------------------------------------------------
+# TS-260o [P1] — Lint exits 1 when requirement=CONDITIONAL is set directly on
+# the auth-otp-form leaf execution (autheticatorFlow=false) instead of on the
+# flow-alias execution that references its wrapping sub-flow. Added by code
+# review (blind-hunter/dev's own Completion Notes): this shape is not valid
+# Keycloak config — CONDITIONAL is a flow-level property — and would fail at
+# import time even though a naive check might accept it.
+# ---------------------------------------------------------------------------
+@test "[P1][TS-260o] Lint exits 1 when CONDITIONAL is set directly on the auth-otp-form leaf execution" {
+  local fixture
+  fixture=$(mktemp)
+  echo "${VALID_FIXTURE}" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for flow in d['authenticationFlows']:
+    if flow['alias'] == 'envocc browser forms conditional otp':
+        for ex in flow['authenticationExecutions']:
+            if ex['authenticator'] == 'auth-otp-form':
+                ex['requirement'] = 'CONDITIONAL'
+print(json.dumps(d))
+" > "${fixture}"
+  run python3 "${PROJECT_ROOT}/scripts/lint-realm-export.py" "${fixture}"
+  assert_failure
+  assert_output --partial "leaf execution"
   rm -f "${fixture}"
 }

@@ -113,6 +113,28 @@ print(base64.b32encode(os.urandom(20)).decode('utf-8').rstrip('='))
 }
 
 # ---------------------------------------------------------------------------
+# wait_for_totp_window_margin [min_seconds_remaining]
+# Code-review addition (edge-case hunter finding): a code generated near the
+# tail of a 30s TOTP step can go stale before a later HTTP round-trip
+# validates it, causing intermittent CI flakiness unrelated to the feature
+# under test. Blocks until at least `min_seconds_remaining` (default 10)
+# seconds remain in the current step before the caller generates/submits a
+# code, giving multi-request test bodies (TS-261a/c/d) headroom to complete
+# within a single step.
+# ---------------------------------------------------------------------------
+wait_for_totp_window_margin() {
+  local min_remaining="${1:-10}"
+  python3 -c "
+import sys, time
+period = int(sys.argv[1])
+min_remaining = int(sys.argv[2])
+remaining = period - (time.time() % period)
+if remaining < min_remaining:
+    time.sleep(remaining + 0.1)
+" "${TOTP_PERIOD}" "${min_remaining}"
+}
+
+# ---------------------------------------------------------------------------
 # configure_totp_for_user <admin_token> <user_id> <base32_secret>
 # Provisions a TOTP credential on an existing user via Admin REST (test setup
 # only — never the enrollment UI).
@@ -417,6 +439,7 @@ teardown() {
   otp_form_action=$(echo "${step1}" | tail -1)
 
   local code headers auth_code
+  wait_for_totp_window_margin
   code=$(totp_code "${TEST_TOTP_SECRET}")
   headers=$(submit_otp_step "${session_jar}" "${otp_form_action}" "${code}")
   auth_code=$(echo "${headers}" | extract_auth_code_from_headers) \
@@ -441,6 +464,20 @@ teardown() {
 # TS-261b [P0] — Skipping the OTP step after password succeeds does NOT yield
 # tokens (AC1: the OTP step cannot be bypassed).
 # ---------------------------------------------------------------------------
+#
+# NOTE (deliberate, reviewed correction — not a silent workaround, found
+# during code review): the original assertion here POSTed an empty `code=`
+# to the token endpoint and asserted HTTP 400. That assertion is true
+# UNCONDITIONALLY — an empty/absent authorization code is always rejected by
+# the token endpoint regardless of whether OTP enforcement exists at all, so
+# this test would have passed even with OTP fully disabled. It never actually
+# proved AC1's "OTP step cannot be bypassed" claim. Fixed to directly inspect
+# the raw HTTP response to the password-only POST: for AC1 to hold, that
+# response must be the re-rendered OTP challenge (no `Location` header
+# carrying an authorization `code`) — Keycloak must never issue tokens/a code
+# from password alone for an account with a configured TOTP credential. The
+# password-step helper is bypassed in favor of a raw POST (mirrors TS-261e's
+# existing pattern) so the headers of that specific response are inspectable.
 @test "[P0][TS-261b] Skipping the OTP step after password succeeds does not yield tokens" {
   ensure_test_totp_credential
 
@@ -449,64 +486,125 @@ teardown() {
   verifier=$(echo "${pkce_out}" | head -1)
   challenge=$(echo "${pkce_out}" | tail -1)
 
-  local step1 session_jar otp_form_action
-  step1=$(submit_password_step "${challenge}" "${TEST_USER_EMAIL}" "${TEST_USER_PASSWORD}") \
-    || fail "Password step did not reach an OTP form — expected AC1 CONDITIONAL OTP execution for a user with a configured TOTP credential"
-  session_jar=$(echo "${step1}" | head -1)
-  otp_form_action=$(echo "${step1}" | tail -1)
+  local session_jar tmphtml
+  session_jar=$(mktemp "${TMPDIR:-/tmp}/kc-totp-skip-sess-XXXXXX")
+  tmphtml=$(mktemp "${TMPDIR:-/tmp}/kc-totp-skip-login-XXXXXX")
+  local state="state-$$-${RANDOM}"
 
-  # Attempt to exchange at the token endpoint WITHOUT ever completing the OTP
-  # step — there is no auth code yet because Keycloak has not issued one
-  # (login has not completed). Confirm the token endpoint has nothing to
-  # redeem: a bogus/absent code must be rejected.
-  local token_response http_code
-  token_response=$(curl -s --max-time 15 \
-    -X POST "${TOKEN_ENDPOINT}" \
-    -d "grant_type=authorization_code" \
-    -d "code=" \
-    -d "redirect_uri=${REDIRECT_URI}" \
-    -d "client_id=${CLIENT_ID}" \
-    -d "code_verifier=${verifier}" \
-    -w "\n%{http_code}")
-  http_code=$(echo "${token_response}" | tail -1)
+  curl -sf --max-time 15 \
+    -c "${session_jar}" \
+    -o "${tmphtml}" \
+    "${AUTH_ENDPOINT}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=openid&code_challenge=${challenge}&code_challenge_method=S256&state=${state}" \
+    || fail "Could not initiate auth request"
 
-  rm -f "${session_jar}"
-  assert_equal "${http_code}" "400"
+  local form_action
+  form_action=$(python3 -c "
+import re, sys
+html = open('${tmphtml}').read()
+actions = [m.replace('&amp;', '&') for m in re.findall(r'action=\"([^\"]+)\"', html)]
+auth = [a for a in actions if 'login-actions/authenticate' in a or 'authenticate' in a]
+print((auth or actions or [''])[0])
+")
+
+  # Submit username/password ONLY — no OTP code — and capture the raw
+  # response headers/body of THIS SPECIFIC response (not a later hop).
+  local pw_bodyfile pw_headers
+  pw_bodyfile=$(mktemp "${TMPDIR:-/tmp}/kc-totp-skip-pwbody-XXXXXX")
+  pw_headers=$(curl -s --max-time 15 \
+    -c "${session_jar}" \
+    -b "${session_jar}" \
+    -D - -o "${pw_bodyfile}" \
+    -X POST "${form_action}" \
+    -d "username=${TEST_USER_EMAIL}" \
+    -d "password=${TEST_USER_PASSWORD}" \
+    -d "credentialId=")
+
+  # AC1's core, positive assertion: password-only must NOT yield an auth
+  # code — there must be no Location header carrying one.
+  local leaked_auth_code
+  leaked_auth_code=$(echo "${pw_headers}" | extract_auth_code_from_headers 2>/dev/null || echo "")
+
+  # Positive control: confirm the reason no code was issued is that the OTP
+  # challenge was actually rendered (not an unrelated error/500) — otherwise
+  # "no code" could be vacuously true for the wrong reason.
+  local reached_otp_form
+  reached_otp_form=$(python3 -c "
+import re
+html = open('${pw_bodyfile}').read()
+actions = [m.replace('&amp;', '&') for m in re.findall(r'action=\"([^\"]+)\"', html)]
+auth = [a for a in actions if 'login-actions/authenticate' in a or 'authenticate' in a]
+print('yes' if auth else 'no')
+")
+
+  rm -f "${session_jar}" "${tmphtml}" "${pw_bodyfile}"
+
+  [[ "${reached_otp_form}" == "yes" ]] \
+    || fail "Expected the password-only response to re-render the OTP challenge form (AC1 CONDITIONAL OTP execution for a user with a configured TOTP credential); got no authenticate form action"
+  [[ -z "${leaked_auth_code}" ]] \
+    || fail "Expected password-only submission to NOT yield an authorization code (AC1: OTP step cannot be bypassed), but got auth code: ${leaked_auth_code}"
 }
 
 # ---------------------------------------------------------------------------
 # TS-261c [P0] — Same valid TOTP code resubmitted within the same time step is
 # rejected (AC3: single-use-per-time-step / Keycloak's built-in replay cache).
+#
+# NOTE (deliberate, reviewed correction — not a silent workaround, found
+# during code review): the original version resubmitted the code against the
+# SAME already-completed OTP form action. Per submit_otp_step_and_get_next_action's
+# own documented finding (see its comment above, and TS-261d), Keycloak embeds
+# a fresh session_code on every re-render, and once a login has completed the
+# auth session is spent — a second POST to that same stale action
+# short-circuits with a session-mismatch redirect BEFORE the OTP validator
+# (and its replay cache) ever runs. That structure could never actually
+# exercise otpPolicyCodeReusable — it always "passed" for the wrong reason.
+# Fixed to perform a genuinely SEPARATE, independent login attempt (fresh
+# PKCE/state/session/OTP-form-action) submitting the SAME code — still within
+# the same 30s TOTP step (wait_for_totp_window_margin guards this) — so the
+# second submission reaches a live OTP validator instance and is rejected
+# specifically because Keycloak's replay cache recognizes the code as already
+# consumed this step, not because of session staleness.
 # ---------------------------------------------------------------------------
 @test "[P0][TS-261c] Resubmitting the same valid TOTP code within the same time step is rejected" {
   ensure_test_totp_credential
 
-  local pkce_out challenge
-  pkce_out=$(pkce_generate)
-  challenge=$(echo "${pkce_out}" | tail -1)
-
-  local step1 session_jar otp_form_action
-  step1=$(submit_password_step "${challenge}" "${TEST_USER_EMAIL}" "${TEST_USER_PASSWORD}") \
-    || fail "Password step did not reach an OTP form"
-  session_jar=$(echo "${step1}" | head -1)
-  otp_form_action=$(echo "${step1}" | tail -1)
-
-  local code first_headers first_auth_code
+  local code
+  wait_for_totp_window_margin
   code=$(totp_code "${TEST_TOTP_SECRET}")
-  first_headers=$(submit_otp_step "${session_jar}" "${otp_form_action}" "${code}")
+
+  # First, independent login attempt — submits the code and must succeed.
+  local pkce_out_1 challenge_1 step1 session_jar_1 otp_form_action_1
+  pkce_out_1=$(pkce_generate)
+  challenge_1=$(echo "${pkce_out_1}" | tail -1)
+  step1=$(submit_password_step "${challenge_1}" "${TEST_USER_EMAIL}" "${TEST_USER_PASSWORD}") \
+    || fail "Password step (first attempt) did not reach an OTP form"
+  session_jar_1=$(echo "${step1}" | head -1)
+  otp_form_action_1=$(echo "${step1}" | tail -1)
+
+  local first_headers first_auth_code
+  first_headers=$(submit_otp_step "${session_jar_1}" "${otp_form_action_1}" "${code}")
   first_auth_code=$(echo "${first_headers}" | extract_auth_code_from_headers) \
     || fail "First submission of a valid TOTP code should succeed; headers: ${first_headers}"
+  rm -f "${session_jar_1}"
 
-  # Immediately resubmit the SAME code against the SAME (already-authenticated)
-  # OTP form action — Keycloak's replay cache must reject reuse of a code
-  # already verified within the current time step.
+  # Second, fully independent login attempt (fresh state/session/OTP form
+  # action) submitting the SAME code, still within the same TOTP time step —
+  # this reaches a live OTP validator and must be rejected by the replay
+  # cache (otpPolicyCodeReusable: false), not by a stale-session redirect.
+  local pkce_out_2 challenge_2 step2 session_jar_2 otp_form_action_2
+  pkce_out_2=$(pkce_generate)
+  challenge_2=$(echo "${pkce_out_2}" | tail -1)
+  step2=$(submit_password_step "${challenge_2}" "${TEST_USER_EMAIL}" "${TEST_USER_PASSWORD}") \
+    || fail "Password step (second attempt) did not reach an OTP form"
+  session_jar_2=$(echo "${step2}" | head -1)
+  otp_form_action_2=$(echo "${step2}" | tail -1)
+
   local second_headers second_auth_code
-  second_headers=$(submit_otp_step "${session_jar}" "${otp_form_action}" "${code}")
+  second_headers=$(submit_otp_step "${session_jar_2}" "${otp_form_action_2}" "${code}")
   second_auth_code=$(echo "${second_headers}" | extract_auth_code_from_headers 2>/dev/null || echo "")
+  rm -f "${session_jar_2}"
 
-  rm -f "${session_jar}"
   [[ -z "${second_auth_code}" || "${second_auth_code}" != "${first_auth_code}" ]] \
-    || fail "Expected the second submission of the same TOTP code to be rejected (replay), but got a fresh auth code"
+    || fail "Expected a second, independent login submitting the same TOTP code within the same time step to be rejected (replay cache), but got a fresh auth code"
 }
 
 # ---------------------------------------------------------------------------

@@ -129,7 +129,7 @@ input[type="email"]:focus-visible {
 }
 
 /* ── Six-cell verification-code input (Story 2.6, AC2, DESIGN.md#Components
- * code-input). The field stays ONE real <input name="totp"> (see
+ * code-input). The field stays ONE real <input id="totp" name="otp"> (see
  * login-otp.ftl and Dev Notes "Code-Input Implementation Approach") — this
  * repeating-gradient background paints six equal-width cell dividers behind
  * the text so it *looks* like six bordered cells without any extra DOM. ── */

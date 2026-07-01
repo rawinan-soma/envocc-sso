@@ -484,45 +484,103 @@ def main():
                 "exists in 'authenticationFlows'."
             )
 
-        all_executions = [
+        # Code-review finding (edge-case hunter): every execution that points at a
+        # sub-flow (autheticatorFlow=true / has a flowAlias) must resolve to a flow
+        # that actually exists in 'authenticationFlows' — a dangling reference passes
+        # a naive check but makes the whole realm import fail at Keycloak startup.
+        for f in flows:
+            if not isinstance(f, dict):
+                continue
+            for ex in f.get("authenticationExecutions") or []:
+                if not isinstance(ex, dict):
+                    continue
+                flow_alias_ref = ex.get("flowAlias")
+                if flow_alias_ref is not None and flow_alias_ref not in flows_by_alias:
+                    errors.append(
+                        f"Flow '{f.get('alias')!r}' has an execution referencing "
+                        f"flowAlias {flow_alias_ref!r}, which does not exist in "
+                        "'authenticationFlows' — this dangling reference would fail "
+                        "at Keycloak import time."
+                    )
+
+        # AC1 ("Locked Decision"): the CONDITIONAL-OTP gate must live in the flow
+        # that is ACTUALLY ACTIVE (i.e. reachable from 'browserFlow' by following
+        # flowAlias references), not merely present *somewhere* in
+        # 'authenticationFlows'. A leftover/unused flow containing a correctly
+        # shaped OTP step must not make an unrelated, unprotected active browser
+        # flow pass lint (code-review finding: edge-case hunter).
+        reachable_aliases = set()
+        frontier = [browser_flow] if browser_flow in flows_by_alias else []
+        while frontier:
+            alias = frontier.pop()
+            if alias in reachable_aliases:
+                continue
+            reachable_aliases.add(alias)
+            flow = flows_by_alias.get(alias)
+            if not isinstance(flow, dict):
+                continue
+            for ex in flow.get("authenticationExecutions") or []:
+                if not isinstance(ex, dict):
+                    continue
+                nested_alias = ex.get("flowAlias")
+                if nested_alias in flows_by_alias and nested_alias not in reachable_aliases:
+                    frontier.append(nested_alias)
+
+        reachable_executions = [
             ex
-            for f in flows
-            if isinstance(f, dict)
-            for ex in (f.get("authenticationExecutions") or [])
+            for alias in reachable_aliases
+            for ex in (flows_by_alias[alias].get("authenticationExecutions") or [])
             if isinstance(ex, dict)
         ]
 
         otp_executions = [
-            ex for ex in all_executions if ex.get("authenticator") == "auth-otp-form"
+            ex for ex in reachable_executions if ex.get("authenticator") == "auth-otp-form"
         ]
         has_condition_user_configured = any(
-            ex.get("authenticator") == "conditional-user-configured" for ex in all_executions
+            ex.get("authenticator") == "conditional-user-configured"
+            for ex in reachable_executions
         )
 
         if not otp_executions:
             errors.append(
-                "No 'auth-otp-form' execution found in authenticationFlows — the browser "
-                "flow must include an OTP step (AC1)."
+                "No 'auth-otp-form' execution found reachable from 'browserFlow' "
+                f"({browser_flow!r}) — the ACTIVE browser flow must include an OTP "
+                "step (AC1); an OTP execution existing only in an unreferenced flow "
+                "does not satisfy this."
             )
         else:
             # Keycloak's CONDITIONAL requirement type is assigned to the flow-alias
-            # execution that references a conditional sub-flow (not necessarily to the
-            # auth-otp-form leaf execution itself) — accept either shape: the leaf is
-            # directly CONDITIONAL, or it is nested inside a sub-flow that a parent flow
-            # references via a CONDITIONAL flowAlias execution.
+            # execution that references a conditional sub-flow — CONDITIONAL is a
+            # flow-level property, never valid directly on a non-flow (leaf)
+            # execution (confirmed live against Keycloak 26.6.3 — see this story's
+            # Dev Agent Record). Reject that shape outright rather than silently
+            # accepting it only for it to fail at Keycloak import time.
+            for ex in otp_executions:
+                if ex.get("requirement") == "CONDITIONAL" and not ex.get("autheticatorFlow"):
+                    errors.append(
+                        "The 'auth-otp-form' execution has requirement=CONDITIONAL set "
+                        "directly on the leaf execution — CONDITIONAL is only valid on a "
+                        "flow-alias execution (autheticatorFlow=true) referencing a "
+                        "conditional sub-flow, not on a non-flow authenticator execution; "
+                        "this shape is rejected by Keycloak at import time."
+                    )
+
+            # Only the sub-flow(s) that actually contain 'auth-otp-form' are eligible
+            # to satisfy the CONDITIONAL-wrapper requirement — this correlates the
+            # two checks instead of testing each token's existence independently and
+            # globally (code-review finding: edge-case hunter).
             flow_alias_by_authenticator_flow = {
-                f.get("alias")
-                for f in flows
-                if isinstance(f, dict)
-                and any(
+                alias
+                for alias in reachable_aliases
+                if any(
                     isinstance(ex, dict) and ex.get("authenticator") == "auth-otp-form"
-                    for ex in (f.get("authenticationExecutions") or [])
+                    for ex in (flows_by_alias[alias].get("authenticationExecutions") or [])
                 )
             }
             has_conditional_wrapper = any(
                 ex.get("flowAlias") in flow_alias_by_authenticator_flow
                 and ex.get("requirement") == "CONDITIONAL"
-                for ex in all_executions
+                for ex in reachable_executions
             )
 
             for ex in otp_executions:
@@ -544,11 +602,11 @@ def main():
 
         if not has_condition_user_configured:
             errors.append(
-                "No 'conditional-user-configured' execution found in authenticationFlows — "
-                "the OTP branch must be gated by a condition-user-configured sub-flow so "
-                "OTP is only non-skippable for accounts that already have a TOTP "
-                "credential (Locked Decision — bare REQUIRED with no escape hatch would "
-                "strand unenrolled accounts)."
+                "No 'conditional-user-configured' execution found reachable from "
+                "'browserFlow' — the OTP branch must be gated by a "
+                "condition-user-configured sub-flow so OTP is only non-skippable for "
+                "accounts that already have a TOTP credential (Locked Decision — bare "
+                "REQUIRED with no escape hatch would strand unenrolled accounts)."
             )
 
     # ── Step 10: Report and exit ────────────────────────────────────────────────
