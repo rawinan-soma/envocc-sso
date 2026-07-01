@@ -1,9 +1,14 @@
 # compose.yaml — envocc-sso foundation stack
 #
 # Services:
-#   postgres  — PostgreSQL 17.5, two isolated databases (keycloak + admin)
-#   keycloak  — Keycloak 26.6.3, backed by the keycloak database
-#   nginx     — Nginx 1.28-alpine, security edge (TLS, headers, rate-limiting)
+#   postgres           — PostgreSQL 17.5, two isolated databases (keycloak + admin)
+#   keycloak           — Keycloak 26.6.3, backed by the keycloak database
+#   nginx              — Nginx 1.28-alpine, security edge (TLS, headers, rate-limiting)
+#   mock-oidc-provider — (Story 2.9, dev/CI ONLY) simulates the external ThaiD OIDC
+#                        identity provider for the "Login with ThaiD" brokered-login
+#                        integration tests. No access to the real DOPA/ThaiD service
+#                        exists in dev/CI (AC5). See "PRODUCTION-HARDENING NOTE" on
+#                        this service below and keycloak/REALM-EXPORT-NOTES.md.
 #
 # Prerequisites:
 #   1. Generate TLS certs: openssl req -x509 -newkey rsa:4096 -keyout nginx/certs/dev.key -out nginx/certs/dev.crt -days 365 -nodes -subj "/CN=localhost"
@@ -79,6 +84,26 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Story 2.9 — dev/CI convenience only: Keycloak's realm import references the
+      # `thaid` identity provider's mock endpoints (keycloak/realm-export.json) as
+      # static config strings — the import itself does not probe them over the
+      # network, so Keycloak does not need mock-oidc-provider to be *healthy* to
+      # start successfully. `condition: service_started` (ordering only, not a
+      # health gate) avoids making the unrelated email+password/TOTP login path
+      # (Story 2.2/2.6) a hostage to this dev/CI-only mock container: if
+      # mock-oidc-provider fails to become healthy (bad pull, crash-loop, etc.),
+      # Keycloak still starts and every non-ThaiD login path keeps working.
+      # ThaiD-specific readiness is independently, directly verified by TS-290a in
+      # tests/integration/thaid-broker.bats before any ThaiD-dependent assertions
+      # run. Code review finding (Step 7): this was previously a hard
+      # `condition: service_healthy` gate, making all of Keycloak (not just ThaiD
+      # login) a single point of failure on the mock IdP's health.
+      # A production-hardening pass MUST remove this dependency entirely (along
+      # with the mock-oidc-provider service itself) once the `thaid` IdP is
+      # repointed at the real DOPA/ThaiD endpoints — mirrors the `test-ropc-client`
+      # "FORBIDDEN in production" pattern from Story 2.1/2.8.
+      mock-oidc-provider:
+        condition: service_started
     healthcheck:
       # Health endpoint moved to management port 9000 in KC 25+.
       # The ubi9-micro base image has no curl/wget — use a bash TCP socket.
@@ -103,6 +128,71 @@ services:
       timeout: 10s
       retries: 8
       start_period: 60s
+
+  # ── Mock OIDC IdP (Story 2.9, dev/CI ONLY) ──────────────────────────────────
+  # ghcr.io/navikt/mock-oauth2-server: MIT-licensed, actively maintained, purpose-
+  # built for mocking OAuth2/OIDC providers. Simulates the external ThaiD identity
+  # provider so the "Login with ThaiD" brokered-login flow can be exercised in
+  # dev/CI without any dependency on the real DOPA/ThaiD service (AC5).
+  #
+  # Configuration: JSON_CONFIG_PATH points at a mounted config file that enables
+  # `interactiveLogin` (a simple HTML login form at the authorize endpoint whose
+  # submitted `username` field becomes the issued token's `sub` claim — this is how
+  # integration tests assert an arbitrary PID per test user). The image supports
+  # multiple issuers with ZERO configuration: the first path segment of any request
+  # URL is taken as the issuer id, so this realm always addresses it under a single
+  # path, "thaid" (e.g. /thaid/.well-known/openid-configuration), without needing an
+  # explicit issuer registration. See keycloak/mock-oidc/config.json and
+  # keycloak/REALM-EXPORT-NOTES.md (Story 2.9 section) for the full mechanism,
+  # including why the `thaid` identity provider's `authorizationUrl` (browser-facing)
+  # deliberately differs from its `tokenUrl`/`userInfoUrl`/`jwksUrl`/`issuer`
+  # (Keycloak-backend-facing, reached via this service's Compose DNS name).
+  #
+  # PRODUCTION-HARDENING NOTE: this service exists ONLY to support dev/CI's mock
+  # ThaiD broker flow. A production compose file would omit it entirely and point
+  # the `thaid` identity provider at the real DOPA/ThaiD endpoints instead.
+  mock-oidc-provider:
+    image: ghcr.io/navikt/mock-oauth2-server:5.0.2@sha256:f625692f5bf84939f3d0af4931f2c0f038dca84c4f1bac1171710d544181f97f
+    restart: unless-stopped
+    environment:
+      JSON_CONFIG_PATH: /config/config.json
+    volumes:
+      - ./keycloak/mock-oidc/config.json:/config/config.json:ro
+    # Host port published — unlike Keycloak's own 8080 (see SECURITY NOTE above),
+    # this dev/CI-only mock IdP needs host reachability for two reasons: (1) the
+    # BATS-driven integration suite (tests/integration/thaid-broker.bats, TS-290a)
+    # runs as a host process and curls this service's discovery endpoint directly;
+    # (2) the `thaid` identity provider's `authorizationUrl` in realm-export.json
+    # points browsers here directly (Keycloak only ever redirects the browser to
+    # this URL — it never calls it server-to-server), and in dev/CI the "browser"
+    # (a real browser, or this repo's BATS helper acting as one) runs on the host,
+    # not inside the Docker network. This does not contradict Story 1.3's "only
+    # Nginx publishes ports" rule in practice — that rule is already not strictly
+    # followed today: every existing integration test calls Keycloak directly at
+    # http://localhost:8080, a pre-existing environment assumption from prior
+    # stories that this story does not introduce or attempt to silently fix.
+    ports:
+      - "18080:8080"
+    healthcheck:
+      # The Wolfi-based image ships wget but no curl (confirmed at implementation
+      # time). GET /isalive returns 200 "alive and well" once ready.
+      #
+      # Code review note: switching this to poll the `thaid` issuer's own
+      # discovery endpoint (Task 0.2's literal suggestion) was tried and
+      # reverted — hands-on verification found the per-issuer discovery route
+      # (`/thaid/.well-known/openid-configuration`) is not reliably ready in
+      # the same window /isalive is, causing spurious `unhealthy` status and
+      # blocking Keycloak's `depends_on: service_healthy` gate from ever
+      # passing. /isalive remains the healthcheck; TS-290a in
+      # tests/integration/thaid-broker.bats independently and directly
+      # verifies the `thaid` discovery endpoint as this suite's first test,
+      # so discovery-readiness is still covered, just not at the compose
+      # healthcheck layer.
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8080/isalive"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # ── Nginx 1.28-alpine ─────────────────────────────────────────────────────
   # Security edge: TLS termination, security headers, CSP, rate-limiting.

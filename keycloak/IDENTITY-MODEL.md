@@ -65,7 +65,9 @@ The following fields **must never** appear in the user `attributes` map or any f
 - Trade union membership (`tradeUnion`)
 - Genetic data (`geneticData`)
 
-> **PID / ThaiD:** National ID (PID) for the ThaiD federated identity is stored **only** in the Keycloak identity broker link — a separate subsystem, not in user `attributes`. See Decision 2 in `_bmad-output/planning-artifacts/architecture.md`.
+> **PID / ThaiD:** National ID (PID) for the ThaiD federated identity is stored **only** in the Keycloak identity broker link — a separate subsystem, not in user `attributes`. See Decision 2 in `_bmad-output/planning-artifacts/architecture.md`. Pre-registration mechanism: `POST /admin/realms/envocc/users/{id}/federated-identity/{alias}` — see `keycloak/REALM-EXPORT-NOTES.md` (Story 2.9 section) for the full request/response shape, the deny-only `thaid-first-broker-login` flow this constraint drives, and hands-on-verified behavior.
+>
+> **Documentation nuance (not a behavioral conflict, flagged for a future doc-cleanup pass):** this list groups PID with genuinely PDPA §26-sensitive fields (health info, biometric, religion, etc.), while `prd.md` FR23 classifies PID as regular personal data under PDPA (not §26), documented in the RoPA and held under least-privilege. Both documents agree on the operative rule this section enforces (PID must never be a user `attributes` field, only a broker-link reference) — only the §26-categorization label differs. No code-level enforcement changes are needed or made here.
 
 ### Admin REST API bypass caveat
 

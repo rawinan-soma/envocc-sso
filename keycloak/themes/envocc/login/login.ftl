@@ -24,14 +24,14 @@
                                    id="username"
                                    class="${properties.kcInputClass!}"
                                    name="username"
-                                   value="${(login.username!'')?html}"
+                                   value="${(login.username!'')}"
                                    type="hidden">
                         <#else>
                             <input tabindex="${properties.kcLoginTabIndex!}"
                                    id="username"
                                    class="${properties.kcInputClass!}"
                                    name="username"
-                                   value="${(login.username!'')?html}"
+                                   value="${(login.username!'')}"
                                    type="text"
                                    autofocus
                                    autocomplete="username"
@@ -129,11 +129,16 @@
                                class="${properties.kcFormSocialAccountListButtonClass!} <#if social.providers?size gt 3>${properties.kcFormSocialAccountGridItem!}</#if>"
                                type="button"
                                href="${p.loginUrl}">
+                                <#-- Story 2.9: prefer the theme's translatable message key for the
+                                     thaid provider (FR12 externalized-strings requirement) over the
+                                     realm-config displayName, which is not localizable. Falls back to
+                                     displayName for any other provider (none exist today, but this
+                                     keeps the loop generically correct). -->
                                 <#if p.iconClasses?has_content>
                                     <i class="${properties.kcCommonLogoIdP!} ${p.iconClasses!}" aria-hidden="true"></i>
-                                    <span class="${properties.kcFormSocialAccountNameClass!} kc-social-icon-text">${p.displayName!}</span>
+                                    <span class="${properties.kcFormSocialAccountNameClass!} kc-social-icon-text"><#if p.alias == "thaid">${msg("loginWithThaiD")}<#else>${p.displayName!}</#if></span>
                                 <#else>
-                                    <span class="${properties.kcFormSocialAccountNameClass!}">${p.displayName!}</span>
+                                    <span class="${properties.kcFormSocialAccountNameClass!}"><#if p.alias == "thaid">${msg("loginWithThaiD")}<#else>${p.displayName!}</#if></span>
                                 </#if>
                             </a>
                         </li>

@@ -279,3 +279,219 @@ fields to enable proper RP-initiated logout:
 - **UX-DR3 — Branded signed-out surface**: the Keycloak "Signed out" theme page is
   styled in Story 2.5. Until then, the default "You are logged out" page is acceptable
   as a placeholder.
+
+---
+
+## Story 2.9 — Login with ThaiD (Brokered Federation & Account Linking)
+
+This section documents the `identityProviders`/`authenticationFlows` additions and the
+mock OIDC IdP added in Story 2.9, covering FR13a, FR21, FR2/FR12 (top-level redirect,
+no framing), and AR8/architecture.md Decision 2 (native Keycloak brokering, no
+hand-rolled auth code).
+
+### `identityProviders` — the `thaid` OIDC broker
+
+`realm-export.json` adds one `identityProviders[]` entry, alias `thaid`. Key fields:
+
+| Field | Value | Rationale |
+|---|---|---|
+| `providerId` | `"oidc"` | Generic OIDC broker — no custom auth code (NFR8, Decision 2). |
+| `trustEmail` | `false` | This realm's reconciliation key for ThaiD is the pre-registered federated-identity link by PID, never an email claim asserted by the IdP. |
+| `firstBrokerLoginFlowAlias` | `"thaid-first-broker-login"` | The deny-only flow below — only invoked when no existing link is found. |
+| `config.clientSecret` | `""` (zeroed) | Mirrors the `test-ropc-client` zeroed-secret pattern (Story 2.1/2.8): committed value is never a real secret; populate at runtime via `PUT /admin/realms/envocc/identity-provider/instances/thaid` with a body containing `config.clientSecret` sourced from `.env`'s `KC_THAID_MOCK_CLIENT_SECRET`. **In practice, this mock IdP does not validate `clientSecret` at all** (confirmed hands-on against `ghcr.io/navikt/mock-oauth2-server` — it is a permissive mock server by design), so the flow works correctly even before this runtime-population step runs; the convention is followed anyway for consistency with the realm's secret-hygiene posture and to keep the swap to a real, secret-validating DOPA/ThaiD endpoint a config-only change later. |
+
+### Why `authorizationUrl` differs from `tokenUrl`/`userInfoUrl`/`jwksUrl`/`issuer`
+
+**This is the single most important, non-obvious design detail in this story's realm
+config — read this before changing any of these five URLs.**
+
+All five could naively be set to the same `http://mock-oidc-provider:8080/thaid/...`
+container-network address. That is correct for four of them, but **not**
+`authorizationUrl`:
+
+- `tokenUrl`, `userInfoUrl`, `jwksUrl`, `issuer` are called **server-to-server by
+  Keycloak's own backend**, which runs inside the Docker Compose network — so the
+  Compose service DNS name `mock-oidc-provider` resolves correctly there.
+- `authorizationUrl` is **never called by Keycloak itself** — Keycloak only ever emits
+  an HTTP redirect pointing the *browser* (or, in this story's own BATS-driven tests,
+  the host-run curl process acting as a browser surrogate) at this URL. In dev/CI, that
+  browser/test-process runs on the **host**, which cannot resolve the Compose-internal
+  hostname `mock-oidc-provider` (confirmed hands-on: `ping host.docker.internal` and a
+  direct hostname-based identity-provider config both fail to resolve from the host in
+  this environment). `authorizationUrl` is therefore set to
+  `http://localhost:18080/thaid/authorize` — the mock IdP's published host port
+  (Task 0.1) — while the other four use the container-network hostname.
+
+This asymmetry is safe and does not create a validation mismatch: the `iss` claim
+embedded in tokens the mock IdP issues is derived from whatever `Host` header reached
+its **token** endpoint (confirmed hands-on: the same mock IdP instance, queried with
+different `Host` headers, returns a different `issuer` in its discovery document each
+time) — and since Keycloak's backend always calls `tokenUrl` via the
+`mock-oidc-provider:8080` hostname, the issued token's `iss` always equals the
+configured `issuer` field, regardless of which host/port the browser used to reach the
+authorize step.
+
+**Keycloak's own URL-scheme validation (why plain `http://` is even allowed here):**
+Keycloak rejects non-HTTPS identity-provider endpoint URLs unless the target host
+resolves to a loopback/private/link-local address (`SslRequired.EXTERNAL`'s
+`isLocal()` check — `org.keycloak.common.enums.SslRequired`, confirmed by reading
+Keycloak 26.6.3 source). `localhost` and the `mock-oidc-provider` Compose service name
+(which resolves to a private container IP via Compose's embedded DNS) both satisfy
+this; an arbitrary non-resolvable or public hostname would not. This is also why
+`mock-oidc-provider` must already exist on the Compose network by the time Keycloak's
+realm import runs — Keycloak validates every configured URL, including
+`tokenUrl`/`issuer`, at **import time**, and import fails outright (crash-loop) if the
+hostname does not yet resolve. This is why `keycloak`'s `depends_on` entry in
+`compose.yaml` (Task 0.3) requires `mock-oidc-provider: condition: service_started`
+(Compose's embedded DNS registers a container's service-name record at
+container-creation time, well before the container reaches "started" — so hostname
+resolution is already satisfied by then). Note this is DNS resolution only, not an
+HTTP/TCP readiness probe of the mock IdP's listening port — `isLocal()` never actually
+connects to `tokenUrl`/`issuer`, so Keycloak does not need the mock IdP to be *healthy*
+(actively serving requests) to import successfully, only *resolvable*. That is also
+why this dependency was intentionally loosened from `service_healthy` to
+`service_started` (Step 7 code-review finding): a hard health gate made the unrelated
+email+password/TOTP login path a hostage to this dev/CI-only mock container's health.
+
+### Mock OIDC IdP — `ghcr.io/navikt/mock-oauth2-server`
+
+- **Image:** `ghcr.io/navikt/mock-oauth2-server:5.0.2`, pinned by tag and
+  `@sha256:f625692f5bf84939f3d0af4931f2c0f038dca84c4f1bac1171710d544181f97f` (verified
+  current stable release at implementation time, 2026-07-01; re-verify before bumping).
+- **Config mechanism chosen:** a mounted JSON config file (`keycloak/mock-oidc/config.json`,
+  mounted read-only at `/config/config.json`, referenced via the `JSON_CONFIG_PATH` env
+  var) containing only `{"interactiveLogin": true}`. No explicit issuer/tokenCallback
+  registration is needed — the image supports multiple issuers with **zero**
+  configuration: the first path segment of any request URL is taken as the issuer id
+  (confirmed hands-on), so every URL in this realm's config consistently uses the
+  single path segment `thaid` (e.g. `/thaid/.well-known/openid-configuration`) simply
+  by always addressing the service under that path — there is no separate "register
+  issuer thaid" step.
+- **Per-PID claim assertion:** `interactiveLogin: true` serves an HTML login form at
+  the `/thaid/authorize` endpoint with **no `action` attribute** (a browser posts back
+  to the form's own current URL). Submitting `username=<pid>` completes the login and
+  the mock IdP issues a token whose `sub` claim equals the submitted `username` value —
+  this is how each integration test asserts an arbitrary PID as the ThaiD subject
+  claim, with zero per-test mock-IdP configuration required.
+- **Health check:** `GET /isalive` returns `200 "alive and well"`. The image is
+  Wolfi-based and ships `wget` but no `curl` (confirmed hands-on) — the `compose.yaml`
+  healthcheck uses `wget --quiet --spider`.
+- **Client secret validation:** the mock server does **not** validate `client_secret`
+  at all (confirmed hands-on — a token exchange with an empty `client_secret` succeeds
+  identically to one with a real value). This is expected, documented behavior for a
+  test-only mock IdP and is why the zeroed, never-runtime-populated
+  `identityProviders[].config.clientSecret` still works end-to-end in this story's
+  tests.
+
+### PID pre-registration — the Admin REST mechanism this story's tests use
+
+Story 4.4 (HR Admin "capture PID at account creation" UI, not yet built) will call this
+same endpoint from its UI; this story's own integration tests call it directly to
+pre-register a federated-identity link before driving a broker login:
+
+```http
+POST /admin/realms/envocc/users/{id}/federated-identity/thaid
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "identityProvider": "thaid",
+  "userId": "<PID>",
+  "userName": "<PID>"
+}
+```
+
+Response: `204 No Content` on success. `GET /admin/realms/envocc/users/{id}/federated-identity`
+returns the list of links for a user (used by TS-290f to assert only one PID remains
+linked after a rejected conflicting-link attempt).
+
+**Observed behavior (TS-290f, confirmed hands-on):** attempting to register a
+**second, different** PID to a user that already has a `thaid` federated-identity link
+returns **HTTP 409 Conflict** (Keycloak 26.6.3) — the first link is preserved and the
+second call is rejected outright, with no need to first `DELETE` the existing link.
+
+### `thaid-first-broker-login` — the deny-only flow (Task 2)
+
+`realm-export.json` adds a top-level `authenticationFlows[]` entry, alias
+`thaid-first-broker-login`, consisting of exactly one execution:
+
+```json
+{
+  "authenticator": "deny-access-authenticator",
+  "authenticatorFlow": false,
+  "requirement": "REQUIRED",
+  "priority": 10,
+  "userSetupAllowed": false
+}
+```
+
+**Provider id correction (confirmed hands-on):** the story's own drafting text names
+this authenticator `"deny-access"`. The actual registered provider id in this repo's
+pinned Keycloak 26.6.3 is **`deny-access-authenticator`** (confirmed via
+`GET /admin/realms/{realm}/authentication/authenticator-providers` against a live
+instance — `deny-access` alone is not a registered provider id and `POST .../executions/execution`
+with that id returns `400 "No authentication provider found for id: deny-access"`).
+This is a naming correction, not a missing-feature finding — the "Deny access"
+authenticator itself is present and selectable exactly as the story's Task 2.2
+anticipated, just under this slightly different id.
+
+This flow only ever runs when Keycloak's **core broker logic** (not this flow) finds
+no existing federated-identity link for the incoming `(thaid, <PID>)` pair — i.e. a
+true first-broker-login. When it runs, the single `deny-access-authenticator` execution
+unconditionally fails the flow: Keycloak renders a themed error page (`HTTP 401`,
+confirmed hands-on) and creates **no** local account. See
+`keycloak/IDENTITY-MODEL.md` Section 3 for why this realm cannot use Keycloak's default
+attribute/email-based first-broker-login linking (PID is never a user `attributes`
+field).
+
+### `--import-realm` field-shape pitfalls found (fixed in `realm-export.json`)
+
+Two issues surfaced only by actually importing this story's `realm-export.json` into a
+live Keycloak 26.6.3 container (not caught by `python3 -m json.tool` alone):
+
+1. **`authenticationFlows[].description` has a 255-character DB column limit.** An
+   earlier, more verbose draft description caused realm import to crash the entire
+   Keycloak boot with `Value too long for column "DESCRIPTION CHARACTER VARYING(255)"`.
+   Keep any `authenticationFlows[].description` string at or under 255 characters.
+2. **`identityProviders[].hideOnLoginPage` (inside `config`) is not a recognized
+   field.** The actual Keycloak `IdentityProviderRepresentation` field controlling
+   login-page visibility is a **top-level boolean** `hideOnLogin` (not nested in
+   `config`, and not the string `"false"`/`"true"` convention `config` map entries
+   use). `realm-export.json` sets `"hideOnLogin": false` at the top level of the
+   `thaid` entry; AC1 requires the button to render, which is `hideOnLogin`'s default
+   anyway, but the field is set explicitly for clarity.
+
+### Pre-existing bug fixed: `login.ftl` 500'd on every render (not a Story 2.9 defect)
+
+Verifying AC1 hands-on (loading the actual rendered Sign-in page through a live stack)
+surfaced that `login.ftl` **failed to render at all** — every login attempt returned
+HTTP 500 with `freemarker.core.ParseException: ... Using ?html (legacy escaping) is not
+allowed when auto-escaping is on with a markup output format (HTML)`. `git blame` traces
+this to Story 2.5 (`value="${(login.username!'')?html}"`, two occurrences) — Keycloak
+26's default FreeMarker auto-escaping already HTML-escapes `${...}` interpolations, and
+stacking the legacy `?html` builtin on top is a hard parse error in this Keycloak
+version, not merely deprecated. This is unrelated to any Story 2.9 change (confirmed via
+`git blame` and `git diff` — the affected lines are untouched by this story's edit to the
+`socialProviders` block) and predates this story entirely; no prior story's tests caught
+it because none of them render the login page's HTML via a live browser-style request —
+Story 2.9's AC1 verification is the first to do so. Fixed by removing `?html` from both
+occurrences (auto-escaping alone is sufficient and correct). Without this fix, AC1 could
+not be verified at all — the Sign-in surface never rendered, ThaiD button or otherwise.
+
+### PKCE and the `sub` claim — findings that shaped `tests/integration/thaid-broker.bats`
+
+Two additional hands-on findings shaped the `drive_thaid_broker_login()` test helper
+(not realm config changes, but worth recording here since they were only discoverable
+by actually driving the flow):
+
+- **`test-oidc-client` enforces PKCE S256** (`realm-export.json`,
+  `attributes.pkce.code.challenge.method: "S256"`, Story 2.2). The initial
+  `/protocol/openid-connect/auth` request MUST include `code_challenge`/
+  `code_challenge_method`, or Keycloak rejects it with `invalid_request: Missing
+  parameter: code_challenge_method` before any broker redirect happens — this applies
+  identically to a `kc_idp_hint=thaid` broker-initiated request.
+- **This realm's `access_token` does not carry a `sub` claim** for `test-oidc-client`
+  (confirmed via a live token exchange against this exact realm-export.json). Only the
+  `id_token` does, per the OIDC spec's ID Token requirement. The test helper decodes
+  `id_token`, matching `tests/helpers/common.bash`'s existing `get_envocc_test_token()`
+  convention, which reads `id_token` for the same reason.
