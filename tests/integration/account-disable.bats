@@ -114,6 +114,128 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# Shared per-test setup helpers.
+#
+# TS-280a/b/d/e/f/g each independently need "create an active user, set its
+# password, and populate the live test-ropc-client secret from .env" — that
+# ~45-line sequence was originally duplicated verbatim 6 times in this file.
+# These three composable helpers replace that duplication. Per this story's
+# Dev Notes ("Do not add a new shared helper function to common.bash unless a
+# second story would also need it"), they are scoped locally to this file
+# rather than added to tests/helpers/common.bash.
+#
+# IMPORTANT — subshell/`fail` interaction: each helper is invoked via command
+# substitution (`x=$(_helper ...)`), which runs in a subshell. A `fail` call
+# inside that subshell would only abort the subshell, NOT the enclosing
+# @test — the test would silently continue with an empty/partial value. To
+# avoid that class of bug, these helpers never call `fail` themselves; they
+# write a diagnostic to stderr and `return 1`, and every call site follows
+# the existing `x=$(...) || fail "..."` convention already used for
+# `get_admin_token` elsewhere in this file/repo.
+#
+# `_create_active_test_user` prints the new user's UUID to stdout as soon as
+# it is known (before returning), so `_TS28xx_USER_ID` can still be captured
+# for teardown() cleanup even if a *later* step in a test fails.
+# ---------------------------------------------------------------------------
+
+# _create_active_test_user <token> <username> <lastname>
+# Creates an enabled+emailVerified user (no password set — call
+# _set_test_user_password separately if the test needs to authenticate).
+# Prints the user's UUID to stdout on success.
+_create_active_test_user() {
+  local token="${1}" username="${2}" lastname="${3}"
+  local http_status post_loc_file user_id loc
+
+  post_loc_file=$(mktemp)
+  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
+    -X POST \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"${username}\",\"email\":\"${username}\",\"enabled\":true,\"emailVerified\":true,\"firstName\":\"Test\",\"lastName\":\"${lastname}\"}" \
+    "http://localhost:8080/admin/realms/envocc/users")
+  if [[ "${http_status}" != "201" ]]; then
+    rm -f "${post_loc_file}"
+    echo "_create_active_test_user: could not create ${username} (got HTTP ${http_status})" >&2
+    return 1
+  fi
+  loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
+  rm -f "${post_loc_file}"
+  user_id="${loc##*/}"
+  if [[ -z "${user_id}" ]]; then
+    local fallback_resp
+    fallback_resp=$(curl -sf --max-time 10 \
+      -H "Authorization: Bearer ${token}" \
+      "http://localhost:8080/admin/realms/envocc/users?email=${username}&exact=true") || true
+    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+  fi
+  if [[ -z "${user_id}" ]]; then
+    echo "_create_active_test_user: UUID not found for ${username} after creation" >&2
+    return 1
+  fi
+
+  echo "${user_id}"
+}
+
+# _set_test_user_password <token> <user_id>
+# Sets the fixed, non-temporary test password (Test!Disable123) shared by
+# every ROPC-based test in this file.
+_set_test_user_password() {
+  local token="${1}" user_id="${2}"
+  local reset_status
+  reset_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+    -X PUT \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json" \
+    -d '{"type":"password","value":"Test!Disable123","temporary":false}' \
+    "http://localhost:8080/admin/realms/envocc/users/${user_id}/reset-password")
+  if [[ "${reset_status}" != "204" ]]; then
+    echo "_set_test_user_password: could not set password for user ${user_id} (got HTTP ${reset_status})" >&2
+    return 1
+  fi
+}
+
+# _configure_ropc_client_secret <token>
+# Reads KC_TEST_ROPC_CLIENT_SECRET from .env and pushes it onto the live
+# test-ropc-client via PUT /clients/{id} — the realm export ships the client
+# with a zeroed secret (see identity-model.bats TS-210d for pattern origin).
+# Prints the secret to stdout on success.
+_configure_ropc_client_secret() {
+  local token="${1}"
+  local ropc_secret
+  ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
+  if [[ -z "${ropc_secret}" ]]; then
+    echo "_configure_ropc_client_secret: KC_TEST_ROPC_CLIENT_SECRET not set in .env" >&2
+    return 1
+  fi
+
+  local clients_json client_uuid client_rep update_status
+  clients_json=$(curl -sf --max-time 10 \
+    -H "Authorization: Bearer ${token}" \
+    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") || {
+    echo "_configure_ropc_client_secret: could not look up test-ropc-client — is the realm import current? (Story 2.8 Task 0)" >&2
+    return 1
+  }
+  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
+  if [[ -z "${client_uuid}" ]]; then
+    echo "_configure_ropc_client_secret: test-ropc-client not found in realm — re-import realm-export.json (Story 2.8 Task 0)" >&2
+    return 1
+  fi
+  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
+  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+    -X PUT \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json" \
+    -d "${client_rep}" \
+    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
+  if [[ "${update_status}" != "204" ]]; then
+    echo "_configure_ropc_client_secret: could not set test-ropc-client secret (got HTTP ${update_status})" >&2
+    return 1
+  fi
+
+  echo "${ropc_secret}"
+}
+
+# ---------------------------------------------------------------------------
 # TS-280a [P0] — Active user can authenticate (control/baseline)
 #
 # Creates a user in `active` state (enabled:true, emailVerified:true, no
@@ -130,61 +252,20 @@ teardown() {
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
-  # Create active test user
-  local http_status post_loc_file user_id a_loc
-  post_loc_file=$(mktemp)
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
-    -X POST \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"username":"ts280a@envocc.local","email":"ts280a@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"DisableCtrl"}' \
-    "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-280a (got HTTP ${http_status})"; }
-  a_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
-  rm -f "${post_loc_file}"
-  user_id="${a_loc##*/}"
-  if [[ -z "${user_id}" ]]; then
-    local fallback_resp
-    fallback_resp=$(curl -sf --max-time 10 \
-      -H "Authorization: Bearer ${token}" \
-      "http://localhost:8080/admin/realms/envocc/users?email=ts280a@envocc.local&exact=true") || true
-    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-  fi
-  [[ -n "${user_id}" ]] || fail "User TS-280a UUID not found after creation"
+  # Create active test user, set its password, and populate the live
+  # test-ropc-client secret from .env (see the shared helpers above the
+  # first @test in this file — the realm export ships test-ropc-client
+  # with a zeroed secret; see tests/integration/identity-model.bats
+  # TS-210d for the origin of this runtime-secret-population pattern).
+  local user_id
+  user_id=$(_create_active_test_user "${token}" "ts280a@envocc.local" "DisableCtrl")
   _TS280A_USER_ID="${user_id}"
+  [[ -n "${user_id}" ]] || fail "Could not create test user TS-280a — see stderr above"
+  _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280a — see stderr above"
 
-  # Set a non-temporary password
-  local reset_status
-  reset_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"type":"password","value":"Test!Disable123","temporary":false}' \
-    "http://localhost:8080/admin/realms/envocc/users/${user_id}/reset-password")
-  [[ "${reset_status}" == "204" ]] || fail "Could not set password for TS-280a (got HTTP ${reset_status})"
-
-  # Read ROPC client secret from .env and populate it on the live client
-  # (the realm export ships test-ropc-client with a zeroed secret — see
-  # tests/integration/identity-model.bats TS-210d for the origin of this pattern).
   local ropc_secret
-  ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
-  [[ -n "${ropc_secret}" ]] || fail "KC_TEST_ROPC_CLIENT_SECRET not set in .env"
-
-  local clients_json client_uuid client_rep update_status
-  clients_json=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") \
-    || fail "Could not look up test-ropc-client — is the realm import current? (Story 2.8 Task 0)"
-  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
-  [[ -n "${client_uuid}" ]] || fail "test-ropc-client not found in realm — re-import realm-export.json (Story 2.8 Task 0)"
-  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
-  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d "${client_rep}" \
-    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
-  [[ "${update_status}" == "204" ]] || fail "Could not set test-ropc-client secret (got HTTP ${update_status})"
+  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+    || fail "Could not configure test-ropc-client secret for TS-280a — see stderr above"
 
   # Attempt ROPC login — expect HTTP 200 with a non-empty access_token.
   local response status body access_token
@@ -219,59 +300,18 @@ teardown() {
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
-  # Create active test user
-  local http_status post_loc_file user_id b_loc
-  post_loc_file=$(mktemp)
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
-    -X POST \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"username":"ts280b@envocc.local","email":"ts280b@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"DisableBlock"}' \
-    "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-280b (got HTTP ${http_status})"; }
-  b_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
-  rm -f "${post_loc_file}"
-  user_id="${b_loc##*/}"
-  if [[ -z "${user_id}" ]]; then
-    local fallback_resp
-    fallback_resp=$(curl -sf --max-time 10 \
-      -H "Authorization: Bearer ${token}" \
-      "http://localhost:8080/admin/realms/envocc/users?email=ts280b@envocc.local&exact=true") || true
-    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-  fi
-  [[ -n "${user_id}" ]] || fail "User TS-280b UUID not found after creation"
+  # Create active test user, set its password, and populate the live
+  # test-ropc-client secret (see the shared helpers above the first @test
+  # in this file for the runtime-secret-population pattern origin).
+  local user_id
+  user_id=$(_create_active_test_user "${token}" "ts280b@envocc.local" "DisableBlock")
   _TS280B_USER_ID="${user_id}"
+  [[ -n "${user_id}" ]] || fail "Could not create test user TS-280b — see stderr above"
+  _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280b — see stderr above"
 
-  # Set a non-temporary password
-  local reset_status
-  reset_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"type":"password","value":"Test!Disable123","temporary":false}' \
-    "http://localhost:8080/admin/realms/envocc/users/${user_id}/reset-password")
-  [[ "${reset_status}" == "204" ]] || fail "Could not set password for TS-280b (got HTTP ${reset_status})"
-
-  # Populate the ROPC client secret at runtime (see TS-280a for pattern origin)
   local ropc_secret
-  ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
-  [[ -n "${ropc_secret}" ]] || fail "KC_TEST_ROPC_CLIENT_SECRET not set in .env"
-
-  local clients_json client_uuid client_rep update_status
-  clients_json=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") \
-    || fail "Could not look up test-ropc-client — is the realm import current? (Story 2.8 Task 0)"
-  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
-  [[ -n "${client_uuid}" ]] || fail "test-ropc-client not found in realm — re-import realm-export.json (Story 2.8 Task 0)"
-  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
-  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d "${client_rep}" \
-    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
-  [[ "${update_status}" == "204" ]] || fail "Could not set test-ropc-client secret (got HTTP ${update_status})"
+  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+    || fail "Could not configure test-ropc-client secret for TS-280b — see stderr above"
 
   # Disable the account
   local disable_status
@@ -330,28 +370,12 @@ teardown() {
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
-  # Create a plain active test user (state does not matter for this structural check)
-  local http_status post_loc_file user_id c_loc
-  post_loc_file=$(mktemp)
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
-    -X POST \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"username":"ts280c@envocc.local","email":"ts280c@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"Structural"}' \
-    "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-280c (got HTTP ${http_status})"; }
-  c_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
-  rm -f "${post_loc_file}"
-  user_id="${c_loc##*/}"
-  if [[ -z "${user_id}" ]]; then
-    local fallback_resp
-    fallback_resp=$(curl -sf --max-time 10 \
-      -H "Authorization: Bearer ${token}" \
-      "http://localhost:8080/admin/realms/envocc/users?email=ts280c@envocc.local&exact=true") || true
-    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-  fi
-  [[ -n "${user_id}" ]] || fail "User TS-280c UUID not found after creation"
+  # Create a plain active test user (state does not matter for this structural
+  # check; no password/ROPC needed, so only the creation helper is used).
+  local user_id
+  user_id=$(_create_active_test_user "${token}" "ts280c@envocc.local" "Structural")
   _TS280C_USER_ID="${user_id}"
+  [[ -n "${user_id}" ]] || fail "Could not create test user TS-280c — see stderr above"
 
   # Fetch the full user object
   local user_tmpfile curl_exit
@@ -437,59 +461,18 @@ PYEOF
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
-  # Create active test user
-  local http_status post_loc_file user_id d_loc
-  post_loc_file=$(mktemp)
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
-    -X POST \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"username":"ts280d@envocc.local","email":"ts280d@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"ReEnable"}' \
-    "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-280d (got HTTP ${http_status})"; }
-  d_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
-  rm -f "${post_loc_file}"
-  user_id="${d_loc##*/}"
-  if [[ -z "${user_id}" ]]; then
-    local fallback_resp
-    fallback_resp=$(curl -sf --max-time 10 \
-      -H "Authorization: Bearer ${token}" \
-      "http://localhost:8080/admin/realms/envocc/users?email=ts280d@envocc.local&exact=true") || true
-    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-  fi
-  [[ -n "${user_id}" ]] || fail "User TS-280d UUID not found after creation"
+  # Create active test user, set its password, and populate the live
+  # test-ropc-client secret (see the shared helpers above the first @test
+  # in this file for the runtime-secret-population pattern origin).
+  local user_id
+  user_id=$(_create_active_test_user "${token}" "ts280d@envocc.local" "ReEnable")
   _TS280D_USER_ID="${user_id}"
+  [[ -n "${user_id}" ]] || fail "Could not create test user TS-280d — see stderr above"
+  _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280d — see stderr above"
 
-  # Set a non-temporary password
-  local reset_status
-  reset_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"type":"password","value":"Test!Disable123","temporary":false}' \
-    "http://localhost:8080/admin/realms/envocc/users/${user_id}/reset-password")
-  [[ "${reset_status}" == "204" ]] || fail "Could not set password for TS-280d (got HTTP ${reset_status})"
-
-  # Populate the ROPC client secret at runtime (see TS-280a for pattern origin)
   local ropc_secret
-  ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
-  [[ -n "${ropc_secret}" ]] || fail "KC_TEST_ROPC_CLIENT_SECRET not set in .env"
-
-  local clients_json client_uuid client_rep update_status
-  clients_json=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") \
-    || fail "Could not look up test-ropc-client — is the realm import current? (Story 2.8 Task 0)"
-  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
-  [[ -n "${client_uuid}" ]] || fail "test-ropc-client not found in realm — re-import realm-export.json (Story 2.8 Task 0)"
-  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
-  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d "${client_rep}" \
-    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
-  [[ "${update_status}" == "204" ]] || fail "Could not set test-ropc-client secret (got HTTP ${update_status})"
+  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+    || fail "Could not configure test-ropc-client secret for TS-280d — see stderr above"
 
   # Disable, confirm rejection
   local disable_status
@@ -557,59 +540,18 @@ PYEOF
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
-  # Create active test user
-  local http_status post_loc_file user_id e_loc
-  post_loc_file=$(mktemp)
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
-    -X POST \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"username":"ts280e@envocc.local","email":"ts280e@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"RefreshRevoke"}' \
-    "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-280e (got HTTP ${http_status})"; }
-  e_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
-  rm -f "${post_loc_file}"
-  user_id="${e_loc##*/}"
-  if [[ -z "${user_id}" ]]; then
-    local fallback_resp
-    fallback_resp=$(curl -sf --max-time 10 \
-      -H "Authorization: Bearer ${token}" \
-      "http://localhost:8080/admin/realms/envocc/users?email=ts280e@envocc.local&exact=true") || true
-    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-  fi
-  [[ -n "${user_id}" ]] || fail "User TS-280e UUID not found after creation"
+  # Create active test user, set its password, and populate the live
+  # test-ropc-client secret (see the shared helpers above the first @test
+  # in this file for the runtime-secret-population pattern origin).
+  local user_id
+  user_id=$(_create_active_test_user "${token}" "ts280e@envocc.local" "RefreshRevoke")
   _TS280E_USER_ID="${user_id}"
+  [[ -n "${user_id}" ]] || fail "Could not create test user TS-280e — see stderr above"
+  _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280e — see stderr above"
 
-  # Set a non-temporary password
-  local reset_status
-  reset_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"type":"password","value":"Test!Disable123","temporary":false}' \
-    "http://localhost:8080/admin/realms/envocc/users/${user_id}/reset-password")
-  [[ "${reset_status}" == "204" ]] || fail "Could not set password for TS-280e (got HTTP ${reset_status})"
-
-  # Populate the ROPC client secret at runtime (see TS-280a for pattern origin)
   local ropc_secret
-  ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
-  [[ -n "${ropc_secret}" ]] || fail "KC_TEST_ROPC_CLIENT_SECRET not set in .env"
-
-  local clients_json client_uuid client_rep update_status
-  clients_json=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") \
-    || fail "Could not look up test-ropc-client — is the realm import current? (Story 2.8 Task 0)"
-  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
-  [[ -n "${client_uuid}" ]] || fail "test-ropc-client not found in realm — re-import realm-export.json (Story 2.8 Task 0)"
-  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
-  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d "${client_rep}" \
-    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
-  [[ "${update_status}" == "204" ]] || fail "Could not set test-ropc-client secret (got HTTP ${update_status})"
+  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+    || fail "Could not configure test-ropc-client secret for TS-280e — see stderr above"
 
   # Authenticate and capture both access_token and refresh_token
   local login_response login_status login_body refresh_token
@@ -675,59 +617,18 @@ PYEOF
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
-  # Create active test user
-  local http_status post_loc_file user_id f_loc
-  post_loc_file=$(mktemp)
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
-    -X POST \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"username":"ts280f@envocc.local","email":"ts280f@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"SessionsZero"}' \
-    "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-280f (got HTTP ${http_status})"; }
-  f_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
-  rm -f "${post_loc_file}"
-  user_id="${f_loc##*/}"
-  if [[ -z "${user_id}" ]]; then
-    local fallback_resp
-    fallback_resp=$(curl -sf --max-time 10 \
-      -H "Authorization: Bearer ${token}" \
-      "http://localhost:8080/admin/realms/envocc/users?email=ts280f@envocc.local&exact=true") || true
-    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-  fi
-  [[ -n "${user_id}" ]] || fail "User TS-280f UUID not found after creation"
+  # Create active test user, set its password, and populate the live
+  # test-ropc-client secret (see the shared helpers above the first @test
+  # in this file for the runtime-secret-population pattern origin).
+  local user_id
+  user_id=$(_create_active_test_user "${token}" "ts280f@envocc.local" "SessionsZero")
   _TS280F_USER_ID="${user_id}"
+  [[ -n "${user_id}" ]] || fail "Could not create test user TS-280f — see stderr above"
+  _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280f — see stderr above"
 
-  # Set a non-temporary password
-  local reset_status
-  reset_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"type":"password","value":"Test!Disable123","temporary":false}' \
-    "http://localhost:8080/admin/realms/envocc/users/${user_id}/reset-password")
-  [[ "${reset_status}" == "204" ]] || fail "Could not set password for TS-280f (got HTTP ${reset_status})"
-
-  # Populate the ROPC client secret at runtime (see TS-280a for pattern origin)
   local ropc_secret
-  ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
-  [[ -n "${ropc_secret}" ]] || fail "KC_TEST_ROPC_CLIENT_SECRET not set in .env"
-
-  local clients_json client_uuid client_rep update_status
-  clients_json=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") \
-    || fail "Could not look up test-ropc-client — is the realm import current? (Story 2.8 Task 0)"
-  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
-  [[ -n "${client_uuid}" ]] || fail "test-ropc-client not found in realm — re-import realm-export.json (Story 2.8 Task 0)"
-  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
-  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d "${client_rep}" \
-    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
-  [[ "${update_status}" == "204" ]] || fail "Could not set test-ropc-client secret (got HTTP ${update_status})"
+  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+    || fail "Could not configure test-ropc-client secret for TS-280f — see stderr above"
 
   # Authenticate to establish a server-side session
   local login_status
@@ -782,59 +683,18 @@ PYEOF
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
-  # Create active test user
-  local http_status post_loc_file user_id g_loc
-  post_loc_file=$(mktemp)
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
-    -X POST \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"username":"ts280g@envocc.local","email":"ts280g@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"NoRetroactive"}' \
-    "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-280g (got HTTP ${http_status})"; }
-  g_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
-  rm -f "${post_loc_file}"
-  user_id="${g_loc##*/}"
-  if [[ -z "${user_id}" ]]; then
-    local fallback_resp
-    fallback_resp=$(curl -sf --max-time 10 \
-      -H "Authorization: Bearer ${token}" \
-      "http://localhost:8080/admin/realms/envocc/users?email=ts280g@envocc.local&exact=true") || true
-    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-  fi
-  [[ -n "${user_id}" ]] || fail "User TS-280g UUID not found after creation"
+  # Create active test user, set its password, and populate the live
+  # test-ropc-client secret (see the shared helpers above the first @test
+  # in this file for the runtime-secret-population pattern origin).
+  local user_id
+  user_id=$(_create_active_test_user "${token}" "ts280g@envocc.local" "NoRetroactive")
   _TS280G_USER_ID="${user_id}"
+  [[ -n "${user_id}" ]] || fail "Could not create test user TS-280g — see stderr above"
+  _set_test_user_password "${token}" "${user_id}" || fail "Could not set password for TS-280g — see stderr above"
 
-  # Set a non-temporary password
-  local reset_status
-  reset_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"type":"password","value":"Test!Disable123","temporary":false}' \
-    "http://localhost:8080/admin/realms/envocc/users/${user_id}/reset-password")
-  [[ "${reset_status}" == "204" ]] || fail "Could not set password for TS-280g (got HTTP ${reset_status})"
-
-  # Populate the ROPC client secret at runtime (see TS-280a for pattern origin)
   local ropc_secret
-  ropc_secret=$(_env_value "KC_TEST_ROPC_CLIENT_SECRET")
-  [[ -n "${ropc_secret}" ]] || fail "KC_TEST_ROPC_CLIENT_SECRET not set in .env"
-
-  local clients_json client_uuid client_rep update_status
-  clients_json=$(curl -sf --max-time 10 \
-    -H "Authorization: Bearer ${token}" \
-    "http://localhost:8080/admin/realms/envocc/clients?clientId=test-ropc-client") \
-    || fail "Could not look up test-ropc-client — is the realm import current? (Story 2.8 Task 0)"
-  client_uuid=$(echo "${clients_json}" | python3 -c "import json,sys; c=json.load(sys.stdin); print(c[0]['id'] if c else '')")
-  [[ -n "${client_uuid}" ]] || fail "test-ropc-client not found in realm — re-import realm-export.json (Story 2.8 Task 0)"
-  client_rep=$(echo "${clients_json}" | ROPC_SECRET="${ropc_secret}" python3 -c "import json,sys,os; c=json.load(sys.stdin)[0]; c['secret']=os.environ['ROPC_SECRET']; print(json.dumps(c))")
-  update_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-    -X PUT \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d "${client_rep}" \
-    "http://localhost:8080/admin/realms/envocc/clients/${client_uuid}")
-  [[ "${update_status}" == "204" ]] || fail "Could not set test-ropc-client secret (got HTTP ${update_status})"
+  ropc_secret=$(_configure_ropc_client_secret "${token}") \
+    || fail "Could not configure test-ropc-client secret for TS-280g — see stderr above"
 
   # Authenticate to establish a server-side session
   local login_status
@@ -893,28 +753,12 @@ PYEOF
   local token
   token=$(get_admin_token) || fail "Could not obtain admin token"
 
-  # Create a fresh, never-authenticated test user
-  local http_status post_loc_file user_id h_loc
-  post_loc_file=$(mktemp)
-  http_status=$(curl -s -o /dev/null -w "%{http_code}" -D "${post_loc_file}" --max-time 10 \
-    -X POST \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d '{"username":"ts280h@envocc.local","email":"ts280h@envocc.local","enabled":true,"emailVerified":true,"firstName":"Test","lastName":"IdempotentLogout"}' \
-    "http://localhost:8080/admin/realms/envocc/users")
-  [[ "${http_status}" == "201" ]] || { rm -f "${post_loc_file}"; fail "Could not create test user TS-280h (got HTTP ${http_status})"; }
-  h_loc=$(grep -i '^location:' "${post_loc_file}" | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]+:[[:space:]]*//')
-  rm -f "${post_loc_file}"
-  user_id="${h_loc##*/}"
-  if [[ -z "${user_id}" ]]; then
-    local fallback_resp
-    fallback_resp=$(curl -sf --max-time 10 \
-      -H "Authorization: Bearer ${token}" \
-      "http://localhost:8080/admin/realms/envocc/users?email=ts280h@envocc.local&exact=true") || true
-    user_id=$(echo "${fallback_resp}" | python3 -c "import json,sys; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-  fi
-  [[ -n "${user_id}" ]] || fail "User TS-280h UUID not found after creation"
+  # Create a fresh, never-authenticated test user (no password/ROPC needed,
+  # so only the creation helper is used).
+  local user_id
+  user_id=$(_create_active_test_user "${token}" "ts280h@envocc.local" "IdempotentLogout")
   _TS280H_USER_ID="${user_id}"
+  [[ -n "${user_id}" ]] || fail "Could not create test user TS-280h — see stderr above"
 
   # First /logout call — user has never authenticated, zero sessions
   local first_status
