@@ -208,6 +208,108 @@ describe('AC2 — realm-export.json does not set conflicting contentSecurityPoli
 });
 
 // ---------------------------------------------------------------------------
+// ATDD Scaffold — Story 2.6 AC1/AC3: otpPolicy + browserFlow wired in
+// realm-export.json (config-as-code, spot-checked here at the theme-test
+// level; scripts/lint-realm-export.py + tests/unit/realm-otp-policy.bats own
+// the authoritative, exhaustive lint coverage — see Task 2.4).
+//
+// TDD Phase: RED — realm-export.json currently has no otpPolicy,
+// authenticationFlows, or browserFlow key (confirmed by reading the file
+// before writing this scaffold). These assertions are expected to FAIL
+// until Task 1 and Task 2 are implemented.
+// ---------------------------------------------------------------------------
+
+describe('Story 2.6 AC3 — realm-export.json declares an explicit otpPolicy (bounded clock-drift window)', () => {
+  it('realm-export.json has an otpPolicy object at the realm root', () => {
+    const realm = JSON.parse(realmJson);
+    assert.ok(
+      realm.otpPolicy && typeof realm.otpPolicy === 'object',
+      'Expected realm-export.json to declare a top-level "otpPolicy" object (Subtask 1.1) — ' +
+      'Keycloak defaults must not be relied on implicitly for config-as-code (AC3)',
+    );
+  });
+
+  it('otpPolicy.type is "totp" (not hotp — Decision 1, this realm uses TOTP only)', () => {
+    const realm = JSON.parse(realmJson);
+    assert.strictEqual(realm.otpPolicy?.type, 'totp',
+      `Expected otpPolicy.type to be "totp", got: ${realm.otpPolicy?.type}`);
+  });
+
+  it('otpPolicy.digits is 6', () => {
+    const realm = JSON.parse(realmJson);
+    assert.strictEqual(realm.otpPolicy?.digits, 6,
+      `Expected otpPolicy.digits to be 6, got: ${realm.otpPolicy?.digits}`);
+  });
+
+  it('otpPolicy.lookAheadWindow is explicitly 1 (±30s bounded clock-drift window)', () => {
+    const realm = JSON.parse(realmJson);
+    assert.strictEqual(realm.otpPolicy?.lookAheadWindow, 1,
+      `Expected otpPolicy.lookAheadWindow to be 1, got: ${realm.otpPolicy?.lookAheadWindow}`);
+  });
+
+  it('otpPolicy.lookBehindWindow is explicitly 1 (±30s bounded clock-drift window)', () => {
+    const realm = JSON.parse(realmJson);
+    assert.strictEqual(realm.otpPolicy?.lookBehindWindow, 1,
+      `Expected otpPolicy.lookBehindWindow to be 1, got: ${realm.otpPolicy?.lookBehindWindow}`);
+  });
+
+  it('otpPolicy does NOT declare initialCounter (HOTP-only field — must not appear in a TOTP-only realm)', () => {
+    const realm = JSON.parse(realmJson);
+    assert.strictEqual(realm.otpPolicy?.initialCounter, undefined,
+      'Expected otpPolicy to NOT declare initialCounter — that field is HOTP-only (Subtask 1.2)');
+  });
+});
+
+describe('Story 2.6 AC1 — realm-export.json binds a browserFlow with a CONDITIONAL OTP execution', () => {
+  it('realm-export.json sets "browserFlow" at the realm root', () => {
+    const realm = JSON.parse(realmJson);
+    assert.ok(
+      typeof realm.browserFlow === 'string' && realm.browserFlow.length > 0,
+      'Expected realm-export.json to set a non-empty "browserFlow" at the realm root (Subtask 2.2)',
+    );
+  });
+
+  it('the flow referenced by browserFlow exists in authenticationFlows', () => {
+    const realm = JSON.parse(realmJson);
+    const flows = Array.isArray(realm.authenticationFlows) ? realm.authenticationFlows : [];
+    const referenced = flows.find((f) => f.alias === realm.browserFlow);
+    assert.ok(
+      referenced,
+      `Expected authenticationFlows to contain a flow aliased "${realm.browserFlow}" (matching browserFlow)`,
+    );
+  });
+
+  it('the browser flow (or a nested sub-flow) contains an auth-otp-form execution set to CONDITIONAL', () => {
+    const realm = JSON.parse(realmJson);
+    const flows = Array.isArray(realm.authenticationFlows) ? realm.authenticationFlows : [];
+    const allExecutions = flows.flatMap((f) => f.authenticationExecutions || []);
+    const otpExecution = allExecutions.find((ex) => ex.authenticator === 'auth-otp-form');
+    assert.ok(otpExecution, 'Expected to find an authenticationExecutions entry with authenticator: "auth-otp-form"');
+    assert.strictEqual(
+      otpExecution.requirement,
+      'CONDITIONAL',
+      `Expected the auth-otp-form execution's requirement to be "CONDITIONAL" (not bare REQUIRED, not DISABLED) — ` +
+      `Locked Decision in Dev Notes: hard REQUIRED would strand accounts with no TOTP credential ` +
+      `(no CONFIGURE_TOTP escape hatch in this story's scope). Got: ${otpExecution.requirement}`,
+    );
+  });
+
+  it('the OTP branch is gated by a condition-user-configured sub-flow (not an unconditional CONDITIONAL)', () => {
+    const realm = JSON.parse(realmJson);
+    const flows = Array.isArray(realm.authenticationFlows) ? realm.authenticationFlows : [];
+    const allExecutions = flows.flatMap((f) => f.authenticationExecutions || []);
+    const hasConditionUserConfigured = allExecutions.some(
+      (ex) => ex.authenticator === 'conditional-user-configured',
+    );
+    assert.ok(
+      hasConditionUserConfigured,
+      'Expected an authenticationExecutions entry with authenticator: "conditional-user-configured" — ' +
+      'this is what makes OTP non-skippable ONLY for users who already have a TOTP credential (AC1 scope boundary)',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // AC1 — Deep Sea tokens applied: CSS uses var() references, no raw hex
 // ---------------------------------------------------------------------------
 
@@ -589,6 +691,133 @@ describe('AC5 — login-otp.ftl has persistent <label> for TOTP code input', () 
   it('login-otp.ftl TOTP input has a matching id attribute (totp or otp)', () => {
     const hasId = /id=["']totp["']/.test(loginOtpFtl) || /id=["']otp["']/.test(loginOtpFtl);
     assert.ok(hasId, 'Expected login-otp.ftl to have id="totp" or id="otp" on the code input');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ATDD Scaffold — Story 2.6: Six-cell verification-code group (AC2, UX-DR6/UX-DR8)
+//
+// AC2: the verification surface renders as six individual Noto-Sans-Mono
+// cells that behave and are announced as ONE logical field: auto-advance,
+// Backspace step-back, paste-fills-all-six, auto-submit-on-6th-digit — with
+// exactly one accessible label bound to the group, and a no-JS fallback that
+// still POSTs a single 6-digit `totp` form value.
+//
+// TDD Phase: RED — login-otp.ftl currently ships story 2.5's single
+// plain-text placeholder input with no six-cell presentation, no
+// otp-input.js enhancement script, and no code-input cell styling in
+// login.css. All assertions below are expected to FAIL until Task 3 is
+// implemented.
+// ---------------------------------------------------------------------------
+
+const OTP_INPUT_JS = path.join(THEME_ROOT, 'resources', 'js', 'otp-input.js');
+let otpInputJs = '';
+
+describe('Story 2.6 AC2 — login-otp.ftl posts a single 6-digit `totp` form field (no-JS fallback, NFR8)', () => {
+  it('login-otp.ftl still declares name="totp" on the underlying field (single POST param, no custom SPI)', () => {
+    assert.match(loginOtpFtl, /name=["']totp["']/,
+      'Expected login-otp.ftl to keep posting a single name="totp" field — ' +
+      'Keycloak\'s OTPFormAuthenticator reads request.getFirstParam("totp") server-side (NFR8: no custom auth SPI)');
+  });
+
+  it('login-otp.ftl constrains the totp field to exactly 6 digits (maxlength=6, numeric input)', () => {
+    const inputMatch = loginOtpFtl.match(/<input[^>]*name=["']totp["'][^>]*>/);
+    assert.ok(inputMatch, 'Expected to find the <input name="totp" ...> element in login-otp.ftl');
+    assert.match(inputMatch[0], /maxlength=["']6["']/,
+      'Expected the totp input to declare maxlength="6" (single logical 6-digit field)');
+    assert.match(inputMatch[0], /inputmode=["']numeric["']/,
+      'Expected the totp input to declare inputmode="numeric" for numeric keyboards / no-JS validation hinting');
+  });
+});
+
+describe('Story 2.6 AC2 — login-otp.ftl renders a six-cell visual/DOM group for the code input', () => {
+  it('login-otp.ftl contains six-cell markup (cell container or six cell elements)', () => {
+    const hasCellGroup = /class=["'][^"']*(otp-cell|code-cell|totp-cell)[^"']*["']/.test(loginOtpFtl)
+      || /id=["'][^"']*otp-cells?["']/.test(loginOtpFtl);
+    assert.ok(
+      hasCellGroup,
+      'Expected login-otp.ftl to contain six-cell markup — a cell-group container or ' +
+      'per-cell class hooks (e.g. class="otp-cell") for the six-Noto-Sans-Mono-cell presentation (AC2, DESIGN.md#Components code-input)',
+    );
+  });
+});
+
+describe('Story 2.6 AC2 — login-otp.ftl code-input group has exactly ONE accessible label (no double-announcement)', () => {
+  it('login-otp.ftl does not add a redundant aria-label alongside the existing <label for="totp">', () => {
+    // Per story Dev Notes: if the single-<input id="totp"> approach is kept, the
+    // existing <label for="totp"> already satisfies accessibility — an
+    // additional aria-label on that same input would double-announce to
+    // screen readers and must NOT be present.
+    const inputMatch = loginOtpFtl.match(/<input[^>]*name=["']totp["'][^>]*>/);
+    assert.ok(inputMatch, 'Expected to find the <input name="totp" ...> element in login-otp.ftl');
+    assert.ok(
+      !/aria-label=/.test(inputMatch[0]),
+      'Expected the totp <input> to NOT carry a redundant aria-label when a <label for="totp"> already exists ' +
+      '(would double-announce to screen readers — story Dev Notes / AC2)',
+    );
+  });
+
+  it('login-otp.ftl six real-input alternative (if chosen) does not label each cell individually', () => {
+    // Only relevant if the six-separate-<input>-elements alternative was chosen.
+    // Guard: count <input> elements whose name/id look like individual digit
+    // cells (e.g. name="totp-0".."totp-5") and assert none carries its own
+    // <label for="..."> — the group must have exactly one label, not six.
+    const digitCellInputs = [...loginOtpFtl.matchAll(/<input[^>]*name=["']totp-\d["'][^>]*>/g)];
+    if (digitCellInputs.length > 0) {
+      for (const match of digitCellInputs) {
+        assert.ok(
+          !/aria-label=/.test(match[0]),
+          'Expected individual digit-cell inputs (six-real-inputs alternative) to NOT carry their own aria-label — ' +
+          'the group must be announced as ONE logical field via a single wrapping label/aria-labelledby (AC2)',
+        );
+      }
+    }
+  });
+});
+
+describe('Story 2.6 AC2 — Noto Sans Mono code-input design tokens are applied in login.css', () => {
+  it('login.css references --font-code-family for the code-input cells', () => {
+    assert.match(css, /--font-code-family/,
+      'Expected login.css to reference var(--font-code-family) (Noto Sans Mono) for the six-cell code input (DESIGN.md#Components code-input)');
+  });
+
+  it('login.css references --font-code-size for the code-input cells', () => {
+    assert.match(css, /--font-code-size/,
+      'Expected login.css to reference var(--font-code-size) (24px) for the six-cell code input');
+  });
+
+  it('login.css references --color-border and --color-accent for cell border / focus-cell border', () => {
+    assert.match(css, /--color-border/,
+      'Expected login.css to reference var(--color-border) for the code-input cell border');
+    assert.match(css, /--color-accent/,
+      'Expected login.css to reference var(--color-accent) for the code-input focus-cell border');
+  });
+});
+
+describe('Story 2.6 AC2 — otp-input.js progressive-enhancement script exists (auto-advance/paste/auto-submit)', () => {
+  before(() => {
+    otpInputJs = fs.existsSync(OTP_INPUT_JS) ? fs.readFileSync(OTP_INPUT_JS, 'utf-8') : '';
+  });
+
+  it('keycloak/themes/envocc/login/resources/js/otp-input.js exists', () => {
+    assert.ok(
+      fs.existsSync(OTP_INPUT_JS),
+      `Expected ${OTP_INPUT_JS} to exist (Subtask 3.4 — additive enhancement script, ` +
+      'the underlying single <input name="totp"> must still work with this script absent/disabled)',
+    );
+  });
+
+  it('otp-input.js implements auto-submit behavior on the 6th digit', () => {
+    assert.match(otpInputJs, /length\s*===?\s*6|maxlength/i,
+      'Expected otp-input.js to check for 6-digit completion (auto-submit-on-6th-digit, AC2)');
+  });
+
+  it('otp-input.js does not remove or bypass the name="totp" POST field it enhances', () => {
+    assert.ok(
+      !/name\s*=\s*["']totp["']\s*=\s*null|removeAttribute\(["']name["']\)/.test(otpInputJs),
+      'Expected otp-input.js to be purely additive — it must not strip the name="totp" attribute ' +
+      'that makes the no-JS fallback work (progressive enhancement, NFR8-aligned)',
+    );
   });
 });
 
