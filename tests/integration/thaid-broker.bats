@@ -176,16 +176,39 @@ print(base64.urlsafe_b64encode(h).decode().rstrip('='))
   # network URLs, realm-export.json Task 1.2), then either:
   #   - an existing federated-identity link was found -> redirects to the RP
   #     redirect_uri with Keycloak's own ?code=... (this hop's Location header)
-  #   - no link found -> thaid-first-broker-login (deny-access) runs -> HTTP
-  #     401 themed error page, no Location header
-  #   - the linked account is disabled -> HTTP 400 themed error page, no
-  #     Location header
+  #   - no link found -> redirects (302) to Keycloak's own
+  #     login-actions/first-broker-login endpoint, which is where the
+  #     thaid-first-broker-login (deny-access) flow actually executes (see
+  #     Hop 3b below) -> that request is the one that produces the themed
+  #     401 error page
+  #   - the linked account is disabled -> HTTP 400 themed error page directly
+  #     from this hop, no Location header (the disabled-account check runs
+  #     before first-broker-login, so no Hop 3b is needed here)
   local hop3_headers hop3_status hop3_location
   hop3_headers=$(curl -s --max-time 15 -D - -o "${hop3_html}" \
     -c "${session_jar}" -b "${session_jar}" \
     "${hop2_location}") || true
   hop3_status=$(echo "${hop3_headers}" | grep -i "^HTTP/" | tail -1 | awk '{print $2}' | tr -d '\r')
   hop3_location=$(echo "${hop3_headers}" | grep -i "^location:" | tail -1 | tr -d '\r' | sed -E 's/^[Ll]ocation:[[:space:]]*//')
+
+  # Hop 3b: HANDS-ON VERIFIED (re-confirmed against the live TS-290d/e stack
+  # during test review) — an unrecognized-PID (no existing link) login does
+  # NOT land on the 401 error page at Hop 3 itself; Hop 3 only redirects
+  # (302) to Keycloak's login-actions/first-broker-login endpoint, and it is
+  # THAT request which runs the thaid-first-broker-login (deny-access) flow
+  # and returns the themed 401. Without following this hop, hop3_status would
+  # only ever observe the intermediate 302 — never the actual deny-access
+  # outcome. A pre-existing federated-identity link (TS-290b/c) never
+  # redirects through this endpoint, so this is a no-op for every other
+  # caller.
+  if [[ "${hop3_location}" == */login-actions/first-broker-login* ]]; then
+    local hop3b_headers
+    hop3b_headers=$(curl -s --max-time 15 -D - -o "${hop3_html}" \
+      -c "${session_jar}" -b "${session_jar}" \
+      "${hop3_location}") || true
+    hop3_status=$(echo "${hop3b_headers}" | grep -i "^HTTP/" | tail -1 | awk '{print $2}' | tr -d '\r')
+    hop3_location=$(echo "${hop3b_headers}" | grep -i "^location:" | tail -1 | tr -d '\r' | sed -E 's/^[Ll]ocation:[[:space:]]*//')
+  fi
 
   rm -f "${session_jar}" "${hop1_html}" "${hop2_html}" "${hop3_html}"
 
@@ -478,7 +501,12 @@ print('OK')
   result=$(drive_thaid_broker_login "${pid}") || true
   status=$(echo "${result}" | sed -n '1p')
 
-  [[ "${status}" != "200" ]] || fail "Expected the broker flow to be rejected for an unrecognized PID, but it completed with HTTP 200"
+  # Hands-on verified (see drive_thaid_broker_login's Hop 3b): the deny-access
+  # authenticator's rejection surfaces as an exact HTTP 401 themed error page,
+  # not merely "anything other than 200" — assert the specific status so a
+  # regression that changes the rejection's shape (e.g. a 5xx, or the flow
+  # silently completing) is caught precisely, not just "not 200".
+  assert_equal "${status}" "401"
 
   token=$(get_admin_token) || fail "Could not obtain admin token"
   local search_json count
@@ -526,7 +554,10 @@ print('OK')
   result=$(drive_thaid_broker_login "${pid}") || true
   status=$(echo "${result}" | sed -n '1p')
 
-  [[ "${status}" != "200" ]] || fail "Expected the broker flow to be rejected for a disabled account, but it completed with HTTP 200"
+  # Hands-on verified: a disabled account's rejection surfaces as an exact
+  # HTTP 400 themed error page directly at Hop 3 (see drive_thaid_broker_login
+  # header) — assert the specific status for the same reason as TS-290d.
+  assert_equal "${status}" "400"
 }
 
 # ---------------------------------------------------------------------------
