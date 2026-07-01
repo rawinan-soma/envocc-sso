@@ -48,6 +48,10 @@ let loginFtl    = '';
 let loginOtpFtl = '';
 let realmJson   = '';
 let dockerfile  = '';
+// Parsed once in before() and reused by every test that needs the realm
+// object, instead of each it() re-parsing the same static JSON document
+// (code-review finding: efficiency — redundant JSON.parse per test).
+let realm       = null;
 
 // Pre-extracted snippets (computed in before() after files are loaded).
 // Use these in tests rather than re-extracting inline.
@@ -63,6 +67,7 @@ before(() => {
   loginOtpFtl = fs.existsSync(LOGIN_OTP_FTL) ? fs.readFileSync(LOGIN_OTP_FTL, 'utf-8') : '';
   realmJson   = fs.existsSync(REALM_EXPORT)  ? fs.readFileSync(REALM_EXPORT, 'utf-8')  : '';
   dockerfile  = fs.existsSync(DOCKERFILE)    ? fs.readFileSync(DOCKERFILE, 'utf-8')    : '';
+  realm       = realmJson ? JSON.parse(realmJson) : null;
 
   // Pre-extract reusable snippets to avoid repeated inline regex/slice in tests.
   bannerBlock = css.match(/\.anti-phishing-banner\s*\{([^}]+)\}/s)?.[1] ?? '';
@@ -142,7 +147,6 @@ describe('AC6 — realm-export.json wires loginTheme', () => {
   });
 
   it('realm-export.json sets "loginTheme": "envocc" at realm root', () => {
-    const realm = JSON.parse(realmJson);
     assert.strictEqual(
       realm.loginTheme,
       'envocc',
@@ -182,7 +186,6 @@ describe('AC6 — Dockerfile COPYs theme before kc.sh build', () => {
 
 describe('AC2 — realm-export.json does not set conflicting contentSecurityPolicy', () => {
   it('realm-export.json browserSecurityHeaders does not have a contentSecurityPolicy value', () => {
-    const realm = JSON.parse(realmJson);
     const bsh = realm.browserSecurityHeaders;
     if (!bsh) {
       // browserSecurityHeaders absent entirely — acceptable
@@ -196,7 +199,6 @@ describe('AC2 — realm-export.json does not set conflicting contentSecurityPoli
   });
 
   it('realm-export.json browserSecurityHeaders does not duplicate frame-ancestors', () => {
-    const realm = JSON.parse(realmJson);
     const bsh = realm.browserSecurityHeaders;
     if (!bsh) return; // absent is fine
     const csp = bsh.contentSecurityPolicy || '';
@@ -237,44 +239,37 @@ describe('AC2 — realm-export.json does not set conflicting contentSecurityPoli
 // fields instead of a nonexistent nested object / nonexistent field.
 describe('Story 2.6 AC3 — realm-export.json declares an explicit otpPolicy (bounded clock-drift window)', () => {
   it('otpPolicyType is "totp" (not hotp — Decision 1, this realm uses TOTP only)', () => {
-    const realm = JSON.parse(realmJson);
     assert.strictEqual(realm.otpPolicyType, 'totp',
       `Expected otpPolicyType to be "totp", got: ${realm.otpPolicyType}`);
   });
 
   it('otpPolicyDigits is 6', () => {
-    const realm = JSON.parse(realmJson);
     assert.strictEqual(realm.otpPolicyDigits, 6,
       `Expected otpPolicyDigits to be 6, got: ${realm.otpPolicyDigits}`);
   });
 
   it('otpPolicyPeriod is explicitly 30', () => {
-    const realm = JSON.parse(realmJson);
     assert.strictEqual(realm.otpPolicyPeriod, 30,
       `Expected otpPolicyPeriod to be 30, got: ${realm.otpPolicyPeriod}`);
   });
 
   it('otpPolicyLookAheadWindow is explicitly 1 (±30s bounded clock-drift window — Keycloak applies this symmetrically, there is no separate lookBehindWindow field)', () => {
-    const realm = JSON.parse(realmJson);
     assert.strictEqual(realm.otpPolicyLookAheadWindow, 1,
       `Expected otpPolicyLookAheadWindow to be 1, got: ${realm.otpPolicyLookAheadWindow}`);
   });
 
   it('realm-export.json does NOT declare otpPolicyInitialCounter (HOTP-only field — Keycloak defaults it to 0 for TOTP, no need to set it explicitly, Subtask 1.2)', () => {
-    const realm = JSON.parse(realmJson);
     assert.strictEqual(realm.otpPolicyInitialCounter, undefined,
       'Expected realm-export.json to NOT set otpPolicyInitialCounter — that field is HOTP-only (Subtask 1.2); ' +
       'Keycloak defaults it to 0 for a TOTP-only realm when absent from the import file');
   });
 
   it('otpPolicyCodeReusable is explicitly false (AC3 single-use-within-time-step / replay protection)', () => {
-    const realm = JSON.parse(realmJson);
     assert.strictEqual(realm.otpPolicyCodeReusable, false,
       `Expected otpPolicyCodeReusable to be false, got: ${realm.otpPolicyCodeReusable}`);
   });
 
   it('realm-export.json does NOT declare a nonexistent nested "otpPolicy" object (must use flat otpPolicy* fields, or Keycloak import fails)', () => {
-    const realm = JSON.parse(realmJson);
     assert.strictEqual(realm.otpPolicy, undefined,
       'Expected no top-level "otpPolicy" object — Keycloak\'s RealmRepresentation has no such field; ' +
       'importing one fails with "Unrecognized field \\"otpPolicy\\"" (verified against a live Keycloak 26.6.3 import)');
@@ -283,7 +278,6 @@ describe('Story 2.6 AC3 — realm-export.json declares an explicit otpPolicy (bo
 
 describe('Story 2.6 AC1 — realm-export.json binds a browserFlow with a CONDITIONAL OTP execution', () => {
   it('realm-export.json sets "browserFlow" at the realm root', () => {
-    const realm = JSON.parse(realmJson);
     assert.ok(
       typeof realm.browserFlow === 'string' && realm.browserFlow.length > 0,
       'Expected realm-export.json to set a non-empty "browserFlow" at the realm root (Subtask 2.2)',
@@ -291,7 +285,6 @@ describe('Story 2.6 AC1 — realm-export.json binds a browserFlow with a CONDITI
   });
 
   it('the flow referenced by browserFlow exists in authenticationFlows', () => {
-    const realm = JSON.parse(realmJson);
     const flows = Array.isArray(realm.authenticationFlows) ? realm.authenticationFlows : [];
     const referenced = flows.find((f) => f.alias === realm.browserFlow);
     assert.ok(
@@ -301,7 +294,6 @@ describe('Story 2.6 AC1 — realm-export.json binds a browserFlow with a CONDITI
   });
 
   it('the browser flow (or a nested sub-flow) contains an auth-otp-form execution set to CONDITIONAL', () => {
-    const realm = JSON.parse(realmJson);
     const flows = Array.isArray(realm.authenticationFlows) ? realm.authenticationFlows : [];
     const allExecutions = flows.flatMap((f) => f.authenticationExecutions || []);
 
@@ -341,7 +333,6 @@ describe('Story 2.6 AC1 — realm-export.json binds a browserFlow with a CONDITI
   });
 
   it('the OTP branch is gated by a condition-user-configured sub-flow (not an unconditional CONDITIONAL)', () => {
-    const realm = JSON.parse(realmJson);
     const flows = Array.isArray(realm.authenticationFlows) ? realm.authenticationFlows : [];
     const allExecutions = flows.flatMap((f) => f.authenticationExecutions || []);
     const hasConditionUserConfigured = allExecutions.some(
@@ -869,10 +860,18 @@ describe('Story 2.6 AC2 — otp-input.js progressive-enhancement script exists (
   });
 
   it('otp-input.js does not remove or bypass the name="otp" POST field it enhances', () => {
+    // NOTE (code-review fix): the previous regex's first alternative,
+    // `name\s*=\s*["']otp["']\s*=\s*null`, is not syntactically valid JS
+    // (you cannot assign to a string literal) and could never match real
+    // source — only the `removeAttribute("name")` alternative was doing any
+    // work. Check directly for the two ways the script could actually strip
+    // or rename the field: reassigning `.name` (to anything, since this
+    // script has no legitimate reason to touch it at all) or calling
+    // removeAttribute('name').
     assert.ok(
-      !/name\s*=\s*["']otp["']\s*=\s*null|removeAttribute\(["']name["']\)/.test(otpInputJs),
-      'Expected otp-input.js to be purely additive — it must not strip the name="otp" attribute ' +
-      'that makes the no-JS fallback work (progressive enhancement, NFR8-aligned)',
+      !/\.name\s*=/.test(otpInputJs) && !/removeAttribute\(\s*["']name["']\s*\)/.test(otpInputJs),
+      'Expected otp-input.js to be purely additive — it must not strip or reassign the name="otp" ' +
+      'attribute that makes the no-JS fallback work (progressive enhancement, NFR8-aligned)',
     );
   });
 });

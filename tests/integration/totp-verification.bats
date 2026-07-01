@@ -46,6 +46,11 @@ bats_load_library 'bats-assert'
 
 load '../helpers/common'
 
+# pkce_generate() and extract_auth_code_from_headers() moved to
+# tests/helpers/common.bash (code-review finding: reuse — this file
+# duplicated them from oidc-pkce-flow.bats instead of using the shared
+# helpers library both files already `load`).
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -58,16 +63,6 @@ TOKEN_ENDPOINT="${KC_BASE}/realms/${REALM}/protocol/openid-connect/token"
 
 # RFC 6238 TOTP period; matches otpPolicy.period=30 required by AC3/Subtask 1.1.
 TOTP_PERIOD=30
-
-# ---------------------------------------------------------------------------
-# PKCE helpers (mirrors tests/integration/oidc-pkce-flow.bats)
-# ---------------------------------------------------------------------------
-pkce_generate() {
-  local verifier challenge
-  verifier=$(openssl rand -base64 48 | tr '+/' '-_' | tr -d '=\n')
-  challenge=$(printf '%s' "${verifier}" | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '=\n')
-  printf '%s\n%s\n' "${verifier}" "${challenge}"
-}
 
 # ---------------------------------------------------------------------------
 # totp_code <base32_secret> [time_offset_seconds]
@@ -162,19 +157,18 @@ if remaining < min_remaining:
 # ---------------------------------------------------------------------------
 configure_totp_for_user() {
   local admin_token="${1}" user_id="${2}" secret="${3}"
-  local credential_data secret_data body
-  credential_data=$(python3 -c "
-import json
-print(json.dumps({'subType': 'totp', 'digits': 6, 'period': 30, 'algorithm': 'HmacSHA1', 'secretEncoding': 'BASE32'}))
-")
-  secret_data=$(python3 -c "
-import json, sys
-print(json.dumps({'value': sys.argv[1]}))
-" "${secret}")
+  local body
+  # Combined into a single python3 invocation (code-review finding: efficiency —
+  # the three pieces below are independent/derivable from one process instead of
+  # three sequential subprocess spawns). Behavior is unchanged: credentialData
+  # and secretData are still JSON-encoded STRINGS nested inside the outer body,
+  # matching what RepresentationToModel.createCredentials() expects (see NOTE above).
   body=$(python3 -c "
 import json, sys
-print(json.dumps({'credentials': [{'type': 'otp', 'userLabel': 'Test TOTP', 'credentialData': sys.argv[1], 'secretData': sys.argv[2]}]}))
-" "${credential_data}" "${secret_data}")
+credential_data = json.dumps({'subType': 'totp', 'digits': 6, 'period': 30, 'algorithm': 'HmacSHA1', 'secretEncoding': 'BASE32'})
+secret_data = json.dumps({'value': sys.argv[1]})
+print(json.dumps({'credentials': [{'type': 'otp', 'userLabel': 'Test TOTP', 'credentialData': credential_data, 'secretData': secret_data}]}))
+" "${secret}")
   curl -sf --max-time 15 \
     -X PUT "${KC_BASE}/admin/realms/${REALM}/users/${user_id}" \
     -H "Authorization: Bearer ${admin_token}" \
@@ -321,21 +315,6 @@ print((auth or actions or [''])[0])
 ")
   rm -f "${bodyfile}"
   printf '%s\n' "${next_action}"
-}
-
-extract_auth_code_from_headers() {
-  python3 -c "
-import sys, urllib.parse
-for line in sys.stdin:
-    if line.lower().startswith('location:'):
-        loc = line.split(':', 1)[1].strip()
-        params = urllib.parse.parse_qs(urllib.parse.urlparse(loc).query)
-        code = params.get('code', [''])[0]
-        if code:
-            print(code)
-            sys.exit(0)
-sys.exit(1)
-"
 }
 
 # ---------------------------------------------------------------------------
@@ -603,8 +582,15 @@ print('yes' if auth else 'no')
   second_auth_code=$(echo "${second_headers}" | extract_auth_code_from_headers 2>/dev/null || echo "")
   rm -f "${session_jar_2}"
 
-  [[ -z "${second_auth_code}" || "${second_auth_code}" != "${first_auth_code}" ]] \
-    || fail "Expected a second, independent login submitting the same TOTP code within the same time step to be rejected (replay cache), but got a fresh auth code"
+  # NOTE (code-review fix): the previous assertion also accepted a *different*
+  # second_auth_code as a pass. Auth codes are per-request random tokens, so
+  # any two independently-issued codes are always different — that clause
+  # made the check vacuously true even if replay protection were completely
+  # broken and the second (replayed) submission succeeded with a fresh code.
+  # The only outcome that actually proves the replay cache rejected the
+  # resubmission is an EMPTY second_auth_code (no Location/code redirect).
+  [[ -z "${second_auth_code}" ]] \
+    || fail "Expected a second, independent login submitting the same TOTP code within the same time step to be rejected (replay cache), but got a fresh auth code: ${second_auth_code}"
 }
 
 # ---------------------------------------------------------------------------
