@@ -279,3 +279,63 @@ fields to enable proper RP-initiated logout:
 - **UX-DR3 — Branded signed-out surface**: the Keycloak "Signed out" theme page is
   styled in Story 2.5. Until then, the default "You are logged out" page is acceptable
   as a placeholder.
+
+## Story 2.7 — Brute-Force Protection & Enumeration-Resistant Responses
+
+This section documents the per-account brute-force tuning added in Story 2.7,
+covering FR19 (progressive delays, per-account and per-IP) and FR20
+(enumeration-resistant identical generic responses).
+
+### Per-account brute-force field reference
+
+`bruteForceProtected: true` was enabled in Story 1.2 to satisfy the CI lint gate
+(`scripts/lint-realm-export.py`, which only asserts the boolean), with the numeric
+tuning fields deliberately left as **placeholders** pending this story. The
+following table documents the final, deliberate values chosen in Story 2.7:
+
+| Field | Value | Rationale |
+|---|---|---|
+| `bruteForceProtected` | `true` | Enables Keycloak's native per-account brute-force detection (audited component, NFR8 — no hand-rolled lockout logic). |
+| `failureFactor` | `5` | **Tuned down from the Story 1.2 placeholder of `30`.** Number of failed attempts before an account is temporarily locked. 5 is low enough to blunt credential-stuffing/guessing quickly while still tolerant of a couple of genuine typos. |
+| `permanentLockout` | `false` | Lockout is always temporary (progressive-delay based) — never requires an admin-unlock action for a failed-login count. Keeps the lockout experience self-resolving for legitimate users. |
+| `waitIncrementSeconds` | `60` | Wait time grows by 60 seconds for each additional failure past the quick-login threshold — the progressive-delay curve. |
+| `maxFailureWaitSeconds` | `900` (15 min) | Caps the maximum single lockout wait at 15 minutes, bounding the worst-case delay for a legitimate user who forgot their password. |
+| `minimumQuickLoginWaitSeconds` | `60` | Applies an immediate 60-second wait when retries happen faster than `quickLoginCheckMilliSeconds` apart — deters rapid-fire scripted attempts specifically. |
+| `quickLoginCheckMilliSeconds` | `1000` | Attempts within 1 second of each other are treated as "quick" (scripted) retries and immediately trigger the minimum wait, rather than waiting for the full `failureFactor` count. |
+| `maxDeltaTimeSeconds` | `43200` (12 h) | Failure count resets after 12 hours without a new failure — bounds how long a stale failure count can linger and contribute toward a future lockout. |
+
+Together these implement a two-stage defense: **quick-retry throttling**
+(`minimumQuickLoginWaitSeconds` / `quickLoginCheckMilliSeconds`) catches
+scripted rapid-fire attempts immediately, while the **progressive lockout**
+(`failureFactor` / `waitIncrementSeconds` / `maxFailureWaitSeconds`) throttles
+slower, distributed guessing attempts. This is the per-account layer of FR19's
+two-layer defense; the per-IP layer (`nginx/nginx.conf`, `login_zone`,
+10 req/min, HTTP 429) was already shipped in Story 1.3 and required no changes
+in Story 2.7 — see `tests/unit/nginx-config.bats` for its regression coverage.
+
+### Enumeration-resistant messaging (FR20, UX-DR9)
+
+No `messages_en.properties` changes were needed for Story 2.7. The envocc theme
+already (since Story 2.5):
+
+- Sets `invalidUserMessage` and `invalidPasswordMessage` to the identical
+  string `Incorrect email or password.` — a wrong password and a nonexistent
+  email produce byte-identical copy.
+- Does **not** override `accountTemporarilyDisabledMessage`,
+  `accountPermanentlyDisabledMessage`, or their TOTP variants
+  (`accountTemporarilyDisabledMessageTotp`,
+  `accountPermanentlyDisabledMessageTotp`) — these inherit Keycloak's base
+  theme, which already ships the same generic "Invalid username or password."
+  family of copy for a brute-force-locked account (verified against Keycloak
+  26.6.3 upstream base theme). A locked account is therefore indistinguishable
+  from a wrong-password attempt.
+- `accountDisabledMessage` (`This account is not available. Contact HR if you
+  need help.`) remains a **deliberate, accepted exception**: it is the
+  HR-disable path (Story 2.8, FR25), a conceptually distinct state from
+  "wrong password" or "brute-force locked," and is not part of the
+  identical-wording requirement.
+
+See `tests/unit/brute-force-config.bats` (TS-271x) and
+`tests/unit/enumeration-resistant-messages.bats` (TS-272x) for the automated
+regression guards, and `tests/integration/brute-force-lockout.bats` (TS-273x)
+for live-stack lockout + enumeration-timing verification.
