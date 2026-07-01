@@ -279,3 +279,126 @@ fields to enable proper RP-initiated logout:
 - **UX-DR3 — Branded signed-out surface**: the Keycloak "Signed out" theme page is
   styled in Story 2.5. Until then, the default "You are logged out" page is acceptable
   as a placeholder.
+
+## Story 2.8 — Disable Blocks Authentication & Revokes Sessions
+
+This section documents the Admin REST API procedure for disabling an account, covering
+FR25 (auth blocked) and FR46 (session/refresh-token revocation). **No new
+`realm-export.json` fields are introduced by this story** — `enabled: false` blocking
+authentication and `POST /users/{id}/logout` revoking sessions are both built-in,
+non-configurable Keycloak behaviors. See `keycloak/IDENTITY-MODEL.md` Section 4/5 for
+the lifecycle state model this procedure operates on.
+
+### The complete disable procedure — TWO calls, not one
+
+Any caller (future HR Admin UI — Story 4.5, System Admin force-terminate UI — Epic 5,
+or an ops runbook) **MUST perform both of the following calls, in order**, to satisfy
+both AC1 (FR25) and AC2 (FR46):
+
+**Step 1 — Block new authentication (FR25):**
+
+```http
+PUT /admin/realms/envocc/users/{id}
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{ "enabled": false }
+```
+
+Response: `204 No Content`. This blocks all **new** authentication attempts —
+password/ROPC grant, Authorization Code + PKCE, and token refresh — realm-wide,
+across every registered client. It does **NOT** retroactively revoke already-issued
+tokens or kill already-established sessions; Keycloak only checks `enabled` at
+authentication/token-issuance time.
+
+**Step 2 — Revoke sessions + refresh-token families (FR46):**
+
+```http
+POST /admin/realms/envocc/users/{id}/logout
+Authorization: Bearer <admin_token>
+```
+
+Response: `204 No Content`. No request body. This is the Admin REST endpoint that
+force-invalidates every server-side SSO session for the user AND revokes the
+associated refresh tokens by removing the session backing them. It is **idempotent**
+— safe to call even if the user has zero active sessions (e.g. a `pending` account
+that never logged in).
+
+**Verification call** (used by the integration tests below, and usable operationally
+to confirm revocation took effect):
+
+```http
+GET /admin/realms/envocc/users/{id}/sessions
+Authorization: Bearer <admin_token>
+```
+
+Returns a JSON array of session objects; `[]` after a successful disable + logout.
+
+### Why call order matters (defense-in-depth, not a race-condition fix)
+
+Disabling first (Step 1) ensures that even if the session-kill call (Step 2) is
+delayed, no *new* tokens can be minted in the interim. However, a session or refresh
+token issued a moment before Step 1 remains technically valid until Step 2 completes.
+Both calls should be issued back-to-back by any caller (ideally in the same request
+handler / transaction-like sequence).
+
+### Residual window — accepted (FR25)
+
+An already-authenticated *relying party's own local session* (e.g. a pilot app's
+cookie-based session established from a prior valid token) is bounded by that app's
+own session lifetime, not by this SSO revocation — integrating apps are contractually
+required (FG-7/FR41 integration guide, Epic 6) to bound their local session to the
+token lifetime. This is a **named, accepted residual**, not a defect of this story.
+No push-based revocation/webhook mechanism is planned to close this gap.
+
+### `test-ropc-client` — test-only fixture (Story 2.1, restored by Story 2.8)
+
+Story 2.1 specified a `test-ropc-client` in `keycloak/realm-export.json` to drive
+ROPC-based integration tests (`directAccessGrantsEnabled: true`,
+`standardFlowEnabled: false`, confidential client, secret zeroed on disk and
+populated from `.env`'s `KC_TEST_ROPC_CLIENT_SECRET` at test runtime — see
+`keycloak/IDENTITY-MODEL.md` Section 7). That client was never actually committed to
+`realm-export.json` despite Story 2.1's own story file claiming otherwise. Story 2.8
+re-adds it (Task 0) because Tasks 3 and 4 below are entirely ROPC-based and cannot run
+without it. This is a **test-fixture restoration**, not new production-relevant
+config — see `keycloak/IDENTITY-MODEL.md` Section 7 for the "Production use:
+FORBIDDEN" warning, which still applies unchanged.
+
+**`scripts/lint-realm-export.py` note:** the realm-lint script's Story 2.2 check
+("`directAccessGrantsEnabled` must not be true on any client") pre-dates
+`test-ropc-client` actually being present in the file and would otherwise reject this
+test fixture outright. Story 2.8 adds a narrow, `clientId`-keyed exemption for
+`test-ropc-client` only (see the script's inline comment at Check 6) — every other
+client is still held to the original, unconditional rule. This does not weaken the
+general ROPC-hardening check; it only accounts for the one client that must have ROPC
+enabled by design to serve as a test fixture.
+
+### Integration tests (AC1, AC2)
+
+`tests/integration/account-disable.bats` — TS-280a through TS-280h — proves both ACs
+against a live stack:
+
+| Test | AC | What it proves |
+|---|---|---|
+| TS-280a | control | Active user can authenticate via ROPC (baseline) |
+| TS-280b | AC1 | Disabled account cannot obtain a new token via ROPC |
+| TS-280c | AC1 | `enabled: false` is a user-level field, not per-client scoped |
+| TS-280d | — | Re-enabling (`enabled: true`) restores authentication |
+| TS-280e | AC2 | A previously-issued refresh token stops working after disable + `/logout` |
+| TS-280f | AC2 | `GET /users/{id}/sessions` reports `[]` after disable + `/logout` |
+| TS-280g | AC2 | `enabled: false` alone (no `/logout`) does NOT retroactively kill a session — proves the two-call procedure is mandatory |
+| TS-280h | AC2 | `POST /users/{id}/logout` is idempotent on a user with zero sessions |
+
+Run locally: `INTEGRATION=1 bats tests/integration/account-disable.bats` against a
+live stack (`docker compose up --build`).
+
+**Known local-verification limitation (pre-existing, not introduced by this story):**
+Since Story 1.3, Keycloak's port 8080 is intentionally not published to the host —
+Nginx (ports 80/443) is the only external entry point. However, all Admin-REST-based
+`tests/integration/*.bats` suites (including `identity-model.bats` from Story 2.1 and
+this story's `account-disable.bats`) hard-code `http://localhost:8080`. This is a
+pre-existing test-infrastructure gap inherited from prior stories — running these
+suites locally requires a temporary, non-committed port mapping
+(`8080:8080` on the `keycloak` service) as a local override; `compose.yaml` itself is
+correctly untouched by this story (no ports change) per the story's File Structure
+scope boundary. Fixing this gap repo-wide is out of scope for Story 2.8.

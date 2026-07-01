@@ -77,6 +77,24 @@
       "attributes": {
         "pkce.code.challenge.method": "S256"
       }
+    },
+    {
+      "clientId": "test-ropc-client",
+      "name": "Test ROPC Client (integration tests only)",
+      "description": "Used only for Story 2.1/2.8 direct-grant (ROPC) integration tests. Secret is zeroed on disk and populated from KC_TEST_ROPC_CLIENT_SECRET at test runtime via Admin REST. Production use: FORBIDDEN — remove before production deployment.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "secret": "",
+      "redirectUris": [],
+      "webOrigins": []
     }
   ],
   "roles": {},
