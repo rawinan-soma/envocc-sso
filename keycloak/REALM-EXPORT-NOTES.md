@@ -341,8 +341,17 @@ this; an arbitrary non-resolvable or public hostname would not. This is also why
 `mock-oidc-provider` must already exist on the Compose network by the time Keycloak's
 realm import runs — Keycloak validates every configured URL, including
 `tokenUrl`/`issuer`, at **import time**, and import fails outright (crash-loop) if the
-hostname does not yet resolve. This is exactly why `keycloak`'s `depends_on` entry
-requires `mock-oidc-provider: condition: service_healthy` in `compose.yaml` (Task 0.3).
+hostname does not yet resolve. This is why `keycloak`'s `depends_on` entry in
+`compose.yaml` (Task 0.3) requires `mock-oidc-provider: condition: service_started`
+(Compose's embedded DNS registers a container's service-name record at
+container-creation time, well before the container reaches "started" — so hostname
+resolution is already satisfied by then). Note this is DNS resolution only, not an
+HTTP/TCP readiness probe of the mock IdP's listening port — `isLocal()` never actually
+connects to `tokenUrl`/`issuer`, so Keycloak does not need the mock IdP to be *healthy*
+(actively serving requests) to import successfully, only *resolvable*. That is also
+why this dependency was intentionally loosened from `service_healthy` to
+`service_started` (Step 7 code-review finding): a hard health gate made the unrelated
+email+password/TOTP login path a hostage to this dev/CI-only mock container's health.
 
 ### Mock OIDC IdP — `ghcr.io/navikt/mock-oauth2-server`
 
