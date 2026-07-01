@@ -184,6 +184,22 @@ def lint_clients(clients):
                     "(publicClient: false) even though directAccessGrantsEnabled "
                     "is exempted."
                 )
+            # Positive check (code review, Story 2.8): the exemption above only
+            # skips the "must be false" rule — it does not itself guarantee the
+            # fixture is still ROPC-capable. Without this, an accidental edit
+            # that flips test-ropc-client's directAccessGrantsEnabled to false
+            # (or removes it) would pass lint silently while breaking every
+            # ROPC-dependent integration test (identity-model.bats TS-210d;
+            # account-disable.bats TS-280a/b/d/e) for an unrelated reason.
+            if client.get("directAccessGrantsEnabled") is not True:
+                client_errors.append(
+                    f"[{client_id}] directAccessGrantsEnabled is "
+                    f"{client.get('directAccessGrantsEnabled', '<absent>')!r} — "
+                    "the ROPC test fixture must have directAccessGrantsEnabled: "
+                    "true (it exists solely to drive ROPC integration tests; the "
+                    "exemption above only permits this value, it does not imply "
+                    "it may be omitted or false)."
+                )
         else:
             ropc = client.get("directAccessGrantsEnabled", "<absent>")
             if ropc is not False:

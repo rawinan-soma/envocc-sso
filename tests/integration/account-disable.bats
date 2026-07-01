@@ -534,6 +534,21 @@ PYEOF
 # token endpoint rejects it — direct proof of FR46's "revokes all outstanding
 # refresh-token families."
 #
+# KNOWN LIMITATION (code review): this test alone cannot structurally isolate
+# "rejected because the /logout revocation kicked in" (FR46) from "rejected
+# because the user is disabled" (FR25) — Keycloak's `enabled` gate on the
+# refresh grant is checked ahead of any session/family lookup, so the refresh
+# attempt would also be rejected here even if /logout were a no-op. This
+# combined disable+logout sequence matches AC2's own given/when ("Given an
+# account is disabled, when the transition completes") and is the procedure
+# Task 2 documents as mandatory, so it remains the correct test for that
+# combined claim. The isolated "disable alone does not revoke" half of the
+# claim (i.e. that /logout — not `enabled: false` — is what does the actual
+# session/family revocation) is proven independently on the *session* side by
+# TS-280g below; there is no equivalent independent proof for the *refresh
+# token* side because the token endpoint itself cannot be used to observe
+# that distinction (the enabled-check pre-empts it either way).
+#
 # Requires: test-ropc-client in realm (Story 2.8 Task 0). RED until Task 0.
 # ---------------------------------------------------------------------------
 @test "[P0][TS-280e] Refresh token stops working after disable+logout" {
@@ -611,6 +626,12 @@ PYEOF
 # immediately after disable + POST /users/{id}/logout — direct proof of FR46's
 # "invalidates all server-side sessions for that subject."
 #
+# Asserts a non-empty session list right after login, BEFORE disable+logout —
+# without this, a zero-session assertion afterward would pass vacuously (for
+# the wrong reason) if ROPC direct-grant ever stopped creating a visible
+# session at all, the exact "passes for the wrong reason" failure mode TS-280b
+# guards against for the token-endpoint error content (code review finding).
+#
 # Requires: test-ropc-client in realm (Story 2.8 Task 0). RED until Task 0.
 # ---------------------------------------------------------------------------
 @test "[P0][TS-280f] Admin REST reports zero active sessions after disable+logout" {
@@ -641,6 +662,18 @@ PYEOF
     "http://localhost:8080/realms/envocc/protocol/openid-connect/token")
   [[ "${login_status}" == "200" ]] || fail "Could not authenticate TS-280f user before disable (got HTTP ${login_status})"
 
+  # Baseline: confirm a server-side session actually exists post-login, BEFORE
+  # disable+logout — see test header note on why this guards against a vacuous
+  # zero-session pass below.
+  local baseline_sessions_json baseline_session_count
+  baseline_sessions_json=$(curl -sf --max-time 10 \
+    -H "Authorization: Bearer ${token}" \
+    "http://localhost:8080/admin/realms/envocc/users/${user_id}/sessions") \
+    || fail "Could not GET baseline sessions for TS-280f user"
+  baseline_session_count=$(echo "${baseline_sessions_json}" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "")
+  [[ "${baseline_session_count}" =~ ^[0-9]+$ ]] || fail "Could not parse baseline session count — got: ${baseline_sessions_json}"
+  [[ "${baseline_session_count}" -gt 0 ]] || fail "Expected a non-empty session list immediately after login (baseline), got zero — the zero-session assertion after disable+logout below would be meaningless without this baseline"
+
   # Disable + force-logout (Story 2.8 Task 2 two-call procedure)
   local disable_status logout_status
   disable_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
@@ -663,7 +696,8 @@ PYEOF
     -H "Authorization: Bearer ${token}" \
     "http://localhost:8080/admin/realms/envocc/users/${user_id}/sessions") \
     || fail "Could not GET sessions for TS-280f user"
-  session_count=$(echo "${sessions_json}" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+  session_count=$(echo "${sessions_json}" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "")
+  [[ "${session_count}" =~ ^[0-9]+$ ]] || fail "Could not parse session count after disable+logout — got: ${sessions_json}"
   assert_equal "${session_count}" "0"
 }
 
@@ -725,7 +759,8 @@ PYEOF
     -H "Authorization: Bearer ${token}" \
     "http://localhost:8080/admin/realms/envocc/users/${user_id}/sessions") \
     || fail "Could not GET sessions for TS-280g user"
-  session_count=$(echo "${sessions_json}" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+  session_count=$(echo "${sessions_json}" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "")
+  [[ "${session_count}" =~ ^[0-9]+$ ]] || fail "Could not parse session count after enabled:false-only — got: ${sessions_json}"
   if [[ "${session_count}" == "0" ]]; then
     fail "Expected a non-empty session list after enabled:false alone (without /logout), but got zero sessions — this would mean Keycloak auto-terminates sessions on disable, contradicting the documented two-call procedure (Story 2.8 Task 2)"
   fi
